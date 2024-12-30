@@ -64,13 +64,13 @@ ExitHelp(VOID)
 DWORD
 YORI_BUILTIN_FN
 YoriCmd_EXIT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg;
     DWORD ExitCode;
     YORI_STRING Arg;
 
@@ -86,10 +86,10 @@ YoriCmd_EXIT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 ExitHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2020"));
                 return EXIT_SUCCESS;
             }
@@ -107,8 +107,8 @@ YoriCmd_EXIT(
     if (StartArg == 0) {
         ExitCode = EXIT_SUCCESS;
     } else {
-        LONGLONG llTemp;
-        DWORD CharsConsumed;
+        YORI_MAX_SIGNED_T llTemp;
+        YORI_ALLOC_SIZE_T CharsConsumed;
         if (!YoriLibStringToNumber(&ArgV[StartArg], FALSE, &llTemp, &CharsConsumed) ||
             CharsConsumed == 0) {
 

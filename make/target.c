@@ -47,7 +47,7 @@ MakeDereferenceTarget(
     PYORI_LIST_ENTRY ListEntry;
     PMAKE_CMD_TO_EXEC CmdToExec;
 
-    if (InterlockedDecrement(&Target->ReferenceCount) == 0) {
+    if (InterlockedDecrement((INTERLOCKED_VOLATILE LONG *)&Target->ReferenceCount) == 0) {
 
         YoriLibFreeStringContents(&Target->Recipe);
 
@@ -132,7 +132,10 @@ MakeDeleteAllTargets(
     while (ListEntry != NULL) {
         Target = CONTAINING_RECORD(ListEntry, MAKE_TARGET, ListEntry);
 #if MAKE_DEBUG_TARGETS
-        YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("Deleting target: %y (probed %i exists %i timestamp %llx)\n"), &Target->HashEntry.Key, Target->FileProbed, Target->FileExists, Target->ModifiedTime.QuadPart);
+        YoriLibOutput(YORI_LIB_OUTPUT_STDOUT,
+                      _T("Deleting target: %y (probed %i exists %i timestamp %llx)\n"),
+                      &Target->HashEntry.Key, Target->FileProbed,
+                      Target->FileExists, Target->ModifiedTime.QuadPart);
 #endif
 
         ListEntry = YoriLibGetNextListEntry(&Target->ParentDependents, NULL);
@@ -173,9 +176,15 @@ MakeProbeTargetFile(
         return;
     }
 
+    ASSERT(!Target->FileExists);
+
     //
     //  Check if the object already exists, and if so, when it was last
-    //  modified.
+    //  modified.  Normally this would only need FILE_READ_ATTRIBUTES,
+    //  but some redirectors need FILE_LIST_DIRECTORY aka FILE_READ_DATA
+    //  ot they'll fail operations like GetFileInformationByHandle.
+    //  For ymake, being able to open files for read seems like it should
+    //  always be possible.
     //
     //  MSFIX In the longer run, one thing to consider would be using the
     //  USN value rather than timestamps.  These will be updated for any
@@ -185,10 +194,18 @@ MakeProbeTargetFile(
     //
 
     ASSERT(YoriLibIsStringNullTerminated(&Target->HashEntry.Key));
-    FileHandle = CreateFile(Target->HashEntry.Key.StartOfString, FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+    FileHandle = CreateFile(Target->HashEntry.Key.StartOfString,
+                            FILE_READ_ATTRIBUTES | FILE_READ_DATA,
+                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                            NULL,
+                            OPEN_EXISTING,
+                            FILE_FLAG_BACKUP_SEMANTICS,
+                            NULL);
     if (FileHandle != INVALID_HANDLE_VALUE) {
+
         if (GetFileInformationByHandle(FileHandle, &FileInfo)) {
             Target->FileExists = TRUE;
+
             if (FileInfo.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
                 Target->ModifiedTime.LowPart = 0;
                 Target->ModifiedTime.HighPart = 0;
@@ -368,7 +385,7 @@ MakeLookupOrCreateTarget(
 
     if (ScopeContext->FirstUserTarget == NULL &&
         !TargetIsInferenceRule &&
-        YoriLibCompareStringWithLiteralInsensitive(&TargetNoQuotes, MAKE_DEFAULT_SCOPE_TARGET_NAME) != 0) {
+        YoriLibCompareStringLitIns(&TargetNoQuotes, MAKE_DEFAULT_SCOPE_TARGET_NAME) != 0) {
 
         if (!MakeCreateParentChildDependency(ScopeContext->MakeContext, Target, ScopeContext->DefaultTarget)) {
             MakeDeactivateTarget(Target);
@@ -448,7 +465,7 @@ MakeCreateInferenceRule(
     )
 {
     PMAKE_INFERENCE_RULE InferenceRule;
-    DWORD CharsNeeded;
+    YORI_ALLOC_SIZE_T CharsNeeded;
     LPTSTR WritePoint;
 
     CharsNeeded = SourceDir->LengthInChars + 1 +
@@ -476,10 +493,15 @@ MakeCreateInferenceRule(
     MakePopulateEmbededString(&InferenceRule->TargetExtension, TargetExt, &WritePoint);
 
 #if MAKE_DEBUG_TARGETS
-    YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("Inference rule FromDir=%y FromExt=%y ToDir=%y ToExt=%y\n"), &InferenceRule->RelativeSourceDirectory, &InferenceRule->SourceExtension, &InferenceRule->RelativeTargetDirectory, &InferenceRule->TargetExtension);
+    YoriLibOutput(YORI_LIB_OUTPUT_STDOUT,
+                  _T("Inference rule FromDir=%y FromExt=%y ToDir=%y ToExt=%y\n"),
+                  &InferenceRule->RelativeSourceDirectory,
+                  &InferenceRule->SourceExtension,
+                  &InferenceRule->RelativeTargetDirectory,
+                  &InferenceRule->TargetExtension);
 #endif
 
-    InterlockedIncrement(&Target->ReferenceCount);
+    InterlockedIncrement((INTERLOCKED_VOLATILE LONG *)&Target->ReferenceCount);
     InferenceRule->Target = Target;
     InferenceRule->ScopeContext = ScopeContext;
     YoriLibInsertList(&ScopeContext->InferenceRuleList, &InferenceRule->ListEntry);
@@ -629,7 +651,7 @@ MakeGetNextInferenceRuleTargetExtension(
 
     NextRule = MakeGetNextInferenceRule(TopScope, PreviousRule);
     while (NextRule != NULL) {
-        if (YoriLibCompareStringInsensitive(TargetExt, &NextRule->TargetExtension) == 0) {
+        if (YoriLibCompareStringIns(TargetExt, &NextRule->TargetExtension) == 0) {
             return NextRule;
         }
         NextRule = MakeGetNextInferenceRule(TopScope, NextRule);
@@ -652,13 +674,13 @@ MakeGetNextInferenceRuleTargetExtension(
          rule may require fewer characters than the file name, in which case
          this function returns zero.
  */
-DWORD
+YORI_ALLOC_SIZE_T
 MakeCountExtraInferenceRuleChars(
     __in PMAKE_INFERENCE_RULE InferenceRule
     )
 {
-    DWORD CharsAdded;
-    DWORD CharsRemoved;
+    YORI_ALLOC_SIZE_T CharsAdded;
+    YORI_ALLOC_SIZE_T CharsRemoved;
 
     //
     //  Inference rules are applied backwards: we know a specific target is
@@ -716,9 +738,9 @@ MakeBuildProbeNameFromInferenceRule(
 {
     YORI_STRING FileName;
     YORI_STRING Prefix;
-    DWORD Index;
-    DWORD DirIndex;
-    DWORD SepIndex;
+    YORI_ALLOC_SIZE_T Index;
+    YORI_ALLOC_SIZE_T DirIndex;
+    YORI_ALLOC_SIZE_T SepIndex;
     TCHAR PathChar;
     TCHAR DirChar;
 
@@ -827,7 +849,7 @@ MakeAssignInferenceRuleToTarget(
     if (Target->InferenceRuleParentTarget == NULL) {
         return FALSE;
     }
-    InterlockedIncrement(&Target->InferenceRuleParentTarget->ReferenceCount);
+    InterlockedIncrement((INTERLOCKED_VOLATILE LONG *)&Target->InferenceRuleParentTarget->ReferenceCount);
     MakeReferenceInferenceRule(InferenceRule);
     Target->InferenceRule = InferenceRule;
 
@@ -874,9 +896,9 @@ MakeFindInferenceRuleForTarget(
     YORI_STRING TargetNoExt;
     PYORI_STRING FileToProbe;
     PYORI_STRING NestedFileToProbe;
-    DWORD Index;
-    DWORD CharsNeeded;
-    DWORD LongestCharsNeeded;
+    YORI_ALLOC_SIZE_T Index;
+    YORI_ALLOC_SIZE_T CharsNeeded;
+    YORI_ALLOC_SIZE_T LongestCharsNeeded;
     BOOLEAN FoundRuleWithTargetExtension;
 
     //
@@ -939,7 +961,7 @@ MakeFindInferenceRuleForTarget(
 
     CharsNeeded = Target->HashEntry.Key.LengthInChars + LongestCharsNeeded + 1;
     if (CharsNeeded > FileToProbe->LengthAllocated) {
-        if (!YoriLibReallocateStringWithoutPreservingContents(FileToProbe, CharsNeeded * 2)) {
+        if (!YoriLibReallocStringNoContents(FileToProbe, CharsNeeded * 2)) {
             return FALSE;
         }
     }
@@ -1005,7 +1027,7 @@ MakeFindInferenceRuleForTarget(
 
             CharsNeeded = FileToProbe->LengthInChars + LongestCharsNeeded + 1;
             if (CharsNeeded > NestedFileToProbe->LengthAllocated) {
-                if (!YoriLibReallocateStringWithoutPreservingContents(NestedFileToProbe, CharsNeeded * 2)) {
+                if (!YoriLibReallocStringNoContents(NestedFileToProbe, CharsNeeded * 2)) {
                     return FALSE;
                 }
             }
@@ -1217,15 +1239,15 @@ MakeExpandTargetVariable(
     __out PYORI_STRING VariableData
     )
 {
-    DWORD Index;
+    YORI_ALLOC_SIZE_T Index;
     PYORI_LIST_ENTRY ListEntry;
     PMAKE_TARGET_DEPENDENCY DependentTarget;
     YORI_STRING BaseVariableName;
     YORI_STRING FileNamePartQualifier;
-    DWORD SymbolChars;
+    YORI_ALLOC_SIZE_T SymbolChars;
     BOOLEAN Result;
 
-    SymbolChars = YoriLibCountStringContainingChars(VariableName, _T("@*<?"));
+    SymbolChars = YoriLibCntStringWithChars(VariableName, _T("@*<?"));
 
     //
     //  We should only be here if the variable was target specific, which
@@ -1250,11 +1272,11 @@ MakeExpandTargetVariable(
 
     Result = FALSE;
 
-    if (YoriLibCompareStringWithLiteral(&BaseVariableName, _T("@")) == 0) {
+    if (YoriLibCompareStringLit(&BaseVariableName, _T("@")) == 0) {
         VariableData->StartOfString = Target->HashEntry.Key.StartOfString;
         VariableData->LengthInChars = Target->HashEntry.Key.LengthInChars;
         Result = TRUE;
-    } else if (YoriLibCompareStringWithLiteral(&BaseVariableName, _T("*")) == 0) {
+    } else if (YoriLibCompareStringLit(&BaseVariableName, _T("*")) == 0) {
         VariableData->StartOfString = Target->HashEntry.Key.StartOfString;
 
         //
@@ -1278,7 +1300,7 @@ MakeExpandTargetVariable(
         }
         VariableData->LengthInChars = Index;
         Result = TRUE;
-    } else if (YoriLibCompareStringWithLiteral(&BaseVariableName, _T("?")) == 0) {
+    } else if (YoriLibCompareStringLit(&BaseVariableName, _T("?")) == 0) {
         Index = 0;
         ListEntry = YoriLibGetNextListEntry(&Target->ParentDependents, NULL);
         while (ListEntry != NULL) {
@@ -1319,7 +1341,7 @@ MakeExpandTargetVariable(
         VariableData->StartOfString[Index] = '\0';
         VariableData->LengthInChars = Index;
         Result = TRUE;
-    } else if (YoriLibCompareStringWithLiteral(&BaseVariableName, _T("**")) == 0) {
+    } else if (YoriLibCompareStringLit(&BaseVariableName, _T("**")) == 0) {
         Index = 0;
         ListEntry = YoriLibGetNextListEntry(&Target->ParentDependents, NULL);
         while (ListEntry != NULL) {
@@ -1353,11 +1375,11 @@ MakeExpandTargetVariable(
         VariableData->StartOfString[Index] = '\0';
         VariableData->LengthInChars = Index;
         Result = TRUE;
-    } else if (YoriLibCompareStringWithLiteral(&BaseVariableName, _T("<")) == 0 &&
+    } else if (YoriLibCompareStringLit(&BaseVariableName, _T("<")) == 0 &&
                Target->InferenceRule != NULL) {
 
         YORI_STRING BaseName;
-        DWORD CharsNeeded;
+        YORI_ALLOC_SIZE_T CharsNeeded;
         BOOLEAN PathMatch;
 
         CharsNeeded = MakeCountExtraInferenceRuleChars(Target->InferenceRule);
@@ -1422,10 +1444,10 @@ MakeExpandTargetVariable(
             VariableData->StartOfString = VariableData->StartOfString + Index;
             VariableData->LengthInChars = VariableData->LengthInChars - Index;
         }
-    } else if (YoriLibCompareStringWithLiteralInsensitive(&FileNamePartQualifier, _T("B")) == 0) {
+    } else if (YoriLibCompareStringLitIns(&FileNamePartQualifier, _T("B")) == 0) {
         BOOLEAN FinalDotFound = FALSE;
         BOOLEAN FinalSeperatorFound = FALSE;
-        DWORD FinalDotIndex = 0;
+        YORI_ALLOC_SIZE_T FinalDotIndex = 0;
 
         for (Index = VariableData->LengthInChars; Index > 0; Index--) {
             if (FinalDotIndex == 0 && VariableData->StartOfString[Index - 1] == '.') {
@@ -1446,7 +1468,7 @@ MakeExpandTargetVariable(
             VariableData->StartOfString = VariableData->StartOfString + Index;
         }
 
-    } else if (YoriLibCompareStringWithLiteralInsensitive(&FileNamePartQualifier, _T("D")) == 0) {
+    } else if (YoriLibCompareStringLitIns(&FileNamePartQualifier, _T("D")) == 0) {
 
         BOOLEAN FinalSeperatorFound = FALSE;
 
@@ -1461,7 +1483,7 @@ MakeExpandTargetVariable(
             VariableData->LengthInChars = Index - 1;
         }
 
-    } else if (YoriLibCompareStringWithLiteralInsensitive(&FileNamePartQualifier, _T("F")) == 0) {
+    } else if (YoriLibCompareStringLitIns(&FileNamePartQualifier, _T("F")) == 0) {
         BOOLEAN FinalSeperatorFound = FALSE;
 
         for (Index = VariableData->LengthInChars; Index > 0; Index--) {
@@ -1477,7 +1499,7 @@ MakeExpandTargetVariable(
         }
 
 
-    } else if (YoriLibCompareStringWithLiteralInsensitive(&FileNamePartQualifier, _T("R")) == 0) {
+    } else if (YoriLibCompareStringLitIns(&FileNamePartQualifier, _T("R")) == 0) {
         BOOLEAN FinalDotFound = FALSE;
 
         for (Index = VariableData->LengthInChars; Index > 0; Index--) {
@@ -1520,16 +1542,16 @@ MakeGenerateExecScriptForTarget(
     )
 {
     YORI_STRING Line;
-    DWORD StartLineIndex;
-    DWORD Index;
+    YORI_ALLOC_SIZE_T StartLineIndex;
+    YORI_ALLOC_SIZE_T Index;
     PYORI_STRING SourceString;
     PMAKE_CMD_TO_EXEC CmdToExec;
 
     UNREFERENCED_PARAMETER(MakeContext);
 
     //
-    //  MSFIX: NMAKE will use the inference rule if the target's recipe is
-    //  empty and an inference rule exists.  This allows a makefile to specify
+    //  NMAKE will use the inference rule if the target's recipe is empty and
+    //  an inference rule exists.  This allows a makefile to specify
     //  dependencies without recipes and have the inference rules supply
     //  recipes.  Note that a target with no string but has built dependencies
     //  is still successful.

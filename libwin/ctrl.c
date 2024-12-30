@@ -42,6 +42,11 @@
  @param CanReceiveFocus If TRUE, the control is capable of being selected with
         the tab key or similar.  If FALSE, focus should skip this control.
 
+ @param ReceiveFocusOnMouseClick If TRUE, clicking on the control should
+        switch input focus to it.  For some controls, a click can perform an
+        action without needing to retain focus, but the control still needs to
+        receive focus on keyboard navigation.
+
  @param Ctrl On successful completion, this control structure is updated
         to its initialized state.
 
@@ -53,6 +58,7 @@ YoriWinCreateControl(
     __in_opt PYORI_WIN_CTRL Parent,
     __in PSMALL_RECT Rect,
     __in BOOLEAN CanReceiveFocus,
+    __in BOOLEAN ReceiveFocusOnMouseClick,
     __out PYORI_WIN_CTRL Ctrl
     )
 {
@@ -76,6 +82,9 @@ YoriWinCreateControl(
 
     Ctrl->RelativeToParentClient = TRUE;
     Ctrl->CanReceiveFocus = CanReceiveFocus;
+    if (CanReceiveFocus) {
+        Ctrl->ReceiveFocusOnMouseClick = ReceiveFocusOnMouseClick;
+    }
 
     YoriLibInitializeListHead(&Ctrl->ParentControlList);
     YoriLibInitializeListHead(&Ctrl->ChildControlList);
@@ -104,6 +113,34 @@ YoriWinCreateControl(
 }
 
 /**
+ Notify a control that it should close.  This allows it to cleanup any
+ control specific state before cleaning up the common control structures.
+
+ @param Ctrl Pointer to the control to clean up.
+ */
+VOID
+YoriWinCloseControl(
+    __in PYORI_WIN_CTRL Ctrl
+    )
+{
+    YORI_WIN_EVENT Event;
+    ZeroMemory(&Event, sizeof(Event));
+    Event.EventType = YoriWinEventParentDestroyed;
+
+    //
+    //  Normally a control should destroy itself when notified of parent
+    //  destruction.  If it doesn't support notification, clean it up
+    //  explicitly.
+    //
+
+    if (Ctrl->NotifyEventFn != NULL) {
+        Ctrl->NotifyEventFn(Ctrl, &Event);
+    } else {
+        YoriWinDestroyControl(Ctrl);
+    }
+}
+
+/**
  Close any initialized state within the common control header.
 
  @param Ctrl Pointer to the control to clean up.
@@ -114,6 +151,7 @@ YoriWinDestroyControl(
     )
 {
     PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle = NULL;
+    PYORI_WIN_EVENT PostedEvent;
 
     //
     //  Notify all controls that the parent is going away in case they
@@ -135,6 +173,10 @@ YoriWinDestroyControl(
             YoriWinRemoveControlFromWindow(Window, Ctrl);
         }
         YoriLibRemoveListItem(&Ctrl->ParentControlList);
+    }
+
+    while ((PostedEvent = YoriWinGetNextPostedEvent(Ctrl)) != NULL) {
+        YoriWinFreePostedEvent(PostedEvent);
     }
 
     if (WinMgrHandle != NULL) {
@@ -302,8 +344,8 @@ YoriWinGetControlClientSize(
 BOOLEAN
 YoriWinSetControlCursorState(
     __in PYORI_WIN_CTRL Ctrl,
-    __in BOOL Visible,
-    __in DWORD SizePercentage
+    __in BOOLEAN Visible,
+    __in UCHAR SizePercentage
     )
 {
     if (Ctrl->Parent != NULL) {
@@ -693,7 +735,7 @@ YoriWinTranslateMouseEventForChild(
 
  @param Window On successful completion, populated with the toplevel window
         that the window coordinates are relative to.
- 
+
  @param WinCoord On successful completion, populated with the window
         coordinates.
  */
@@ -801,6 +843,8 @@ YoriWinTranslateCtrlCoordinatesToScreenCoordinates(
  if the coordinates are in the nonclient area; or can return no coordinates
  and indicate that the coordinates are not within the window.
 
+ @param WinMgrHandle Pointer to the window manager.
+
  @param Ctrl Pointer to a control which is a toplevel window.
 
  @param ScreenCoord Specifies screen buffer coordinates.
@@ -818,6 +862,7 @@ YoriWinTranslateCtrlCoordinatesToScreenCoordinates(
  */
 VOID
 YoriWinTranslateScreenCoordinatesToWindow(
+    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
     __in PYORI_WIN_CTRL Ctrl,
     __in COORD ScreenCoord,
     __out PBOOLEAN InWindowRange,
@@ -825,31 +870,43 @@ YoriWinTranslateScreenCoordinatesToWindow(
     __out PCOORD CtrlCoord
     )
 {
+    SMALL_RECT WinMgrLocation;
+    COORD WinMgrCoord;
+
+    YoriWinGetWinMgrLocation(WinMgrHandle, &WinMgrLocation);
+
     *InWindowRange = FALSE;
     *InWindowClientRange = FALSE;
 
-    if (YoriWinCoordInSmallRect(&ScreenCoord, &Ctrl->FullRect)) {
+    if (!YoriWinCoordInSmallRect(&ScreenCoord, &WinMgrLocation)) {
+        CtrlCoord->X = 0;
+        CtrlCoord->Y = 0;
+        return;
+    }
+
+    WinMgrCoord.X = (SHORT)(ScreenCoord.X - WinMgrLocation.Left);
+    WinMgrCoord.Y = (SHORT)(ScreenCoord.Y - WinMgrLocation.Top);
+
+    if (YoriWinCoordInSmallRect(&WinMgrCoord, &Ctrl->FullRect)) {
         SMALL_RECT ClientArea;
         ClientArea.Left = (SHORT)(Ctrl->FullRect.Left + Ctrl->ClientRect.Left);
         ClientArea.Top = (SHORT)(Ctrl->FullRect.Top + Ctrl->ClientRect.Top);
         ClientArea.Right = (SHORT)(Ctrl->FullRect.Left + Ctrl->ClientRect.Right);
         ClientArea.Bottom = (SHORT)(Ctrl->FullRect.Top + Ctrl->ClientRect.Bottom);
         *InWindowRange = TRUE;
-        if (YoriWinCoordInSmallRect(&ScreenCoord, &ClientArea)) {
+        if (YoriWinCoordInSmallRect(&WinMgrCoord, &ClientArea)) {
             *InWindowClientRange = TRUE;
-            CtrlCoord->X = (SHORT)(ScreenCoord.X - ClientArea.Left);
-            CtrlCoord->Y = (SHORT)(ScreenCoord.Y - ClientArea.Top);
+            CtrlCoord->X = (SHORT)(WinMgrCoord.X - ClientArea.Left);
+            CtrlCoord->Y = (SHORT)(WinMgrCoord.Y - ClientArea.Top);
         } else {
-            CtrlCoord->X = (SHORT)(ScreenCoord.X - Ctrl->FullRect.Left);
-            CtrlCoord->Y = (SHORT)(ScreenCoord.Y - Ctrl->FullRect.Top);
+            CtrlCoord->X = (SHORT)(WinMgrCoord.X - Ctrl->FullRect.Left);
+            CtrlCoord->Y = (SHORT)(WinMgrCoord.Y - Ctrl->FullRect.Top);
         }
     } else {
         CtrlCoord->X = 0;
         CtrlCoord->Y = 0;
     }
 }
-
-
 
 /**
  Updates the specified cell within the control's client area.
@@ -1113,6 +1170,32 @@ YoriWinSetControlContext(
 {
     PYORI_WIN_CTRL Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
     Ctrl->UserContext = Context;
+}
+
+/**
+ Change whether the control should receive focus in response to a mouse click.
+ Note controls can receive focus via the keyboard, even if focus is not
+ changed via a click.
+
+ @param CtrlHandle Pointer to the control.
+
+ @param ReceiveFocusOnMouseClick TRUE if the control should gain focus on a
+        mouse click, FALSE if it should not.
+
+ @return TRUE if the state was successfully changed, FALSE if it was not.
+ */
+BOOLEAN
+YoriWinControlSetFocusOnMouseClick(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in BOOLEAN ReceiveFocusOnMouseClick
+    )
+{
+    PYORI_WIN_CTRL Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
+    if (Ctrl->CanReceiveFocus) {
+        Ctrl->ReceiveFocusOnMouseClick = ReceiveFocusOnMouseClick;
+        return TRUE;
+    }
+    return FALSE;
 }
 
 /**

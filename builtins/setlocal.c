@@ -209,15 +209,15 @@ SetlocalFreeStack(
 DWORD
 YORI_BUILTIN_FN
 YoriCmd_ENDLOCAL(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    DWORD i;
+    YORI_ALLOC_SIZE_T i;
     BOOL ArgumentUnderstood;
     PYORI_LIST_ENTRY ListEntry;
     PSETLOCAL_STACK StackLocation;
-    DWORD VarLen;
+    YORI_ALLOC_SIZE_T VarLen;
     LPTSTR ThisVar;
     LPTSTR ThisValue;
     YORI_STRING Arg;
@@ -228,10 +228,10 @@ YoriCmd_ENDLOCAL(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 EndlocalHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2018"));
                 return EXIT_SUCCESS;
             }
@@ -321,7 +321,7 @@ YoriCmd_ENDLOCAL(
             ThisValue = YoriLibFindLeftMostCharacter(&AliasName, '=');
             if (ThisValue != NULL) {
                 ThisValue[0] = '\0';
-                AliasName.LengthInChars = (DWORD)(ThisValue - ThisVar);
+                AliasName.LengthInChars = (YORI_ALLOC_SIZE_T)(ThisValue - ThisVar);
                 YoriCallDeleteAlias(&AliasName);
             }
 
@@ -341,7 +341,7 @@ YoriCmd_ENDLOCAL(
             ThisValue = YoriLibFindLeftMostCharacter(&AliasName, '=');
             if (ThisValue != NULL) {
                 ThisValue[0] = '\0';
-                AliasName.LengthInChars = (DWORD)(ThisValue - ThisVar);
+                AliasName.LengthInChars = (YORI_ALLOC_SIZE_T)(ThisValue - ThisVar);
                 ThisValue++;
                 AliasValue.StartOfString = ThisValue;
                 AliasValue.LengthInChars = VarLen - AliasName.LengthInChars - 1;
@@ -393,17 +393,17 @@ SetlocalDisplayCurrentStackCount(VOID)
 DWORD
 YORI_BUILTIN_FN
 YoriCmd_SETLOCAL(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
     BOOL ArgumentUnderstood;
-    DWORD i;
+    YORI_ALLOC_SIZE_T i;
     PSETLOCAL_STACK NewStackEntry;
-    DWORD CurrentDirectoryLength;
+    YORI_ALLOC_SIZE_T CurrentDirectoryLength;
     YORI_STRING Arg;
     DWORD AttributesToSave = 0;
-    DWORD ExtraChars;
+    YORI_ALLOC_SIZE_T ExtraChars;
     LPTSTR CharOffset;
     BOOLEAN CountStack = FALSE;
 
@@ -417,25 +417,25 @@ YoriCmd_SETLOCAL(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 SetlocalHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2018-2019"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("a")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("a")) == 0) {
                 ArgumentUnderstood = TRUE;
                 AttributesToSave |= SETLOCAL_ATTRIBUTE_ALIASES;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("c")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("c")) == 0) {
                 ArgumentUnderstood = TRUE;
                 CountStack = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("d")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("d")) == 0) {
                 ArgumentUnderstood = TRUE;
                 AttributesToSave |= SETLOCAL_ATTRIBUTE_DIRECTORY;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("e")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("e")) == 0) {
                 ArgumentUnderstood = TRUE;
                 AttributesToSave |= SETLOCAL_ATTRIBUTE_ENVIRONMENT;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("t")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("t")) == 0) {
                 ArgumentUnderstood = TRUE;
                 AttributesToSave |= SETLOCAL_ATTRIBUTE_TITLE;
             }
@@ -460,8 +460,8 @@ YoriCmd_SETLOCAL(
     ExtraChars = 0;
     CurrentDirectoryLength = 0;
     if (AttributesToSave & SETLOCAL_ATTRIBUTE_DIRECTORY) {
-        CurrentDirectoryLength = GetCurrentDirectory(0, NULL);
-        ExtraChars += CurrentDirectoryLength;
+        CurrentDirectoryLength = (YORI_ALLOC_SIZE_T)GetCurrentDirectory(0, NULL);
+        ExtraChars = ExtraChars + CurrentDirectoryLength;
     }
 
     //
@@ -487,14 +487,14 @@ YoriCmd_SETLOCAL(
     if (AttributesToSave & SETLOCAL_ATTRIBUTE_DIRECTORY) {
         NewStackEntry->PreviousDirectory.StartOfString = CharOffset;
         NewStackEntry->PreviousDirectory.LengthAllocated = CurrentDirectoryLength;
-        NewStackEntry->PreviousDirectory.LengthInChars = GetCurrentDirectory(CurrentDirectoryLength, NewStackEntry->PreviousDirectory.StartOfString);
+        NewStackEntry->PreviousDirectory.LengthInChars = (YORI_ALLOC_SIZE_T)GetCurrentDirectory(CurrentDirectoryLength, NewStackEntry->PreviousDirectory.StartOfString);
         CharOffset += CurrentDirectoryLength;
     }
 
     if (AttributesToSave & SETLOCAL_ATTRIBUTE_TITLE) {
         NewStackEntry->PreviousTitle.StartOfString = CharOffset;
         NewStackEntry->PreviousTitle.LengthAllocated = SETLOCAL_MAX_WINDOW_TITLE_LENGTH;
-        NewStackEntry->PreviousTitle.LengthInChars = GetConsoleTitle(NewStackEntry->PreviousTitle.StartOfString, NewStackEntry->PreviousTitle.LengthAllocated);
+        NewStackEntry->PreviousTitle.LengthInChars = (YORI_ALLOC_SIZE_T)GetConsoleTitle(NewStackEntry->PreviousTitle.StartOfString, NewStackEntry->PreviousTitle.LengthAllocated);
         CharOffset += SETLOCAL_MAX_WINDOW_TITLE_LENGTH;
     }
 

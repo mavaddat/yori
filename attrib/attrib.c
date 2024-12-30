@@ -214,7 +214,7 @@ AttribFileFoundCallback(
     if (ExistingAttributes == (DWORD)-1) {
         LastError = GetLastError();
         ErrText = YoriLibGetWinErrorText(LastError);
-        YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("attrib: query of attributes failed: %y %s\n"), FilePath, ErrText);
+        YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("attrib: query of attributes failed: %y %s"), FilePath, ErrText);
         YoriLibFreeWinErrorText(ErrText);
         return TRUE;
     }
@@ -249,7 +249,7 @@ AttribFileFoundCallback(
             if (!SetFileAttributes(FilePath->StartOfString, NewAttributes)) {
                 LastError = GetLastError();
                 ErrText = YoriLibGetWinErrorText(LastError);
-                YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("attrib: modification of attributes failed: %y %s\n"), FilePath, ErrText);
+                YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("attrib: modification of attributes failed: %y %s"), FilePath, ErrText);
                 YoriLibFreeWinErrorText(ErrText);
                 return TRUE;
             } else if (AttribContext->Verbose) {
@@ -262,6 +262,7 @@ AttribFileFoundCallback(
         }
     }
 
+    AttribContext->SavedErrorThisArg = ERROR_SUCCESS;
     AttribContext->FilesFound++;
 
     return TRUE;
@@ -305,7 +306,7 @@ AttribFileEnumerateErrorCallback(
         UnescapedFilePath.LengthInChars = AttribContext->UnescapedPath.LengthInChars;
     }
 
-    if (ErrorCode == ERROR_FILE_NOT_FOUND || ErrorCode == ERROR_PATH_NOT_FOUND) {
+    if (ErrorCode == ERROR_FILE_NOT_FOUND || ErrorCode == ERROR_PATH_NOT_FOUND || ErrorCode == ERROR_INVALID_NAME) {
         AttribContext->SavedErrorThisArg = ErrorCode;
         Result = TRUE;
     } else {
@@ -316,7 +317,7 @@ AttribFileEnumerateErrorCallback(
         DirName.StartOfString = UnescapedFilePath.StartOfString;
         FilePart = YoriLibFindRightMostCharacter(&UnescapedFilePath, '\\');
         if (FilePart != NULL) {
-            DirName.LengthInChars = (DWORD)(FilePart - DirName.StartOfString);
+            DirName.LengthInChars = (YORI_ALLOC_SIZE_T)(FilePart - DirName.StartOfString);
         } else {
             DirName.LengthInChars = UnescapedFilePath.LengthInChars;
         }
@@ -389,14 +390,14 @@ AttribStringToFlags(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
     BOOLEAN ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
-    DWORD MatchFlags;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
+    WORD MatchFlags;
     DWORD Result;
     DWORD NewAttributes;
     BOOLEAN BasicEnumeration = FALSE;
@@ -434,32 +435,32 @@ ENTRYPOINT(
         //
 
         if (PrefixChar == '/') {
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 AttribHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2021"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("b")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("b")) == 0) {
                 BasicEnumeration = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("d")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("d")) == 0) {
                 AttribContext.IncludeDirectories = TRUE;
                 ArgumentUnderstood = TRUE;
 
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("s")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("s")) == 0) {
                 AttribContext.Recursive = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("v")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("v")) == 0) {
                 AttribContext.Verbose = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 ArgumentUnderstood = TRUE;
                 StartArg = i + 1;
                 break;
             }
         } else if (PrefixChar == '-') {
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 AttribHelp();
                 return EXIT_SUCCESS;
             } else {
@@ -491,7 +492,7 @@ ENTRYPOINT(
     }
 
 #if YORI_BUILTIN
-    YoriLibCancelEnable();
+    YoriLibCancelEnable(FALSE);
 #endif
 
     Result = EXIT_SUCCESS;
@@ -550,10 +551,6 @@ ENTRYPOINT(
                 if (YoriLibUserStringToSingleFilePath(&ArgV[i], TRUE, &FullPath)) {
                     AttribFileFoundCallback(&FullPath, NULL, 0, &AttribContext);
                     YoriLibFreeStringContents(&FullPath);
-                }
-
-                if (AttribContext.SavedErrorThisArg != ERROR_SUCCESS) {
-                    YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("File or directory not found: %y\n"), &ArgV[i]);
                 }
             }
 

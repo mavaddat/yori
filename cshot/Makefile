@@ -3,23 +3,21 @@ BINARIES=cshot.exe
 
 !INCLUDE "..\config\common.mk"
 
-!IF $(PDB)==1
 LINKPDB=/Pdb:cshot.pdb
-!ENDIF
 
 BIN_OBJS=\
 	 cshot.obj        \
 
 MOD_OBJS=\
-	 mod_cshot.obj    \
+	 mcshot.obj    \
 
 compile: $(BIN_OBJS) builtins.lib
 
-cshot.exe: $(BIN_OBJS) $(YORILIB) $(YORICRT) $(YORIVER)
+cshot.exe: $(BIN_OBJS) $(YORILIBS) $(YORIVER)
 	@echo $@
-	@$(LINK) $(LDFLAGS) -entry:$(YENTRY) $(BIN_OBJS) $(LIBS) $(CRTLIB) $(YORILIB) $(YORIVER) -version:$(YORI_VER_MAJOR).$(YORI_VER_MINOR) $(LINKPDB) -out:$@
+	@$(LINK) $(LDFLAGS) -entry:$(YENTRY) $(BIN_OBJS) $(YORILIBS) $(EXTERNLIBS) $(YORIVER) -version:$(YORI_VER_MAJOR).$(YORI_VER_MINOR) $(LINKPDB) -out:$@
 
-mod_cshot.obj: cshot.c
+mcshot.obj: cshot.c
 	@echo $@
 	@$(CC) -c -DYORI_BUILTIN=1 $(CFLAGS) -Fo$@ cshot.c
 

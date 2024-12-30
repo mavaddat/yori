@@ -161,7 +161,7 @@ MountMountIso(
 BOOL
 MountMountVhd(
     __in PYORI_STRING FileName,
-    __in BOOL ReadOnly
+    __in BOOLEAN ReadOnly
     )
 {
     VIRTUAL_STORAGE_TYPE StorageType;
@@ -172,9 +172,6 @@ MountMountVhd(
     DWORD Length;
     DWORD AccessRequested;
     YORI_STRING FullFileName;
-    TOKEN_PRIVILEGES TokenPrivileges;
-    LUID ManageVolumeLuid;
-    HANDLE TokenHandle;
     YORI_STRING DiskPhysicalPath;
     LPTSTR ErrText;
 
@@ -183,36 +180,19 @@ MountMountVhd(
 
     if (DllVirtDisk.pAttachVirtualDisk == NULL ||
         DllVirtDisk.pGetVirtualDiskPhysicalPath == NULL ||
-        DllVirtDisk.pOpenVirtualDisk == NULL ||
-        DllAdvApi32.pLookupPrivilegeValueW == NULL ||
-        DllAdvApi32.pOpenProcessToken == NULL ||
-        DllAdvApi32.pAdjustTokenPrivileges == NULL) {
+        DllVirtDisk.pOpenVirtualDisk == NULL) {
 
         YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("mount: OS support not present\n"));
         return FALSE;
     }
 
+    if (!YoriLibEnableManageVolumePrivilege()) {
+        YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("mount: privilege not held\n"));
+        return FALSE;
+    }
+
     YoriLibInitEmptyString(&FullFileName);
     if (!YoriLibUserStringToSingleFilePath(FileName, TRUE, &FullFileName)) {
-        return FALSE;
-    }
-
-    if (!DllAdvApi32.pLookupPrivilegeValueW(NULL, SE_MANAGE_VOLUME_NAME, &ManageVolumeLuid)) {
-        YoriLibFreeStringContents(&FullFileName);
-        return FALSE;
-    }
-
-    if (!DllAdvApi32.pOpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES, &TokenHandle)) {
-        YoriLibFreeStringContents(&FullFileName);
-        return FALSE;
-    }
-
-    TokenPrivileges.PrivilegeCount = 1;
-    TokenPrivileges.Privileges[0].Luid = ManageVolumeLuid;
-    TokenPrivileges.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
-    if (!DllAdvApi32.pAdjustTokenPrivileges(TokenHandle, FALSE, &TokenPrivileges, 0, NULL, 0)) {
-        CloseHandle(TokenHandle);
-        YoriLibFreeStringContents(&FullFileName);
         return FALSE;
     }
 
@@ -379,16 +359,16 @@ typedef enum _MOUNT_OP {
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
     YORI_STRING Arg;
     PYORI_STRING FileName = NULL;
     MOUNT_OP Op;
-    BOOL ReadOnly = FALSE;
+    BOOLEAN ReadOnly = FALSE;
 
     Op = MountOpNone;
 
@@ -399,30 +379,30 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 MountHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2018"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("i")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("i")) == 0) {
                 if (ArgC > i + 1) {
                     FileName = &ArgV[i + 1];
                     Op = MountOpMountIso;
                     ArgumentUnderstood = TRUE;
                     i++;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("r")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("r")) == 0) {
                 ReadOnly = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("u")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("u")) == 0) {
                 if (ArgC > i + 1) {
                     FileName = &ArgV[i + 1];
                     Op = MountOpUnmount;
                     ArgumentUnderstood = TRUE;
                     i++;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("v")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("v")) == 0) {
                 if (ArgC > i + 1) {
                     FileName = &ArgV[i + 1];
                     Op = MountOpMountVhd;
@@ -438,13 +418,13 @@ ENTRYPOINT(
                     YORI_STRING Ext;
                     YoriLibInitEmptyString(&Ext);
                     Ext.StartOfString = Period + 1;
-                    Ext.LengthInChars = ArgV[i].LengthInChars - (DWORD)(Period - ArgV[i].StartOfString) - 1;
-                    if (YoriLibCompareStringWithLiteralInsensitive(&Ext, _T("iso")) == 0) {
+                    Ext.LengthInChars = ArgV[i].LengthInChars - (YORI_ALLOC_SIZE_T)(Period - ArgV[i].StartOfString) - 1;
+                    if (YoriLibCompareStringLitIns(&Ext, _T("iso")) == 0) {
                         FileName = &ArgV[i];
                         Op = MountOpMountIso;
                         ArgumentUnderstood = TRUE;
-                    } else if (YoriLibCompareStringWithLiteralInsensitive(&Ext, _T("vhd")) == 0 ||
-                               YoriLibCompareStringWithLiteralInsensitive(&Ext, _T("vhdx")) == 0) {
+                    } else if (YoriLibCompareStringLitIns(&Ext, _T("vhd")) == 0 ||
+                               YoriLibCompareStringLitIns(&Ext, _T("vhdx")) == 0) {
                         FileName = &ArgV[i];
                         Op = MountOpMountVhd;
                         ArgumentUnderstood = TRUE;
@@ -471,7 +451,7 @@ ENTRYPOINT(
     if (FileName != NULL &&
         YoriLibIsCommandLineOption(FileName, &Arg)) {
 
-        if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+        if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
             MountHelp();
             return EXIT_SUCCESS;
         }

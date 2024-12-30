@@ -44,6 +44,11 @@ DWORD CachedMinorOsVersion;
 DWORD CachedBuildNumber;
 
 /**
+ Previously returned system page size.
+ */
+DWORD CachedPageSize;
+
+/**
  Background support has been determined.
  */
 BOOLEAN YoriLibBackgroundColorSupportDetermined;
@@ -53,6 +58,17 @@ BOOLEAN YoriLibBackgroundColorSupportDetermined;
  YoriLibBackgroundColorSupportDetermined is TRUE.
  */
 BOOLEAN YoriLibBackgroundColorSupported;
+
+/**
+ TRUE if the process is running under SSH.  Only meaningful if
+ YoriLibRunningUnderSshDetermined is TRUE.
+ */
+BOOLEAN YoriLibRunningUnderSsh;
+
+/**
+ TRUE if whether the process is running under SSH has been determined.
+ */
+BOOLEAN YoriLibRunningUnderSshDetermined;
 
 #if _WIN64
 /**
@@ -115,6 +131,10 @@ YoriLibGetOsVersionFromPeb(
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1700)
 #pragma warning(disable: 28159)
+#endif
+
+#if defined(__clang__)
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #endif
 
 /**
@@ -213,7 +233,7 @@ YoriLibLoadOsEdition(
 {
     YORI_OS_VERSION_INFO_EX OsVersionInfoEx;
     LPWSTR BrandingString;
-    DWORD Length;
+    YORI_ALLOC_SIZE_T Length;
 
     YoriLibLoadWinBrandFunctions();
 
@@ -228,7 +248,7 @@ YoriLibLoadOsEdition(
             return FALSE;
         }
 
-        Length = wcslen(BrandingString);
+        Length = (YORI_ALLOC_SIZE_T)wcslen(BrandingString);
 
         if (!YoriLibAllocateString(Edition, Length + 1)) {
             return FALSE;
@@ -543,6 +563,11 @@ YoriLibIsNanoServer(VOID)
         return TRUE;
     }
 
+    if (DllKernel32.hDllKernel32Legacy != NULL) {
+
+        return TRUE;
+    }
+
     return FALSE;
 }
 
@@ -560,9 +585,10 @@ YoriLibDoesSystemSupportBackgroundColors(VOID)
     }
 
     if (!YoriLibBackgroundColorSupportDetermined) {
-        LONGLONG Enabled;
+        YORI_MAX_SIGNED_T Enabled;
 
-        if (!YoriLibGetEnvironmentVariableAsNumber(_T("YORIBACKGROUND"), &Enabled)) {
+        YoriLibBackgroundColorSupported = FALSE;
+        if (!YoriLibGetEnvVarAsNumber(_T("YORIBACKGROUND"), &Enabled)) {
             Enabled = 0;
         }
 
@@ -573,6 +599,175 @@ YoriLibDoesSystemSupportBackgroundColors(VOID)
     }
 
     return YoriLibBackgroundColorSupported;
+}
+
+/**
+ Indicate that the system doesn't know whether to support background colors
+ or not, and support should be re-queried on next use.
+ */
+VOID
+YoriLibResetSystemBackgroundColorSupport(VOID)
+{
+    YoriLibBackgroundColorSupportDetermined = FALSE;
+}
+
+/**
+ Return TRUE if the program is running under an SSH connection.  Typically
+ this should be transparent, but SSH isn't always full Win32 fidelity.
+
+ @return TRUE if the process is being operated through an SSH connection,
+         FALSE if not.
+ */
+BOOLEAN
+YoriLibIsRunningUnderSsh(VOID)
+{
+    if (!YoriLibRunningUnderSshDetermined) {
+        DWORD VarLength;
+
+        VarLength = GetEnvironmentVariable(_T("SSH_CLIENT"), NULL, 0);
+        if (VarLength > 0) {
+            YoriLibRunningUnderSsh = TRUE;
+        }
+
+        YoriLibRunningUnderSshDetermined = TRUE;
+    }
+    return YoriLibRunningUnderSsh;
+}
+
+/**
+ Return the system page size for the current system.
+
+ @return The system page size for the current system.
+ */
+YORI_ALLOC_SIZE_T
+YoriLibGetPageSize(VOID)
+{
+    YORI_SYSTEM_INFO SysInfo;
+    DWORD ValidPageSize;
+
+    //
+    //  If the page size is known, return it.
+    //
+    if (CachedPageSize != 0) {
+        return CachedPageSize;
+    }
+
+
+    //
+    //  Ask the system for the page size.
+    //
+    SysInfo.dwPageSize = 0;
+    GetSystemInfo((LPSYSTEM_INFO)&SysInfo);
+
+    //
+    //  Check if the page size is a power of 2, 4Kb or greater, and 1Mb or
+    //  smaller.  If these criteria aren't met, assume this value is bogus.
+    //
+
+    for (ValidPageSize = 0x1000; ValidPageSize <= 0x100000; ValidPageSize = (ValidPageSize<<1)) {
+        if (ValidPageSize == SysInfo.dwPageSize) {
+            CachedPageSize = SysInfo.dwPageSize;
+            return CachedPageSize;
+        }
+    }
+
+    //
+    //  Default to 4Kb, which is highly likely to be correct.
+    //
+
+    CachedPageSize = 0x1000;
+    return CachedPageSize;
+}
+
+/**
+ Check that the executable already has the specified subsystem version.
+ If it doesn't, update the system version to have the specified value.
+
+ @param NewMajor Verify, or possibly set, the subsystem major version to this
+        value.
+
+ @param NewMinor Verify, or possibly set, the subsystem minor version to this
+        value.
+
+ @return TRUE if the executable has this version or has been updated to it;
+         FALSE if the version could not be determined or updated.
+ */
+BOOLEAN
+YoriLibEnsureProcessSubsystemVersionAtLeast(
+    __in WORD NewMajor,
+    __in WORD NewMinor
+    )
+{
+    PIMAGE_DOS_HEADER DosHeader;
+    PYORILIB_PE_HEADERS PeHeaders;
+    DWORD PageSize;
+    DWORD OldProtect;
+
+    DosHeader = (PIMAGE_DOS_HEADER)GetModuleHandle(NULL);
+    PageSize = YoriLibGetPageSize();
+
+    //
+    //  Check that the executable headers fit on one page.  This should
+    //  always happen, and this routine only manipulates one page of
+    //  permissions.
+    //
+
+    if ((((DWORD_PTR)DosHeader) & ((DWORD_PTR)PageSize - 1)) != 0) {
+        return FALSE;
+    }
+
+    //
+    //  Check the executable looks like a DOS executable.
+    //
+
+    if (DosHeader->e_magic != IMAGE_DOS_SIGNATURE ||
+        DosHeader->e_lfanew == 0 ||
+        DosHeader->e_lfanew + sizeof(YORILIB_PE_HEADERS) > PageSize) {
+
+        return FALSE;
+    }
+
+    PeHeaders = YoriLibAddToPointer(DosHeader, DosHeader->e_lfanew);
+
+    //
+    //  Check that the executable looks like an NT executable.
+    //
+
+    if (PeHeaders->Signature != IMAGE_NT_SIGNATURE ||
+        PeHeaders->ImageHeader.SizeOfOptionalHeader <= FIELD_OFFSET(IMAGE_OPTIONAL_HEADER, Subsystem) + sizeof(WORD)) {
+
+        return FALSE;
+    }
+
+    //
+    //  If the executable already has a high enough version, we're done.
+    //
+
+    if (PeHeaders->OptionalHeader.MajorSubsystemVersion > NewMajor) {
+        return TRUE;
+    }
+
+    if (PeHeaders->OptionalHeader.MajorSubsystemVersion == NewMajor &&
+        PeHeaders->OptionalHeader.MinorSubsystemVersion >= NewMinor) {
+
+        return TRUE;
+    }
+
+    //
+    //  Give ourselves write access to the PE header, change it, and restore
+    //  permissions.
+    //
+
+    if (!VirtualProtect(DosHeader, PageSize, PAGE_READWRITE, &OldProtect)) {
+        return FALSE;
+    }
+
+    PeHeaders->OptionalHeader.MajorSubsystemVersion = NewMajor;
+    PeHeaders->OptionalHeader.MinorSubsystemVersion = NewMinor;
+
+    VirtualProtect(DosHeader, PageSize, OldProtect, &OldProtect);
+
+    return TRUE;
 }
 
 // vim:sw=4:ts=4:et:

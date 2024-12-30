@@ -72,8 +72,8 @@ SetRemoveEscapes(
     __inout PYORI_STRING String
     )
 {
-    DWORD CharIndex;
-    DWORD DestIndex;
+    YORI_ALLOC_SIZE_T CharIndex;
+    YORI_ALLOC_SIZE_T DestIndex;
 
     for (CharIndex = 0, DestIndex = 0; CharIndex < String->LengthInChars; CharIndex++, DestIndex++) {
         if (YoriLibIsEscapeChar(String->StartOfString[CharIndex])) {
@@ -104,27 +104,30 @@ SetRemoveEscapes(
 DWORD
 YORI_BUILTIN_FN
 YoriCmd_SET(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    BOOL AppendComponent = FALSE;
-    BOOL IncludeComponent = FALSE;
-    BOOL RemoveComponent = FALSE;
-    DWORD i;
-    DWORD StartArg = 0;
+    BOOLEAN ArgumentUnderstood;
+    BOOLEAN AppendComponent = FALSE;
+    BOOLEAN IncludeComponent = FALSE;
+    BOOLEAN RemoveComponent = FALSE;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     YORI_STRING Arg;
 
-    DWORD EscapedArgC;
+    DWORD TempArgC;
+    YORI_ALLOC_SIZE_T EscapedArgC;
     PYORI_STRING EscapedArgV;
 
     YoriLibLoadNtDllFunctions();
     YoriLibLoadKernel32Functions();
 
-    if (!YoriCallGetEscapedArguments(&EscapedArgC, &EscapedArgV)) {
+    if (!YoriCallGetEscapedArguments(&TempArgC, &EscapedArgV)) {
         EscapedArgC = ArgC;
         EscapedArgV = ArgV;
+    } else {
+        EscapedArgC = (YORI_ALLOC_SIZE_T)TempArgC;
     }
 
     for (i = 1; i < EscapedArgC; i++) {
@@ -134,28 +137,28 @@ YoriCmd_SET(
 
         if (YoriLibIsCommandLineOption(&EscapedArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 SetHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2019"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("e")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("e")) == 0) {
                 if (!RemoveComponent && !IncludeComponent) {
                     AppendComponent = TRUE;
                     ArgumentUnderstood = TRUE;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("i")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("i")) == 0) {
                 if (!RemoveComponent && !AppendComponent) {
                     IncludeComponent = TRUE;
                     ArgumentUnderstood = TRUE;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("r")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("r")) == 0) {
                 if (!IncludeComponent && !AppendComponent) {
                     RemoveComponent = TRUE;
                     ArgumentUnderstood = TRUE;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 StartArg = i;
                 ArgumentUnderstood = TRUE;
                 break;
@@ -174,14 +177,14 @@ YoriCmd_SET(
     if (StartArg == 0) {
         YORI_STRING EnvironmentStrings;
         LPTSTR ThisVar;
-        DWORD VarLen;
+        YORI_ALLOC_SIZE_T VarLen;
 
         if (!YoriLibGetEnvironmentStrings(&EnvironmentStrings)) {
             return EXIT_FAILURE;
         }
         ThisVar = EnvironmentStrings.StartOfString;
         while (*ThisVar != '\0') {
-            VarLen = _tcslen(ThisVar);
+            VarLen = (YORI_ALLOC_SIZE_T)_tcslen(ThisVar);
             YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("%s\n"), ThisVar);
             ThisVar += VarLen;
             ThisVar++;
@@ -189,34 +192,16 @@ YoriCmd_SET(
         YoriLibFreeStringContents(&EnvironmentStrings);
     } else {
         YORI_STRING Value;
-        YORI_STRING CmdLine;
         YORI_STRING Variable;
+        BOOLEAN ValueSpecified;
 
-        if (!YoriLibBuildCmdlineFromArgcArgv(EscapedArgC - StartArg, &EscapedArgV[StartArg], FALSE, FALSE, &CmdLine)) {
+        if (!YoriLibArgArrayToVariableValue(EscapedArgC - StartArg, &EscapedArgV[StartArg], &Variable, &ValueSpecified, &Value)) {
             return EXIT_FAILURE;
-        }
-
-        memcpy(&Variable, &CmdLine, sizeof(YORI_STRING));
-
-        //
-        //  At this point escapes are still present but it's never valid to
-        //  have an '=' in a variable name, escape or not.
-        //
-
-        YoriLibInitEmptyString(&Value);
-        Value.StartOfString = YoriLibFindLeftMostCharacter(&Variable, '=');
-        if (Value.StartOfString) {
-            Value.StartOfString[0] = '\0';
-            Value.StartOfString++;
-            Variable.LengthAllocated = (DWORD)(Value.StartOfString - CmdLine.StartOfString);
-            Variable.LengthInChars = Variable.LengthAllocated - 1;
-            Value.LengthInChars = CmdLine.LengthInChars - Variable.LengthAllocated;
-            Value.LengthAllocated = CmdLine.LengthAllocated - Variable.LengthAllocated;
         }
 
         SetRemoveEscapes(&Variable);
 
-        if (Value.StartOfString != NULL) {
+        if (ValueSpecified) {
 
             //
             //  Scan through the value looking for any unexpanded environment
@@ -224,25 +209,25 @@ YoriCmd_SET(
             //
 
             YoriLibBuiltinRemoveEmptyVariables(&Value);
-            Value.StartOfString[Value.LengthInChars] = '\0';
 
             if (Value.LengthInChars == 0) {
                 YoriCallSetEnvironmentVariable(&Variable, NULL);
             } else {
                 YORI_STRING CombinedValue;
+                Value.StartOfString[Value.LengthInChars] = '\0';
                 SetRemoveEscapes(&Value);
                 if (IncludeComponent) {
-                    if (YoriLibAddEnvironmentComponentReturnString(&Variable, &Value, TRUE, &CombinedValue)) {
+                    if (YoriLibAddEnvCompReturnString(&Variable, &Value, TRUE, &CombinedValue)) {
                         YoriCallSetEnvironmentVariable(&Variable, &CombinedValue);
                         YoriLibFreeStringContents(&CombinedValue);
                     }
                 } else if (AppendComponent) {
-                    if (YoriLibAddEnvironmentComponentReturnString(&Variable, &Value, FALSE, &CombinedValue)) {
+                    if (YoriLibAddEnvCompReturnString(&Variable, &Value, FALSE, &CombinedValue)) {
                         YoriCallSetEnvironmentVariable(&Variable, &CombinedValue);
                         YoriLibFreeStringContents(&CombinedValue);
                     }
                 } else if (RemoveComponent) {
-                    if (YoriLibRemoveEnvironmentComponentReturnString(&Variable, &Value, &CombinedValue)) {
+                    if (YoriLibRmEnvCompReturnString(&Variable, &Value, &CombinedValue)) {
                         if (CombinedValue.LengthAllocated > 0) {
                             YoriCallSetEnvironmentVariable(&Variable, &CombinedValue);
                         } else {
@@ -259,12 +244,13 @@ YoriCmd_SET(
             LPTSTR ThisVar;
 
             if (!YoriLibGetEnvironmentStrings(&EnvironmentStrings)) {
-                YoriLibFreeStringContents(&CmdLine);
+                YoriLibFreeStringContents(&Variable);
+                YoriLibFreeStringContents(&Value);
                 return EXIT_FAILURE;
             }
             ThisVar = EnvironmentStrings.StartOfString;
             while (*ThisVar != '\0') {
-                if (YoriLibCompareStringWithLiteralInsensitiveCount(&Variable, ThisVar, Variable.LengthInChars) == 0) {
+                if (YoriLibCompareStringLitInsCnt(&Variable, ThisVar, Variable.LengthInChars) == 0) {
                     YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("%s\n"), ThisVar);
                 }
                 ThisVar += _tcslen(ThisVar);
@@ -272,7 +258,8 @@ YoriCmd_SET(
             }
             YoriLibFreeStringContents(&EnvironmentStrings);
         }
-        YoriLibFreeStringContents(&CmdLine);
+        YoriLibFreeStringContents(&Variable);
+        YoriLibFreeStringContents(&Value);
     }
     return EXIT_SUCCESS;
 }

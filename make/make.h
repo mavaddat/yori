@@ -403,12 +403,6 @@ typedef struct _MAKE_TARGET_DEPENDENCY {
 
 /**
  A single command to execute as part of building a target.
-
- MSFIX At some future point, certain state changing commands could be
- evaluated by this program internally like cd or set.  In order to implement
- these, each target needs its own notion of current directory or environment.
- CreateProcess allows these to be specified explicitly for any process not
- builtin.
  */
 typedef struct _MAKE_CMD_TO_EXEC {
 
@@ -799,7 +793,7 @@ typedef struct _MAKE_CONTEXT {
      to the number of logical processors, but is limited to 64 due to
      WaitForMultipleObjects.
      */
-    DWORD NumberProcesses;
+    YORI_ALLOC_SIZE_T NumberProcesses;
 
     /**
      The 32 bit hash of the environment block. This process does not modify
@@ -849,7 +843,7 @@ typedef struct _MAKE_CONTEXT {
 PVOID
 MakeSlabAlloc(
     __in PMAKE_SLAB_ALLOC Alloc,
-    __in DWORD SizeInBytes
+    __in YORI_ALLOC_SIZE_T SizeInBytes
     );
 
 VOID

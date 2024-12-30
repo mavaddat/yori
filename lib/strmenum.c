@@ -110,7 +110,10 @@ YoriLibStreamEnumFileFoundCallback(
     }
     if (StreamContext->FullPathWithStream.LengthAllocated < LengthNeeded) {
         YoriLibFreeStringContents(&StreamContext->FullPathWithStream);
-        if (!YoriLibAllocateString(&StreamContext->FullPathWithStream, LengthNeeded + 200)) {
+        if (!YoriLibIsSizeAllocatable(LengthNeeded + 200)) {
+            return FALSE;
+        }
+        if (!YoriLibAllocateString(&StreamContext->FullPathWithStream, (YORI_ALLOC_SIZE_T)(LengthNeeded + 200))) {
             return FALSE;
         }
     }
@@ -121,7 +124,11 @@ YoriLibStreamEnumFileFoundCallback(
         //  Build the full path to the stream
         //
 
-        StreamContext->FullPathWithStream.LengthInChars = YoriLibSPrintf(StreamContext->FullPathWithStream.StartOfString, _T("%y:%y"), FilePath, &StreamContext->TrailingStreamName);
+        StreamContext->FullPathWithStream.LengthInChars =
+            YoriLibSPrintf(StreamContext->FullPathWithStream.StartOfString,
+                           _T("%y:%y"),
+                           FilePath,
+                           &StreamContext->TrailingStreamName);
 
         //
         //  Check if it exists, and if so, call the user's callback
@@ -139,7 +146,11 @@ YoriLibStreamEnumFileFoundCallback(
             //  Populate stream name
             //
 
-            YoriLibSPrintfS(BogusFileInfo.cFileName, sizeof(BogusFileInfo.cFileName)/sizeof(BogusFileInfo.cFileName[0]), _T("%s:%y"), FileInfo->cFileName, &StreamContext->TrailingStreamName);
+            YoriLibSPrintfS(BogusFileInfo.cFileName,
+                            sizeof(BogusFileInfo.cFileName)/sizeof(BogusFileInfo.cFileName[0]),
+                            _T("%s:%y"),
+                            FileInfo->cFileName,
+                            &StreamContext->TrailingStreamName);
 
             //
             //  Update stream information
@@ -168,7 +179,7 @@ YoriLibStreamEnumFileFoundCallback(
             YoriLibInitEmptyString(&FoundStreamName);
             do {
                 FoundStreamName.StartOfString = FindStreamData.cStreamName;
-                FoundStreamName.LengthInChars = (DWORD)_tcslen(FindStreamData.cStreamName);
+                FoundStreamName.LengthInChars = (YORI_ALLOC_SIZE_T)_tcslen(FindStreamData.cStreamName);
 
                 //
                 //  Truncate any trailing :$DATA attribute name
@@ -211,7 +222,12 @@ YoriLibStreamEnumFileFoundCallback(
                         //  Generate a full path to the stream
                         //
 
-                        StreamContext->FullPathWithStream.LengthInChars = YoriLibSPrintfS(StreamContext->FullPathWithStream.StartOfString, StreamContext->FullPathWithStream.LengthAllocated, _T("%y:%y"), FilePath, &FoundStreamName);
+                        StreamContext->FullPathWithStream.LengthInChars =
+                            YoriLibSPrintfS(StreamContext->FullPathWithStream.StartOfString,
+                                            StreamContext->FullPathWithStream.LengthAllocated,
+                                            _T("%y:%y"),
+                                            FilePath,
+                                            &FoundStreamName);
 
                         //
                         //  Assume file state is stream state
@@ -224,7 +240,11 @@ YoriLibStreamEnumFileFoundCallback(
                         //  Populate stream name
                         //
 
-                        YoriLibSPrintfS(BogusFileInfo.cFileName, sizeof(BogusFileInfo.cFileName)/sizeof(BogusFileInfo.cFileName[0]), _T("%s:%y"), FileInfo->cFileName, &FoundStreamName);
+                        YoriLibSPrintfS(BogusFileInfo.cFileName,
+                                        sizeof(BogusFileInfo.cFileName)/sizeof(BogusFileInfo.cFileName[0]),
+                                        _T("%s:%y"),
+                                        FileInfo->cFileName,
+                                        &FoundStreamName);
 
                         //
                         //  Update stream information
@@ -311,7 +331,7 @@ YoriLibStreamEnumErrorCallback(
 BOOL
 YoriLibForEachStream(
     __in PYORI_STRING FileSpec,
-    __in DWORD MatchFlags,
+    __in WORD MatchFlags,
     __in DWORD Depth,
     __in PYORILIB_FILE_ENUM_FN Callback,
     __in_opt PYORILIB_FILE_ENUM_ERROR_FN ErrorCallback,
@@ -320,7 +340,7 @@ YoriLibForEachStream(
 {
     YORI_STRING FilePart;
     YORI_STRING FileSpecNoStream;
-    DWORD Index;
+    YORI_ALLOC_SIZE_T Index;
     BOOL Result;
     YORI_LIB_STREAM_ENUM_CONTEXT StreamContext;
 

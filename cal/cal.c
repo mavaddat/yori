@@ -148,10 +148,10 @@ CalOutputCalendarForMonth(
     DWORD LineCount;
     DWORD DayCount;
     DWORD ThisDayNumber;
-    DWORD DesiredOffset;
+    YORI_ALLOC_SIZE_T DesiredOffset;
     DWORD CurrentOffset;
     DWORD MonthIndex;
-    DWORD MonthNameLength;
+    YORI_ALLOC_SIZE_T MonthNameLength;
     DWORD RealDaysInMonth[12];
     DWORD DayIndexAtStartOfMonth[12];
     YORI_STRING Line;
@@ -204,7 +204,7 @@ CalOutputCalendarForMonth(
     //
 
     CurrentOffset = 0;
-    MonthNameLength = _tcslen(CalMonthNames[Month]);
+    MonthNameLength = (YORI_ALLOC_SIZE_T)_tcslen(CalMonthNames[Month]);
 
     DesiredOffset = ((CAL_DAYS_PER_WEEK * CAL_CHARS_PER_DAY) - MonthNameLength) / 2;
     while(CurrentOffset < DesiredOffset) {
@@ -215,7 +215,7 @@ CalOutputCalendarForMonth(
 
     memcpy(&Line.StartOfString[CurrentOffset], CalMonthNames[Month], MonthNameLength * sizeof(TCHAR));
     CurrentOffset += MonthNameLength;
-    Line.LengthInChars += MonthNameLength;
+    Line.LengthInChars = Line.LengthInChars + MonthNameLength;
     Line.StartOfString[Line.LengthInChars] = '\n';
     Line.LengthInChars++;
 
@@ -310,10 +310,10 @@ CalOutputCalendarForYear(
     DWORD ThisDayNumber;
     DWORD Quarter;
     DWORD Month;
-    DWORD MonthIndex;
-    DWORD DesiredOffset;
+    WORD MonthIndex;
+    YORI_ALLOC_SIZE_T DesiredOffset;
     DWORD CurrentOffset;
-    DWORD MonthNameLength;
+    YORI_ALLOC_SIZE_T MonthNameLength;
     DWORD RealDaysInMonth[12];
     DWORD DayIndexAtStartOfMonth[12];
     YORI_STRING Line;
@@ -376,7 +376,7 @@ CalOutputCalendarForYear(
                 DesiredOffset = MonthIndex * ((CAL_DAYS_PER_WEEK * CAL_CHARS_PER_DAY) + CAL_CHARS_BETWEEN_MONTHS);
             }
 
-            MonthNameLength = _tcslen(CalMonthNames[Quarter * CAL_MONTHS_PER_ROW + MonthIndex]);
+            MonthNameLength = (YORI_ALLOC_SIZE_T)_tcslen(CalMonthNames[Quarter * CAL_MONTHS_PER_ROW + MonthIndex]);
 
             DesiredOffset += ((CAL_DAYS_PER_WEEK * CAL_CHARS_PER_DAY) - MonthNameLength) / 2;
             while(CurrentOffset < DesiredOffset) {
@@ -387,7 +387,7 @@ CalOutputCalendarForYear(
 
             memcpy(&Line.StartOfString[CurrentOffset], CalMonthNames[Quarter * CAL_MONTHS_PER_ROW + MonthIndex], MonthNameLength * sizeof(TCHAR));
             CurrentOffset += MonthNameLength;
-            Line.LengthInChars += MonthNameLength;
+            Line.LengthInChars = Line.LengthInChars + MonthNameLength;
         }
         Line.StartOfString[Line.LengthInChars] = '\n';
         Line.LengthInChars++;
@@ -516,17 +516,17 @@ CalOutputCalendarForYear(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     YORI_STRING Arg;
     SYSTEMTIME CurrentSysTime;
-    DWORD CharsConsumed;
-    LONGLONG TargetYear;
+    YORI_ALLOC_SIZE_T CharsConsumed;
+    YORI_MAX_SIGNED_T TargetYear;
 
     for (i = 1; i < ArgC; i++) {
 
@@ -535,10 +535,10 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 CalHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2018"));
                 return EXIT_SUCCESS;
             }
@@ -555,7 +555,7 @@ ENTRYPOINT(
 
     if (StartArg != 0) {
         for (i = 0; i < sizeof(CalMonthNames)/sizeof(CalMonthNames[0]); i++) {
-            if (YoriLibCompareStringWithLiteralInsensitive(&ArgV[StartArg], CalMonthNames[i]) == 0) {
+            if (YoriLibCompareStringLitIns(&ArgV[StartArg], CalMonthNames[i]) == 0) {
                 GetLocalTime(&CurrentSysTime);
                 CalOutputCalendarForMonth(CurrentSysTime.wYear, (WORD)i, &CurrentSysTime);
                 return EXIT_SUCCESS;
@@ -568,7 +568,7 @@ ENTRYPOINT(
             TargetYear = 0;
         }
 
-        if (TargetYear > 0 && TargetYear <= sizeof(CalMonthNames)/sizeof(CalMonthNames[0])) {
+        if (TargetYear > 0 && TargetYear <= (LONGLONG)(sizeof(CalMonthNames)/sizeof(CalMonthNames[0]))) {
             GetLocalTime(&CurrentSysTime);
             CalOutputCalendarForMonth(CurrentSysTime.wYear, (WORD)(TargetYear - 1), &CurrentSysTime);
             return EXIT_SUCCESS;

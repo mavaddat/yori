@@ -206,7 +206,7 @@ ZAddDirectoryToRecent(
     ListEntry = YoriLibGetNextListEntry(&ZRecentDirectories.RecentDirList, NULL);
     while (ListEntry != NULL) {
         FoundRecentDir = CONTAINING_RECORD(ListEntry, Z_RECENT_DIRECTORY, ListEntry);
-        if (YoriLibCompareStringInsensitive(DirectoryName, &FoundRecentDir->DirectoryName) == 0) {
+        if (YoriLibCompareStringIns(DirectoryName, &FoundRecentDir->DirectoryName) == 0) {
             YoriLibRemoveListItem(&FoundRecentDir->ListEntry);
             YoriLibInsertList(&ZRecentDirectories.RecentDirList, &FoundRecentDir->ListEntry);
             FoundRecentDir->HitCount++;
@@ -387,16 +387,16 @@ ZBuildScoreboardAndSelectBest(
     YORI_STRING FinalComponent;
     YORI_STRING TrailingPortion;
     YORI_STRING StringToAdd;
-    DWORD EntriesPopulated;
-    DWORD Index;
+    YORI_ALLOC_SIZE_T EntriesPopulated;
+    YORI_ALLOC_SIZE_T Index;
     DWORD ScoreForThisEntry;
     DWORD BestScore;
-    DWORD BestIndex;
-    DWORD OffsetOfMatch;
-    BOOL SeperatorBefore;
-    BOOL SeperatorAfter;
-    BOOL AddThisEntry;
-    BOOL FoundAsParentOnly;
+    YORI_ALLOC_SIZE_T BestIndex;
+    YORI_ALLOC_SIZE_T OffsetOfMatch;
+    BOOLEAN SeperatorBefore;
+    BOOLEAN SeperatorAfter;
+    BOOLEAN AddThisEntry;
+    BOOLEAN FoundAsParentOnly;
 
     //
     //  Allocate enough entries for everything we know about, including all
@@ -460,16 +460,16 @@ ZBuildScoreboardAndSelectBest(
 
         if (FinalComponent.StartOfString != NULL) {
             FinalComponent.StartOfString++;
-            FinalComponent.LengthInChars = FoundRecentDir->DirectoryName.LengthInChars - (DWORD)(FinalComponent.StartOfString - FoundRecentDir->DirectoryName.StartOfString);
+            FinalComponent.LengthInChars = FoundRecentDir->DirectoryName.LengthInChars - (YORI_ALLOC_SIZE_T)(FinalComponent.StartOfString - FoundRecentDir->DirectoryName.StartOfString);
 
-            if (YoriLibCompareStringInsensitive(&FinalComponent, UserSpecification) == 0) {
+            if (YoriLibCompareStringIns(&FinalComponent, UserSpecification) == 0) {
                 ScoreForThisEntry += Z_MAX_RECENT_DIRS * 4;
                 AddThisEntry = TRUE;
             } else if (TrailingPortion.LengthInChars > 0 &&
-                       YoriLibCompareStringInsensitive(&TrailingPortion, UserSpecification) == 0) {
+                       YoriLibCompareStringIns(&TrailingPortion, UserSpecification) == 0) {
                 ScoreForThisEntry += Z_MAX_RECENT_DIRS * 2;
                 AddThisEntry = TRUE;
-            } else if (YoriLibFindFirstMatchingSubstringInsensitive(&FinalComponent, 1, UserSpecification, NULL) != NULL) {
+            } else if (YoriLibFindFirstMatchSubstrIns(&FinalComponent, 1, UserSpecification, NULL) != NULL) {
 
                 ScoreForThisEntry += Z_MAX_RECENT_DIRS;
                 AddThisEntry = TRUE;
@@ -490,7 +490,7 @@ ZBuildScoreboardAndSelectBest(
 
         if (!AddThisEntry &&
             UserSpecification->LengthInChars > 0 &&
-            YoriLibFindFirstMatchingSubstringInsensitive(&FoundRecentDir->DirectoryName, 1, UserSpecification, &OffsetOfMatch) != NULL) {
+            YoriLibFindFirstMatchSubstrIns(&FoundRecentDir->DirectoryName, 1, UserSpecification, &OffsetOfMatch) != NULL) {
 
             SeperatorBefore = FALSE;
             SeperatorAfter = FALSE;
@@ -530,7 +530,7 @@ ZBuildScoreboardAndSelectBest(
 
         if (AddThisEntry) {
             for (BestIndex = 0; BestIndex < EntriesPopulated; BestIndex++) {
-                if (YoriLibCompareStringInsensitive(&Entries[BestIndex].DirectoryName, &StringToAdd) == 0) {
+                if (YoriLibCompareStringIns(&Entries[BestIndex].DirectoryName, &StringToAdd) == 0) {
 
                     if (!FoundAsParentOnly) {
                         Entries[BestIndex].Score += ScoreForThisEntry;
@@ -607,21 +607,21 @@ ZBuildScoreboardAndSelectBest(
 DWORD
 YORI_BUILTIN_FN
 YoriCmd_Z(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
     BOOL Result;
-    DWORD OldCurrentDirectoryLength;
+    YORI_ALLOC_SIZE_T OldCurrentDirectoryLength;
     YORI_STRING OldCurrentDirectory;
     YORI_STRING FullyResolvedUserSpecification;
     YORI_STRING BestMatch;
     PYORI_STRING UserSpecification;
-    BOOL ArgumentUnderstood;
-    BOOL Unload = FALSE;
-    BOOL ListStack = FALSE;
-    DWORD i;
-    DWORD StartArg = 0;
+    BOOLEAN ArgumentUnderstood;
+    BOOLEAN Unload = FALSE;
+    BOOLEAN ListStack = FALSE;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     YORI_STRING Arg;
 
     YoriLibLoadNtDllFunctions();
@@ -634,16 +634,16 @@ YoriCmd_Z(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 ZHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2018"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("l")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("l")) == 0) {
                 ListStack = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("u")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("u")) == 0) {
                 Unload = TRUE;
                 ArgumentUnderstood = TRUE;
             }
@@ -680,12 +680,12 @@ YoriCmd_Z(
 
     UserSpecification = &ArgV[StartArg];
 
-    OldCurrentDirectoryLength = GetCurrentDirectory(0, NULL);
+    OldCurrentDirectoryLength = (YORI_ALLOC_SIZE_T)GetCurrentDirectory(0, NULL);
     if (!YoriLibAllocateString(&OldCurrentDirectory, OldCurrentDirectoryLength)) {
         return EXIT_FAILURE;
     }
 
-    OldCurrentDirectory.LengthInChars = GetCurrentDirectory(OldCurrentDirectory.LengthAllocated, OldCurrentDirectory.StartOfString);
+    OldCurrentDirectory.LengthInChars = (YORI_ALLOC_SIZE_T)GetCurrentDirectory(OldCurrentDirectory.LengthAllocated, OldCurrentDirectory.StartOfString);
     if (OldCurrentDirectory.LengthInChars == 0 ||
         OldCurrentDirectory.LengthInChars >= OldCurrentDirectory.LengthAllocated) {
         DWORD LastError = GetLastError();

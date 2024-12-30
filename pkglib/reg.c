@@ -59,6 +59,7 @@ YoriPkgAppendPath(
     DWORD Err;
     DWORD Disposition;
     DWORD LengthRequired;
+    DWORD BytesRequired;
     YORI_STRING ExistingValue;
 
     if (DllAdvApi32.pRegCloseKey == NULL ||
@@ -78,7 +79,13 @@ YoriPkgAppendPath(
     YoriLibInitEmptyString(&ExistingValue);
     Err = DllAdvApi32.pRegQueryValueExW(hKey, ValueName, NULL, NULL, NULL, &LengthRequired);
     if (Err == ERROR_MORE_DATA || LengthRequired > 0) {
-        if (!YoriLibAllocateString(&ExistingValue, (LengthRequired / sizeof(TCHAR)) + PathToAdd->LengthInChars + 1)) {
+        BytesRequired = (LengthRequired / sizeof(TCHAR)) + PathToAdd->LengthInChars + 1;
+        if (!YoriLibIsSizeAllocatable(BytesRequired)) {
+            DllAdvApi32.pRegCloseKey(hKey);
+            return FALSE;
+        }
+
+        if (!YoriLibAllocateString(&ExistingValue, (YORI_ALLOC_SIZE_T)BytesRequired)) {
             DllAdvApi32.pRegCloseKey(hKey);
             return FALSE;
         }
@@ -90,9 +97,9 @@ YoriPkgAppendPath(
             return FALSE;
         }
 
-        ExistingValue.LengthInChars = LengthRequired / sizeof(TCHAR) - 1;
+        ExistingValue.LengthInChars = (YORI_ALLOC_SIZE_T)(LengthRequired / sizeof(TCHAR) - 1);
 
-        if (!YoriLibAddEnvironmentComponentToString(&ExistingValue, PathToAdd, TRUE)) {
+        if (!YoriLibAddEnvCompToString(&ExistingValue, PathToAdd, TRUE)) {
             YoriLibFreeStringContents(&ExistingValue);
             DllAdvApi32.pRegCloseKey(hKey);
             return FALSE;
@@ -137,6 +144,7 @@ YoriPkgRemoveInstalledPath(
     DWORD Err;
     DWORD Disposition;
     DWORD LengthRequired;
+    DWORD CharsRequired;
     YORI_STRING ExistingValue;
     YORI_STRING NewValue;
 
@@ -161,7 +169,13 @@ YoriPkgRemoveInstalledPath(
     YoriLibInitEmptyString(&ExistingValue);
     Err = DllAdvApi32.pRegQueryValueExW(hKey, ValueName, NULL, NULL, NULL, &LengthRequired);
     if (Err == ERROR_MORE_DATA || LengthRequired > 0) {
-        if (!YoriLibAllocateString(&ExistingValue, (LengthRequired / sizeof(TCHAR)) + 1)) {
+        CharsRequired = (LengthRequired / sizeof(TCHAR)) + 1;
+        if (!YoriLibIsSizeAllocatable(CharsRequired)) {
+            DllAdvApi32.pRegCloseKey(hKey);
+            return FALSE;
+        }
+
+        if (!YoriLibAllocateString(&ExistingValue, (YORI_ALLOC_SIZE_T)CharsRequired)) {
             DllAdvApi32.pRegCloseKey(hKey);
             return FALSE;
         }
@@ -173,9 +187,9 @@ YoriPkgRemoveInstalledPath(
             return FALSE;
         }
 
-        ExistingValue.LengthInChars = LengthRequired / sizeof(TCHAR) - 1;
+        ExistingValue.LengthInChars = (YORI_ALLOC_SIZE_T)(LengthRequired / sizeof(TCHAR) - 1);
 
-        if (!YoriLibRemoveEnvironmentComponentFromString(&ExistingValue, PathToRemove, &NewValue)) {
+        if (!YoriLibRmEnvCompFromString(&ExistingValue, PathToRemove, &NewValue)) {
 
             YoriLibFreeStringContents(&ExistingValue);
             DllAdvApi32.pRegCloseKey(hKey);
@@ -233,10 +247,11 @@ YoriPkgIsFileToBeDeletedOnReboot(
     DWORD Err;
     DWORD Disposition;
     DWORD LengthRequired;
+    DWORD CharsRequired;
     YORI_STRING ExistingValue;
     YORI_STRING FoundFileEntry;
     BOOLEAN LookingForEndOfSource;
-    DWORD Index;
+    YORI_ALLOC_SIZE_T Index;
 
     YoriLibLoadAdvApi32Functions();
 
@@ -264,7 +279,12 @@ YoriPkgIsFileToBeDeletedOnReboot(
     YoriLibInitEmptyString(&ExistingValue);
     Err = DllAdvApi32.pRegQueryValueExW(hKey, _T("PendingFileRenameOperations"), NULL, NULL, NULL, &LengthRequired);
     if (Err == ERROR_MORE_DATA || LengthRequired > 0) {
-        if (!YoriLibAllocateString(&ExistingValue, (LengthRequired / sizeof(TCHAR)) + 1)) {
+        CharsRequired = (LengthRequired / sizeof(TCHAR)) + 1;
+        if (!YoriLibIsSizeAllocatable(CharsRequired)) {
+            DllAdvApi32.pRegCloseKey(hKey);
+            return FALSE;
+        }
+        if (!YoriLibAllocateString(&ExistingValue, (YORI_ALLOC_SIZE_T)CharsRequired)) {
             DllAdvApi32.pRegCloseKey(hKey);
             return FALSE;
         }
@@ -278,7 +298,7 @@ YoriPkgIsFileToBeDeletedOnReboot(
             return FALSE;
         }
 
-        ExistingValue.LengthInChars = LengthRequired / sizeof(TCHAR) - 1;
+        ExistingValue.LengthInChars = (YORI_ALLOC_SIZE_T)(LengthRequired / sizeof(TCHAR) - 1);
 
         DllAdvApi32.pRegCloseKey(hKey);
 
@@ -290,14 +310,14 @@ YoriPkgIsFileToBeDeletedOnReboot(
                 if (FoundFileEntry.StartOfString == NULL) {
                     FoundFileEntry.StartOfString = &ExistingValue.StartOfString[Index + 1];
                 } else {
-                    if (YoriLibCompareStringWithLiteralCount(&FoundFileEntry, _T("\\??\\"), sizeof("\\??\\") - 1) == 0) {
+                    if (YoriLibCompareStringLitCnt(&FoundFileEntry, _T("\\??\\"), sizeof("\\??\\") - 1) == 0) {
                         FoundFileEntry.StartOfString += sizeof("\\??\\") - 1;
                         FoundFileEntry.LengthInChars -= sizeof("\\??\\") - 1;
-                    } else if (YoriLibCompareStringWithLiteralCount(&FoundFileEntry, _T("\\\\?\\"), sizeof("\\\\?\\") - 1) == 0) {
+                    } else if (YoriLibCompareStringLitCnt(&FoundFileEntry, _T("\\\\?\\"), sizeof("\\\\?\\") - 1) == 0) {
                         FoundFileEntry.StartOfString += sizeof("\\\\?\\") - 1;
                         FoundFileEntry.LengthInChars -= sizeof("\\\\?\\") - 1;
                     }
-                    if (YoriLibCompareStringInsensitive(&FoundFileEntry, FilePath) == 0) {
+                    if (YoriLibCompareStringIns(&FoundFileEntry, FilePath) == 0) {
                         YoriLibFreeStringContents(&ExistingValue);
                         return TRUE;
                     }
@@ -320,7 +340,8 @@ YoriPkgIsFileToBeDeletedOnReboot(
  path.  Note that the system path requires privilege and it is expected that
  this can fail if the currently executing user does not have access to it.
 
- @param TargetDirectory Pointer to the directory to append to a path.
+ @param TargetDirectory Pointer to the directory to append to a path.  If not
+        specified, the directory containing the current executable is used.
 
  @param AppendToUserPath If TRUE, the directory should be appended to the
         user's path environment variable.
@@ -332,24 +353,38 @@ YoriPkgIsFileToBeDeletedOnReboot(
  */
 BOOL
 YoriPkgAppendInstallDirToPath(
-    __in PCYORI_STRING TargetDirectory,
+    __in_opt PCYORI_STRING TargetDirectory,
     __in BOOL AppendToUserPath,
     __in BOOL AppendToSystemPath
     )
 {
     BOOL Result = TRUE;
+    YORI_STRING LocalTargetDirectory;
 
     YoriLibLoadAdvApi32Functions();
     YoriLibLoadUser32Functions();
 
+    if (TargetDirectory == NULL) {
+        YORI_STRING AppDir;
+        YoriLibConstantString(&AppDir, _T("~APPDIR"));
+        if (!YoriLibUserStringToSingleFilePath(&AppDir, FALSE, &LocalTargetDirectory)) {
+            return FALSE;
+        }
+    } else {
+        YoriLibInitEmptyString(&LocalTargetDirectory);
+        LocalTargetDirectory.StartOfString = TargetDirectory->StartOfString;
+        LocalTargetDirectory.LengthInChars = TargetDirectory->LengthInChars;
+        LocalTargetDirectory.LengthAllocated = TargetDirectory->LengthAllocated;
+    }
+
     if (AppendToUserPath) {
-        if (!YoriPkgAppendPath(HKEY_CURRENT_USER, _T("Environment"), _T("Path"), TargetDirectory)) {
+        if (!YoriPkgAppendPath(HKEY_CURRENT_USER, _T("Environment"), _T("Path"), &LocalTargetDirectory)) {
             Result = FALSE;
         }
     }
 
     if (AppendToSystemPath) {
-        if (!YoriPkgAppendPath(HKEY_LOCAL_MACHINE, _T("SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment"), _T("Path"), TargetDirectory)) {
+        if (!YoriPkgAppendPath(HKEY_LOCAL_MACHINE, _T("SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment"), _T("Path"), &LocalTargetDirectory)) {
             Result = FALSE;
         }
     }
@@ -359,6 +394,8 @@ YoriPkgAppendInstallDirToPath(
         DWORD_PTR NotifyResult;
         DllUser32.pSendMessageTimeoutW(HWND_BROADCAST, WM_WININICHANGE, 0, (LPARAM)_T("Environment"), SMTO_NORMAL, 200, &NotifyResult);
     }
+
+    YoriLibFreeStringContents(&LocalTargetDirectory);
 
     return Result;
 }
@@ -590,6 +627,833 @@ Exit:
     }
 
     return FALSE;
+}
+
+/**
+ Attempt to gain access to a system registry key.  This is because some keys
+ are restricted to TrustedInstaller inappropriately - they contain
+ configuration that users are expected to change, but are ACL'd to prevent
+ Administrators changing them.  This code automates changing ownership and ACL
+ to allow Administrators to modify the values.
+
+ @param KeyRoot A handle to a registry key, typically one of the well known
+        root keys.
+
+ @param KeyName Pointer to a NULL-terminated string specifying the name of the
+        key whose ACL should be adjusted.
+
+ @return TRUE if adjustment was successful, FALSE on failure.
+ */
+BOOL
+YoriPkgGetAccessToRegistryKey(
+    __in HKEY KeyRoot,
+    __in PCYORI_STRING KeyName
+    )
+{
+    BOOL TakeOwnershipPrivilegeEnabled;
+    HKEY hKey;
+    DWORD Err;
+    DWORD Disposition;
+    DWORD BytesRequired;
+    YORI_ALLOC_SIZE_T BytesToAllocate;
+    PSID AdministratorSid;
+    PSID UsersSid;
+    PACL NewAcl;
+    SECURITY_DESCRIPTOR NewDescriptor;
+    SID_IDENTIFIER_AUTHORITY NtAuthority = SECURITY_NT_AUTHORITY;
+
+    if (DllAdvApi32.pAddAccessAllowedAce == NULL ||
+        DllAdvApi32.pAllocateAndInitializeSid == NULL ||
+        DllAdvApi32.pFreeSid == NULL ||
+        DllAdvApi32.pInitializeAcl == NULL ||
+        DllAdvApi32.pInitializeSecurityDescriptor == NULL ||
+        DllAdvApi32.pRegCloseKey == NULL ||
+        DllAdvApi32.pRegCreateKeyExW == NULL ||
+        DllAdvApi32.pRegSetKeySecurity == NULL ||
+        DllAdvApi32.pSetSecurityDescriptorDacl == NULL ||
+        DllAdvApi32.pSetSecurityDescriptorOwner == NULL) {
+
+        return FALSE;
+    }
+
+    ASSERT(YoriLibIsStringNullTerminated(KeyName));
+    AdministratorSid = NULL;
+    UsersSid = NULL;
+    hKey = NULL;
+    NewAcl = NULL;
+
+    TakeOwnershipPrivilegeEnabled = YoriLibEnableTakeOwnershipPrivilege();
+
+    //
+    //  Get a SID for the Administrators group, which can be used as an owner
+    //  or ACE.  Since the key being manipulated is system wide, any
+    //  modification should be to include some administrative rights,
+    //  otherwise this code would allow a later unprivileged user to modify
+    //  login settings.
+    //
+
+    if (!DllAdvApi32.pAllocateAndInitializeSid(&NtAuthority,
+                                               2,
+                                               SECURITY_BUILTIN_DOMAIN_RID,
+                                               DOMAIN_ALIAS_RID_ADMINS,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               &AdministratorSid)) {
+        Err = ERROR_NOT_ENOUGH_MEMORY;
+        goto Exit;
+    }
+
+    if (!DllAdvApi32.pAllocateAndInitializeSid(&NtAuthority,
+                                               2,
+                                               SECURITY_BUILTIN_DOMAIN_RID,
+                                               DOMAIN_ALIAS_RID_USERS,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               0,
+                                               &UsersSid)) {
+        Err = ERROR_NOT_ENOUGH_MEMORY;
+        goto Exit;
+    }
+
+    Err = DllAdvApi32.pRegCreateKeyExW(KeyRoot,
+                                       KeyName->StartOfString,
+                                       0,
+                                       NULL,
+                                       0,
+                                       WRITE_OWNER,
+                                       NULL,
+                                       &hKey,
+                                       &Disposition);
+    if (Err != ERROR_SUCCESS) {
+        goto Exit;
+    }
+
+    //
+    //  Set owner to Administrators (as opposed to TrustedInstaller.)
+    //
+
+    if (!DllAdvApi32.pInitializeSecurityDescriptor(&NewDescriptor, SECURITY_DESCRIPTOR_REVISION)) {
+        Err = GetLastError();
+        goto Exit;
+    }
+
+    if (!DllAdvApi32.pSetSecurityDescriptorOwner(&NewDescriptor, AdministratorSid, FALSE)) {
+        Err = GetLastError();
+        goto Exit;
+    }
+
+    Err = DllAdvApi32.pRegSetKeySecurity(hKey, OWNER_SECURITY_INFORMATION, &NewDescriptor);
+    if (Err != ERROR_SUCCESS) {
+        goto Exit;
+    }
+
+    //
+    //  Close and reopen, this time with WRITE_DAC.  The ownership change
+    //  should ensure that this succeeds if the calling process is part of
+    //  the Administrators group.
+    //
+
+    DllAdvApi32.pRegCloseKey(hKey);
+    hKey = NULL;
+
+    Err = DllAdvApi32.pRegCreateKeyExW(KeyRoot,
+                                       KeyName->StartOfString,
+                                       0,
+                                       NULL,
+                                       0,
+                                       WRITE_DAC,
+                                       NULL,
+                                       &hKey,
+                                       &Disposition);
+    if (Err != ERROR_SUCCESS) {
+        goto Exit;
+    }
+
+    //
+    //  Now adjust the ACL.  This code uses two ACEs, full access for
+    //  Administrators and read only access for Users.  This is minimal but
+    //  typically appropriate for any kind of system key.
+    //
+
+    BytesRequired = sizeof(ACL) + 2 * (sizeof(ACCESS_ALLOWED_ACE) - sizeof(DWORD)) +
+                    DllAdvApi32.pGetLengthSid(AdministratorSid) +
+                    DllAdvApi32.pGetLengthSid(UsersSid);
+
+    if (!YoriLibIsSizeAllocatable(BytesRequired)) {
+        Err = ERROR_NOT_ENOUGH_MEMORY;
+        goto Exit;
+    }
+
+    BytesToAllocate = (YORI_ALLOC_SIZE_T)BytesRequired;
+
+    NewAcl = YoriLibMalloc(BytesToAllocate);
+    if (NewAcl == NULL) {
+        Err = ERROR_NOT_ENOUGH_MEMORY;
+        goto Exit;
+    }
+
+    if (!DllAdvApi32.pInitializeAcl(NewAcl, BytesToAllocate, ACL_REVISION)) {
+        Err = GetLastError();
+        goto Exit;
+    }
+
+    if (!DllAdvApi32.pAddAccessAllowedAce(NewAcl, ACL_REVISION, KEY_ALL_ACCESS, AdministratorSid)) {
+        Err = GetLastError();
+        goto Exit;
+    }
+
+    if (!DllAdvApi32.pAddAccessAllowedAce(NewAcl, ACL_REVISION, KEY_READ, UsersSid)) {
+        Err = GetLastError();
+        goto Exit;
+    }
+
+    if (!DllAdvApi32.pInitializeSecurityDescriptor(&NewDescriptor, SECURITY_DESCRIPTOR_REVISION)) {
+        Err = GetLastError();
+        goto Exit;
+    }
+
+    if (!DllAdvApi32.pSetSecurityDescriptorDacl(&NewDescriptor, TRUE, NewAcl, FALSE)) {
+        Err = GetLastError();
+        goto Exit;
+    }
+
+    Err = DllAdvApi32.pRegSetKeySecurity(hKey, DACL_SECURITY_INFORMATION, &NewDescriptor);
+    if (Err != ERROR_SUCCESS) {
+        goto Exit;
+    }
+
+Exit:
+
+    if (hKey != NULL) {
+        DllAdvApi32.pRegCloseKey(hKey);
+    }
+
+    if (NewAcl != NULL) {
+        YoriLibFree(NewAcl);
+    }
+
+    if (AdministratorSid != NULL) {
+        DllAdvApi32.pFreeSid(AdministratorSid);
+    }
+
+    if (UsersSid != NULL) {
+        DllAdvApi32.pFreeSid(UsersSid);
+    }
+
+    if (Err == ERROR_SUCCESS) {
+        return TRUE;
+    }
+    return FALSE;
+}
+
+/**
+ Set the logon shell to a new path, specifying the location of the entry
+ in the registry.
+
+ @param KeyName Pointer to the registry key to update.
+
+ @param ValueName Pointer to the registry value to update.
+
+ @param NewShellFullPath Pointer to the new login shell.
+
+ @return TRUE to indicate success, FALSE to indicate failure.
+ */
+BOOL
+YoriPkgUpdateRegistryShell(
+    __in PCYORI_STRING KeyName,
+    __in PCYORI_STRING ValueName,
+    __in PCYORI_STRING NewShellFullPath
+    )
+{
+    HKEY hKey;
+    DWORD Err;
+    DWORD Disposition;
+
+    ASSERT(YoriLibIsStringNullTerminated(KeyName));
+    ASSERT(YoriLibIsStringNullTerminated(ValueName));
+    ASSERT(YoriLibIsStringNullTerminated(NewShellFullPath));
+
+    YoriLibLoadAdvApi32Functions();
+
+    if (DllAdvApi32.pRegCloseKey == NULL ||
+        DllAdvApi32.pRegCreateKeyExW == NULL ||
+        DllAdvApi32.pRegSetValueExW == NULL) {
+
+        return FALSE;
+    }
+
+    Err = DllAdvApi32.pRegCreateKeyExW(HKEY_LOCAL_MACHINE,
+                                       KeyName->StartOfString,
+                                       0,
+                                       NULL,
+                                       0,
+                                       KEY_QUERY_VALUE | KEY_SET_VALUE,
+                                       NULL,
+                                       &hKey,
+                                       &Disposition);
+
+    //
+    //  If we don't have access to change things in the key, try to
+    //  obtain access, and retry.
+    //
+
+    if (Err == ERROR_ACCESS_DENIED) {
+        YoriPkgGetAccessToRegistryKey(HKEY_LOCAL_MACHINE, KeyName);
+
+        Err = DllAdvApi32.pRegCreateKeyExW(HKEY_LOCAL_MACHINE,
+                                           KeyName->StartOfString,
+                                           0,
+                                           NULL,
+                                           0,
+                                           KEY_QUERY_VALUE | KEY_SET_VALUE,
+                                           NULL,
+                                           &hKey,
+                                           &Disposition);
+    }
+
+    if (Err != ERROR_SUCCESS) {
+        return FALSE;
+    }
+
+    Err = DllAdvApi32.pRegSetValueExW(hKey, ValueName->StartOfString, 0, REG_SZ, (LPBYTE)NewShellFullPath->StartOfString, (NewShellFullPath->LengthInChars + 1) * sizeof(TCHAR));
+    if (Err != ERROR_SUCCESS) {
+        goto Exit;
+    }
+
+Exit:
+
+    DllAdvApi32.pRegCloseKey(hKey);
+
+    if (Err == ERROR_SUCCESS) {
+        return TRUE;
+    }
+    return FALSE;
+}
+
+/**
+ Save the current logon shell in the registry into a new value so it can
+ be restored later.
+
+ @param KeyName Pointer to the registry key to update.
+
+ @param MasterValueName Pointer to the registry value to backup.
+
+ @param BackupValueName Pointer to the registry value to save the previous
+        contents to.
+
+ @return TRUE to indicate success, FALSE to indicate failure.
+ */
+BOOL
+YoriPkgBackupRegistryShell(
+    __in PCYORI_STRING KeyName,
+    __in PCYORI_STRING MasterValueName,
+    __in PCYORI_STRING BackupValueName
+    )
+{
+    HKEY hKey;
+    DWORD Err;
+    DWORD Disposition;
+    YORI_STRING ExistingValue;
+    DWORD LengthRequired;
+    DWORD CharsRequired;
+
+    ASSERT(YoriLibIsStringNullTerminated(KeyName));
+    ASSERT(YoriLibIsStringNullTerminated(MasterValueName));
+    ASSERT(YoriLibIsStringNullTerminated(BackupValueName));
+
+    YoriLibLoadAdvApi32Functions();
+
+    if (DllAdvApi32.pRegCloseKey == NULL ||
+        DllAdvApi32.pRegCreateKeyExW == NULL ||
+        DllAdvApi32.pRegQueryValueExW == NULL ||
+        DllAdvApi32.pRegSetValueExW == NULL) {
+
+        return FALSE;
+    }
+
+    YoriLibInitEmptyString(&ExistingValue);
+
+    Err = DllAdvApi32.pRegCreateKeyExW(HKEY_LOCAL_MACHINE,
+                                       KeyName->StartOfString,
+                                       0,
+                                       NULL,
+                                       0,
+                                       KEY_QUERY_VALUE | KEY_SET_VALUE,
+                                       NULL,
+                                       &hKey,
+                                       &Disposition);
+
+    //
+    //  If we don't have access to change things in the key, try to
+    //  obtain access, and retry.
+    //
+
+    if (Err == ERROR_ACCESS_DENIED) {
+        YoriPkgGetAccessToRegistryKey(HKEY_LOCAL_MACHINE, KeyName);
+
+        Err = DllAdvApi32.pRegCreateKeyExW(HKEY_LOCAL_MACHINE,
+                                           KeyName->StartOfString,
+                                           0,
+                                           NULL,
+                                           0,
+                                           KEY_QUERY_VALUE | KEY_SET_VALUE,
+                                           NULL,
+                                           &hKey,
+                                           &Disposition);
+    }
+
+    if (Err != ERROR_SUCCESS) {
+        return FALSE;
+    }
+
+    //
+    //  First, query the backup value.  If it exists, return success.
+    //  This is an intentional policy choice: the goal of this code is
+    //  to allow a system to be restored to a pre-Yori configuration,
+    //  not to restore it to a previous modification.
+    //
+
+    LengthRequired = 0;
+    Err = DllAdvApi32.pRegQueryValueExW(hKey, BackupValueName->StartOfString, NULL, NULL, NULL, &LengthRequired);
+    if (Err == ERROR_MORE_DATA || LengthRequired > 0) {
+        DllAdvApi32.pRegCloseKey(hKey);
+        return TRUE;
+    }
+
+    //
+    //  Now query the master value, so it can be written into the backup
+    //  value.
+    //
+
+    LengthRequired = 0;
+    Err = DllAdvApi32.pRegQueryValueExW(hKey, MasterValueName->StartOfString, NULL, NULL, NULL, &LengthRequired);
+    if (Err == ERROR_MORE_DATA || LengthRequired > 0) {
+        CharsRequired = (LengthRequired / sizeof(TCHAR)) + 1;
+        if (!YoriLibIsSizeAllocatable(CharsRequired)) {
+            goto Exit;
+        }
+        if (!YoriLibAllocateString(&ExistingValue, (YORI_ALLOC_SIZE_T)CharsRequired)) {
+            goto Exit;
+        }
+
+        Err = DllAdvApi32.pRegQueryValueExW(hKey, MasterValueName->StartOfString, NULL, NULL, (LPBYTE)ExistingValue.StartOfString, &LengthRequired);
+        if (Err != ERROR_SUCCESS) {
+            goto Exit;
+        }
+
+        ExistingValue.LengthInChars = (YORI_ALLOC_SIZE_T)(LengthRequired / sizeof(TCHAR) - 1);
+    }
+
+    //
+    //  Save the master value into the backup value.
+    //
+
+    Err = DllAdvApi32.pRegSetValueExW(hKey, BackupValueName->StartOfString, 0, REG_SZ, (LPBYTE)ExistingValue.StartOfString, (ExistingValue.LengthInChars + 1) * sizeof(TCHAR));
+    if (Err != ERROR_SUCCESS) {
+        goto Exit;
+    }
+
+Exit:
+
+    YoriLibFreeStringContents(&ExistingValue);
+    DllAdvApi32.pRegCloseKey(hKey);
+
+    if (Err == ERROR_SUCCESS) {
+        return TRUE;
+    }
+    return FALSE;
+}
+
+/**
+ Restore the saved logon shell from the registry.
+
+ @param KeyName Pointer to the registry key to update.
+
+ @param MasterValueName Pointer to the registry value to restore to.
+
+ @param BackupValueName Pointer to the registry value to restore the previous
+        contents from.
+
+ @return TRUE to indicate success, FALSE to indicate failure.
+ */
+BOOL
+YoriPkgRestoreRegistryBackupShell(
+    __in PCYORI_STRING KeyName,
+    __in PCYORI_STRING MasterValueName,
+    __in PCYORI_STRING BackupValueName
+    )
+{
+    HKEY hKey;
+    DWORD Err;
+    DWORD Disposition;
+    YORI_STRING ExistingValue;
+    DWORD LengthRequired;
+    DWORD CharsToAllocate;
+
+    ASSERT(YoriLibIsStringNullTerminated(KeyName));
+    ASSERT(YoriLibIsStringNullTerminated(MasterValueName));
+    ASSERT(YoriLibIsStringNullTerminated(BackupValueName));
+
+    YoriLibLoadAdvApi32Functions();
+
+    if (DllAdvApi32.pRegCloseKey == NULL ||
+        DllAdvApi32.pRegCreateKeyExW == NULL ||
+        DllAdvApi32.pRegQueryValueExW == NULL ||
+        DllAdvApi32.pRegSetValueExW == NULL) {
+
+        return FALSE;
+    }
+
+    YoriLibInitEmptyString(&ExistingValue);
+
+    Err = DllAdvApi32.pRegCreateKeyExW(HKEY_LOCAL_MACHINE,
+                                       KeyName->StartOfString,
+                                       0,
+                                       NULL,
+                                       0,
+                                       KEY_QUERY_VALUE | KEY_SET_VALUE,
+                                       NULL,
+                                       &hKey,
+                                       &Disposition);
+
+    //
+    //  If we don't have access to change things in the key, try to
+    //  obtain access, and retry.
+    //
+
+    if (Err == ERROR_ACCESS_DENIED) {
+        YoriPkgGetAccessToRegistryKey(HKEY_LOCAL_MACHINE, KeyName);
+
+        Err = DllAdvApi32.pRegCreateKeyExW(HKEY_LOCAL_MACHINE,
+                                           KeyName->StartOfString,
+                                           0,
+                                           NULL,
+                                           0,
+                                           KEY_QUERY_VALUE | KEY_SET_VALUE,
+                                           NULL,
+                                           &hKey,
+                                           &Disposition);
+    }
+
+    if (Err != ERROR_SUCCESS) {
+        return FALSE;
+    }
+
+    //
+    //  First, query the backup value.  If it doesn't exist, we can't restore
+    //  it.
+    //
+
+    LengthRequired = 0;
+    Err = DllAdvApi32.pRegQueryValueExW(hKey, BackupValueName->StartOfString, NULL, NULL, NULL, &LengthRequired);
+    if ((Err != ERROR_SUCCESS && Err != ERROR_MORE_DATA) || LengthRequired == 0) {
+        DllAdvApi32.pRegCloseKey(hKey);
+        return FALSE;
+    }
+
+    CharsToAllocate = LengthRequired / sizeof(TCHAR) + 1;
+    if (!YoriLibIsSizeAllocatable(CharsToAllocate)) {
+        goto Exit;
+    }
+
+    if (!YoriLibAllocateString(&ExistingValue, (YORI_ALLOC_SIZE_T)CharsToAllocate)) {
+        goto Exit;
+    }
+
+    Err = DllAdvApi32.pRegQueryValueExW(hKey, BackupValueName->StartOfString, NULL, NULL, (LPBYTE)ExistingValue.StartOfString, &LengthRequired);
+    if (Err != ERROR_SUCCESS) {
+        goto Exit;
+    }
+
+    ExistingValue.LengthInChars = (YORI_ALLOC_SIZE_T)(LengthRequired / sizeof(TCHAR) - 1);
+
+    //
+    //  Restore the backup value into the master value.
+    //
+
+    Err = DllAdvApi32.pRegSetValueExW(hKey, MasterValueName->StartOfString, 0, REG_SZ, (LPBYTE)ExistingValue.StartOfString, (ExistingValue.LengthInChars + 1) * sizeof(TCHAR));
+    if (Err != ERROR_SUCCESS) {
+        goto Exit;
+    }
+
+Exit:
+
+    YoriLibFreeStringContents(&ExistingValue);
+    DllAdvApi32.pRegCloseKey(hKey);
+
+    if (Err == ERROR_SUCCESS) {
+        return TRUE;
+    }
+    return FALSE;
+}
+
+/**
+ Set the logon shell to a new path.  This involves detecting Server Core or a
+ full GUI server based on it, and in that case, updating the AvailableShells
+ key.  If a different edition, update the regular Shell value.
+
+ @param NewShellFullPath Pointer to the new login shell.
+
+ @return TRUE to indicate success, FALSE to indicate failure.
+ */
+BOOL
+YoriPkgUpdateLogonShell(
+    __in PYORI_STRING NewShellFullPath
+    )
+{
+    YORI_STRING KeyName;
+    YORI_STRING ValueName;
+    YORI_STRING BackupValueName;
+    DWORD Err;
+    HKEY hKey;
+
+    YoriLibLoadAdvApi32Functions();
+
+    if (DllAdvApi32.pRegCloseKey == NULL ||
+        DllAdvApi32.pRegOpenKeyExW == NULL) {
+
+        return FALSE;
+    }
+
+    //
+    //  Check if we're running on a system with Server Core shell support,
+    //  where multiple shells are listed in ranked order.  If so, insert
+    //  the new entry under that key.  If not, use the one-and-only shell
+    //  key instead.
+    //
+
+    YoriLibConstantString(&KeyName, _T("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\\AlternateShells\\AvailableShells"));
+    YoriLibConstantString(&ValueName, _T("98052"));
+
+    Err = DllAdvApi32.pRegOpenKeyExW(HKEY_LOCAL_MACHINE,
+                                     KeyName.StartOfString,
+                                     0,
+                                     KEY_QUERY_VALUE,
+                                     &hKey);
+
+    if (Err == ERROR_SUCCESS) {
+        DllAdvApi32.pRegCloseKey(hKey);
+    } else {
+        YoriLibConstantString(&KeyName, _T("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon"));
+        YoriLibConstantString(&ValueName, _T("Shell"));
+        YoriLibConstantString(&BackupValueName, _T("YoriBackupShell"));
+        if (!YoriPkgBackupRegistryShell(&KeyName, &ValueName, &BackupValueName)) {
+            return FALSE;
+        }
+
+    }
+    return YoriPkgUpdateRegistryShell(&KeyName, &ValueName, NewShellFullPath);
+}
+
+/**
+ Update the login shell to be the default Windows program.
+
+ @return TRUE to indicate success, FALSE to indicate failure.
+ */
+__success(return)
+BOOL
+YoriPkgRestoreRegistryLoginShell(
+    VOID
+    )
+{
+    YORI_STRING KeyName;
+    YORI_STRING ValueName;
+    YORI_STRING BackupValueName;
+    YORI_STRING DefaultShellName;
+    DWORD Err;
+    HKEY hKey;
+
+    YoriLibLoadAdvApi32Functions();
+
+    if (DllAdvApi32.pRegCloseKey == NULL ||
+        DllAdvApi32.pRegDeleteValueW == NULL ||
+        DllAdvApi32.pRegOpenKeyExW == NULL) {
+
+        return FALSE;
+    }
+
+    //
+    //  Check if we're running on a system with Server Core shell support,
+    //  where multiple shells are listed in ranked order.  If so, delete
+    //  our entry under that key.  If not, use the one-and-only shell
+    //  key instead.
+    //
+
+    YoriLibConstantString(&KeyName, _T("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\\AlternateShells\\AvailableShells"));
+    YoriLibConstantString(&ValueName, _T("98052"));
+
+    Err = DllAdvApi32.pRegOpenKeyExW(HKEY_LOCAL_MACHINE,
+                                     KeyName.StartOfString,
+                                     0,
+                                     KEY_QUERY_VALUE | KEY_SET_VALUE,
+                                     &hKey);
+    if (Err == ERROR_SUCCESS) {
+        Err = DllAdvApi32.pRegDeleteValueW(hKey, ValueName.StartOfString);
+        DllAdvApi32.pRegCloseKey(hKey);
+        return TRUE;
+    } else {
+        YoriLibConstantString(&KeyName, _T("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon"));
+        YoriLibConstantString(&ValueName, _T("Shell"));
+        YoriLibConstantString(&BackupValueName, _T("YoriBackupShell"));
+        if (YoriPkgRestoreRegistryBackupShell(&KeyName, &ValueName, &BackupValueName)) {
+            return TRUE;
+        }
+    }
+
+    //
+    //  If we can't restore the backup, it probably means it doesn't exist.
+    //  Reset the system to a hardcoded default.  This code should probably
+    //  be deleted at some point in the future, once enough clients have
+    //  code that took backup values in the first place.
+    //
+
+    YoriLibConstantString(&DefaultShellName, _T("explorer.exe"));
+    return YoriPkgUpdateRegistryShell(&KeyName, &ValueName, &DefaultShellName);
+}
+
+/**
+ Set settings for the console in the user's registry.
+
+ @param ConsoleTitle Optionally points to a string containing the console
+        title to apply these settings to.  If not specified, the global
+        default console values are changed.
+
+ @param ColorTable Pointer to an array of the RGB values for the base 16
+        colors.
+
+ @param WindowColor Specifies the default window color.
+
+ @param PopupColor Specifies the popup color.
+
+ @return TRUE to indicate success, FALSE to indicate failure.
+ */
+BOOL
+YoriPkgSetConsoleDefaults(
+    __in_opt PCYORI_STRING ConsoleTitle,
+    __in_ecount(16) COLORREF* ColorTable,
+    __in UCHAR WindowColor,
+    __in UCHAR PopupColor
+    )
+{
+    YORI_STRING KeyName;
+    TCHAR ValueNameBuffer[16];
+    YORI_STRING ValueName;
+    DWORD Err;
+    YORI_ALLOC_SIZE_T Index;
+    DWORD Temp;
+    TCHAR Char;
+    HKEY hKey;
+    DWORD Disp;
+
+    YoriLibLoadAdvApi32Functions();
+
+    if (DllAdvApi32.pRegCloseKey == NULL ||
+        DllAdvApi32.pRegOpenKeyExW == NULL) {
+
+        return FALSE;
+    }
+
+    //
+    //  Construct the registry key which is either "Console" (for user
+    //  default) or "Console\Title" (for a specific program.)  The default
+    //  title is just the path to the program, although that can't be
+    //  described in the registry since it contains path seperators; the
+    //  registry format substitutes underscores for path seperators.
+    //
+
+    if (ConsoleTitle != NULL && ConsoleTitle->LengthInChars != 0) {
+        YoriLibInitEmptyString(&KeyName);
+        if (!YoriLibAllocateString(&KeyName, sizeof("Console\\") + ConsoleTitle->LengthInChars)) {
+            return FALSE;
+        }
+        KeyName.LengthInChars = YoriLibSPrintfS(KeyName.StartOfString, KeyName.LengthAllocated, _T("Console\\"));
+        for (Index = 0; Index < ConsoleTitle->LengthInChars; Index++) {
+            Char = ConsoleTitle->StartOfString[Index];
+            if (Char == '\\') {
+                Char = '_';
+            }
+            KeyName.StartOfString[KeyName.LengthInChars + Index] = Char;
+        }
+
+        KeyName.LengthInChars = KeyName.LengthInChars + Index;
+        KeyName.StartOfString[KeyName.LengthInChars] = '\0';
+    } else {
+        YoriLibConstantString(&KeyName, _T("Console"));
+    }
+
+    Err = DllAdvApi32.pRegCreateKeyExW(HKEY_CURRENT_USER,
+                                       KeyName.StartOfString,
+                                       0,
+                                       NULL,
+                                       0,
+                                       KEY_SET_VALUE,
+                                       NULL,
+                                       &hKey,
+                                       &Disp);
+
+    YoriLibFreeStringContents(&KeyName);
+    if (Err != ERROR_SUCCESS) {
+        return FALSE;
+    }
+
+    YoriLibInitEmptyString(&ValueName);
+    ValueName.StartOfString = ValueNameBuffer;
+    ValueName.LengthAllocated = sizeof(ValueNameBuffer)/sizeof(ValueNameBuffer[0]);
+
+    for (Index = 0; Index < 16; Index++) {
+        ValueName.LengthInChars = YoriLibSPrintfS(ValueName.StartOfString, ValueName.LengthAllocated, _T("ColorTable%02i"), Index);
+        Err = DllAdvApi32.pRegSetValueExW(hKey, ValueName.StartOfString, 0, REG_DWORD, (LPBYTE)&ColorTable[Index], sizeof(DWORD));
+        if (Err != ERROR_SUCCESS) {
+            break;
+        }
+    }
+
+    if (Err != ERROR_SUCCESS) {
+        DllAdvApi32.pRegCloseKey(hKey);
+        return FALSE;
+    }
+
+    Temp = WindowColor;
+    Err = DllAdvApi32.pRegSetValueExW(hKey, _T("ScreenColors"), 0, REG_DWORD, (LPBYTE)&Temp, sizeof(DWORD));
+
+    if (Err != ERROR_SUCCESS) {
+        DllAdvApi32.pRegCloseKey(hKey);
+        return FALSE;
+    }
+
+    Temp = PopupColor;
+    Err = DllAdvApi32.pRegSetValueExW(hKey, _T("PopupColors"), 0, REG_DWORD, (LPBYTE)&Temp, sizeof(DWORD));
+
+    if (Err != ERROR_SUCCESS) {
+        DllAdvApi32.pRegCloseKey(hKey);
+        return FALSE;
+    }
+
+    Temp = ColorTable[WindowColor & 0x0F];
+    Err = DllAdvApi32.pRegSetValueExW(hKey, _T("DefaultForeground"), 0, REG_DWORD, (LPBYTE)&Temp, sizeof(DWORD));
+
+    if (Err != ERROR_SUCCESS) {
+        DllAdvApi32.pRegCloseKey(hKey);
+        return FALSE;
+    }
+
+    Temp = ColorTable[(WindowColor & 0xF0) >> 4];
+    Err = DllAdvApi32.pRegSetValueExW(hKey, _T("DefaultBackground"), 0, REG_DWORD, (LPBYTE)&Temp, sizeof(DWORD));
+
+    if (Err != ERROR_SUCCESS) {
+        DllAdvApi32.pRegCloseKey(hKey);
+        return FALSE;
+    }
+
+    DllAdvApi32.pRegCloseKey(hKey);
+    return TRUE;
 }
 
 // vim:sw=4:ts=4:et:

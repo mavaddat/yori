@@ -66,19 +66,19 @@ ChdirHelp(VOID)
 DWORD
 YORI_BUILTIN_FN
 YoriCmd_CHDIR(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
     BOOL Result;
-    DWORD OldCurrentDirectoryLength;
+    YORI_ALLOC_SIZE_T OldCurrentDirectoryLength;
     YORI_STRING OldCurrentDirectory;
     YORI_STRING NewCurrentDirectory;
     PYORI_STRING NewDir;
-    BOOL ArgumentUnderstood;
-    BOOL SetToLongPath = FALSE;
-    DWORD i;
-    DWORD StartArg = 0;
+    BOOLEAN ArgumentUnderstood;
+    BOOLEAN SetToLongPath = FALSE;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     YORI_STRING Arg;
     DWORD LastError;
     LPTSTR ErrText;
@@ -93,15 +93,15 @@ YoriCmd_CHDIR(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 ChdirHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2021"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("d")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("d")) == 0) {
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("e")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("e")) == 0) {
                 SetToLongPath = TRUE;
                 ArgumentUnderstood = TRUE;
             }
@@ -123,12 +123,12 @@ YoriCmd_CHDIR(
 
     NewDir = &ArgV[StartArg];
 
-    OldCurrentDirectoryLength = GetCurrentDirectory(0, NULL);
+    OldCurrentDirectoryLength = (YORI_ALLOC_SIZE_T)GetCurrentDirectory(0, NULL);
     if (!YoriLibAllocateString(&OldCurrentDirectory, OldCurrentDirectoryLength)) {
         return EXIT_FAILURE;
     }
 
-    OldCurrentDirectory.LengthInChars = GetCurrentDirectory(OldCurrentDirectory.LengthAllocated, OldCurrentDirectory.StartOfString);
+    OldCurrentDirectory.LengthInChars = (YORI_ALLOC_SIZE_T)GetCurrentDirectory(OldCurrentDirectory.LengthAllocated, OldCurrentDirectory.StartOfString);
     if (OldCurrentDirectory.LengthInChars == 0 ||
         OldCurrentDirectory.LengthInChars >= OldCurrentDirectory.LengthAllocated) {
         LastError = GetLastError();
@@ -201,7 +201,7 @@ YoriCmd_CHDIR(
         //
 
         YoriLibInitEmptyString(&CdPath);
-        if (!YoriLibAllocateAndGetEnvironmentVariable(_T("YORICDPATH"), &CdPath)) {
+        if (!YoriLibAllocateAndGetEnvVar(_T("YORICDPATH"), &CdPath)) {
             LastError = GetLastError();
             ErrText = YoriLibGetWinErrorText(LastError);
             YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("chdir: could not query environment: %s"), ErrText);
@@ -219,11 +219,11 @@ YoriCmd_CHDIR(
         Component.StartOfString = CdPath.StartOfString;
 
         while(TRUE) {
-            Component.LengthInChars = CdPath.LengthInChars - (DWORD)(Component.StartOfString - CdPath.StartOfString);
+            Component.LengthInChars = CdPath.LengthInChars - (YORI_ALLOC_SIZE_T)(Component.StartOfString - CdPath.StartOfString);
 
             Sep = YoriLibFindLeftMostCharacter(&Component, ';');
             if (Sep != NULL) {
-                Component.LengthInChars = (DWORD)(Sep - Component.StartOfString);
+                Component.LengthInChars = (YORI_ALLOC_SIZE_T)(Sep - Component.StartOfString);
             }
 
             NewCurrentDirectory.LengthInChars = 0;
@@ -234,7 +234,7 @@ YoriCmd_CHDIR(
             //  directory on another drive.
             //
 
-            if (YoriLibCompareStringWithLiteral(&Component, _T(".")) == 0) {
+            if (YoriLibCompareStringLit(&Component, _T(".")) == 0) {
 
                 if (!YoriLibUserStringToSingleFilePath(NewDir, SetToLongPath, &NewCurrentDirectory)) {
                     LastError = GetLastError();

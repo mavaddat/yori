@@ -78,7 +78,7 @@ typedef struct _TAIL_CONTEXT {
     /**
      Specifies the number of lines to display in each matching file.
      */
-    DWORD LinesToDisplay;
+    YORI_ALLOC_SIZE_T LinesToDisplay;
 
     /**
      The first error encountered when enumerating objects from a single arg.
@@ -173,7 +173,13 @@ TailProcessStream(
 
         while (TRUE) {
 
-            if (!YoriLibReadLineToStringEx(&TailContext->LinesArray[TailContext->LinesFound % TailContext->LinesToDisplay], &LineContext, !TailContext->WaitForMore, INFINITE, hSource, &LineEnding, &TimeoutReached)) {
+            if (!YoriLibReadLineToStringEx(&TailContext->LinesArray[TailContext->LinesFound % TailContext->LinesToDisplay],
+                                           &LineContext,
+                                           !TailContext->WaitForMore,
+                                           INFINITE,
+                                           hSource,
+                                           &LineEnding,
+                                           &TimeoutReached)) {
                 break;
             }
 
@@ -188,6 +194,9 @@ TailProcessStream(
             StartLine = TailContext->LinesFound - TailContext->LinesToDisplay;
             break;
         } else if (SeekToEndOffset != 0) {
+            DWORD DesiredSeek;
+            DesiredSeek = 4096;
+            DesiredSeek = DesiredSeek * TailContext->LinesToDisplay;
 
             //
             //  If we didn't get enough lines and we have a file that
@@ -196,8 +205,8 @@ TailProcessStream(
             //  line size) start scanning from the top.
             //
 
-            if (SeekToEndOffset < 4096 * TailContext->LinesToDisplay) {
-                SeekToEndOffset = 4096 * TailContext->LinesToDisplay;
+            if (SeekToEndOffset < DesiredSeek) {
+                SeekToEndOffset = DesiredSeek;
             } else {
                 SeekToEndOffset = 0;
                 SetFilePointer(hSource, 0, NULL, FILE_BEGIN);
@@ -358,7 +367,7 @@ TailFileEnumerateErrorCallback(
         DirName.StartOfString = UnescapedFilePath.StartOfString;
         FilePart = YoriLibFindRightMostCharacter(&UnescapedFilePath, '\\');
         if (FilePart != NULL) {
-            DirName.LengthInChars = (DWORD)(FilePart - DirName.StartOfString);
+            DirName.LengthInChars = (YORI_ALLOC_SIZE_T)(FilePart - DirName.StartOfString);
         } else {
             DirName.LengthInChars = UnescapedFilePath.LengthInChars;
         }
@@ -394,18 +403,18 @@ TailFileEnumerateErrorCallback(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
-    DWORD MatchFlags;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
+    WORD MatchFlags;
     DWORD Count;
-    BOOL BasicEnumeration = FALSE;
+    BOOLEAN BasicEnumeration = FALSE;
     TAIL_CONTEXT TailContext;
-    LONGLONG ContextLine;
+    YORI_MAX_SIGNED_T ContextLine;
     YORI_STRING Arg;
 
     ZeroMemory(&TailContext, sizeof(TailContext));
@@ -419,18 +428,18 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 TailHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2019"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("b")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("b")) == 0) {
                 BasicEnumeration = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("c")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("c")) == 0) {
                 if (ArgC > i + 1) {
-                    DWORD CharsConsumed;
+                    YORI_ALLOC_SIZE_T CharsConsumed;
                     if (YoriLibStringToNumber(&ArgV[i + 1], TRUE, &ContextLine, &CharsConsumed) &&
                         CharsConsumed > 0)  {
 
@@ -440,25 +449,25 @@ ENTRYPOINT(
                         ContextLine = -1;
                     }
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("f")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("f")) == 0) {
                 TailContext.WaitForMore = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("n")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("n")) == 0) {
                 if (ArgC > i + 1) {
-                    LONGLONG LineCount;
-                    DWORD CharsConsumed;
+                    YORI_MAX_SIGNED_T LineCount;
+                    YORI_ALLOC_SIZE_T CharsConsumed;
                     if (YoriLibStringToNumber(&ArgV[i + 1], TRUE, &LineCount, &CharsConsumed) &&
-                        LineCount != 0 && LineCount < 1 * 1024 * 1024) {
+                        LineCount != 0 && LineCount < 1 * 1024 * 1024 && LineCount < YORI_MAX_ALLOC_SIZE) {
 
-                        TailContext.LinesToDisplay = (DWORD)LineCount;
+                        TailContext.LinesToDisplay = (YORI_ALLOC_SIZE_T)LineCount;
                         ArgumentUnderstood = TRUE;
                         i++;
                     }
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("s")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("s")) == 0) {
                 TailContext.Recursive = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 StartArg = i + 1;
                 ArgumentUnderstood = TRUE;
                 break;
@@ -484,7 +493,7 @@ ENTRYPOINT(
     }
 
 #if YORI_BUILTIN
-    YoriLibCancelEnable();
+    YoriLibCancelEnable(FALSE);
 #endif
 
     //

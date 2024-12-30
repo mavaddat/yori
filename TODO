@@ -1,19 +1,61 @@
-v1.6:
- - General MSFIX review
- - Tab completion on %i
- - "."=="." becomes ".=="."" due to quote parsing which confuses if badly
 
-To consider:
+At this point, the TODO is more a list of tasks that might be useful and/or
+fun to write.
+
+ - Replace a lot of LONGLONG/DWORDLONG with max int types
+ - Scroll around input line on tiny windows, where the entire line doesn't
+   fit in the window
+ - Make more use something like line selection
+ - Ctrl+R (reverse history search)
+ - Allow pipes to be inserted into tee output
+ - Start without elevation prompt
+ - Have env read variable value pair from stdin
  - Use CopyFileEx when compressing to eliminate CreateFile?
  - Colorize help and error text
- - Ctrl+R
- - Edit horizontal scroll bar
  - More select should use logical line coordinates rather than conhost
    buffer coordinates to allow selection beyond screen size
+ - Tab completion on %i
  - Attempt to use dbghelp stack formatting again.  Seems useful for ydbg
    to be able to output the stack of exceptions etc.
 
-v2.0:
+ - Support move and resize of libwin windows
+ - Maximize/close in libwin
+ - Minimize in libwin, implying defining an icon form of a window
+ - TreeView
+ - Multi-column list
+ - Edit horizontal scroll bar
+ - Edit parse vim tags
+
+ - Environment variable editor UI
+ - TUI start menu - Point & Shoot?
+ - System diagnostics
+
+ - Ymake execute preprocessor CreateProcess calls in parallel somehow
+ - Ymake dependency aware install, so $(BINDIR) is updated if the link changes
+
+ - Regedit "rename" values
+ - Regedit "rename" keys
+ - Regedit search
+ - Regedit multi-sz editor
+
+ - Yui should look deeper for background color
+ - Win+X menu
+ - Start button context menu
+ - See how explorer did show desktop due to elevated
+ - Windows 10 taskbar unhides itself very aggressively
+ - Yui advertize minimize location for animation rendering
+ - Audio mixer/volume tray
+ - Safely remove
+ - Decrypt bitlocker
+ - Disable wifi, apparently not the same as airplane mode
+ - Run recent list and autocomplete
+ - Desktop context menu
+ - Taskbar button progress
+ - Progman DDE server
+ - Extensible notification icons
+ - Yui fullscreen and flash
+
+Longer term, larger things:
  - Port pcre
  - Use regex in hilite
  - Case statement in ys
@@ -21,5 +63,6 @@ v2.0:
  - Markdown formatter/parser
  - Man or something like it
  - Edit line wrap
- - Edit hex editing
+ - PWB
+ - ASCII art/line drawing/visio
  - Round braces in command parser, including if

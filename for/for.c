@@ -84,7 +84,7 @@ typedef struct _FOR_EXEC_CONTEXT {
     /**
      If TRUE, use CMD as a subshell.  If FALSE, use Yori.
      */
-    BOOL InvokeCmd;
+    BOOLEAN InvokeCmd;
 
     /**
      The string that might be found in ArgV which should be changed to contain
@@ -95,7 +95,7 @@ typedef struct _FOR_EXEC_CONTEXT {
     /**
      The number of elements in ArgV.
      */
-    DWORD ArgC;
+    YORI_ALLOC_SIZE_T ArgC;
 
     /**
      The template form of an argv style argument array, before any
@@ -107,13 +107,13 @@ typedef struct _FOR_EXEC_CONTEXT {
      The number of processes that this program would like to have concurrently
      running.
      */
-    DWORD TargetConcurrentCount;
+    YORI_ALLOC_SIZE_T TargetConcurrentCount;
 
     /**
      The number of processes that are currently running as a result of this
      program.
      */
-    DWORD CurrentConcurrentCount;
+    YORI_ALLOC_SIZE_T CurrentConcurrentCount;
 
     /**
      An array of handles with CurrentConcurrentCount number of valid
@@ -140,14 +140,14 @@ ForWaitForProcessToComplete(
     )
 {
     DWORD Result;
-    DWORD Index;
-    DWORD Count;
+    YORI_ALLOC_SIZE_T Index;
+    YORI_ALLOC_SIZE_T Count;
 
-    Result = WaitForMultipleObjects(ExecContext->CurrentConcurrentCount, ExecContext->HandleArray, FALSE, INFINITE);
+    Result = WaitForMultipleObjectsEx(ExecContext->CurrentConcurrentCount, ExecContext->HandleArray, FALSE, INFINITE, FALSE);
 
     ASSERT(Result < (WAIT_OBJECT_0 + ExecContext->CurrentConcurrentCount));
 
-    Index = Result - WAIT_OBJECT_0;
+    Index = (YORI_ALLOC_SIZE_T)(Result - WAIT_OBJECT_0);
 
     ASSERT(Index < ExecContext->CurrentConcurrentCount);
 
@@ -206,7 +206,7 @@ ForQuoteSectionIfNeeded(
     __inout PYORI_STRING CurrentPosition
     )
 {
-    DWORD Offset;
+    YORI_ALLOC_SIZE_T Offset;
 
     //
     //  This routine will update the current position and depends upon the
@@ -216,7 +216,7 @@ ForQuoteSectionIfNeeded(
 
     ASSERT(CurrentPosition->MemoryToFree == NULL);
 
-    Offset = (DWORD)(CurrentPosition->StartOfString - Arg->StartOfString);
+    Offset = (YORI_ALLOC_SIZE_T)(CurrentPosition->StartOfString - Arg->StartOfString);
 
     if (!ArgContext->Quoted && WhiteSpaceInSection && Section->LengthInChars > 0) {
 
@@ -235,16 +235,16 @@ ForQuoteSectionIfNeeded(
             YORI_STRING NewArg;
             YORI_STRING Prefix;
             YORI_STRING Suffix;
-            DWORD ExtraOffsetChars;
+            YORI_ALLOC_SIZE_T ExtraOffsetChars;
 
             YoriLibInitEmptyString(&Prefix);
             YoriLibInitEmptyString(&Suffix);
 
             Prefix.StartOfString = Arg->StartOfString;
-            Prefix.LengthInChars = (DWORD)(Section->StartOfString - Arg->StartOfString);
+            Prefix.LengthInChars = (YORI_ALLOC_SIZE_T)(Section->StartOfString - Arg->StartOfString);
 
             Suffix.StartOfString = Section->StartOfString + Section->LengthInChars;
-            Suffix.LengthInChars = Arg->LengthInChars - (DWORD)(Suffix.StartOfString - Arg->StartOfString);
+            Suffix.LengthInChars = Arg->LengthInChars - (YORI_ALLOC_SIZE_T)(Suffix.StartOfString - Arg->StartOfString);
 
             if (!YoriLibAllocateString(&NewArg, Arg->LengthInChars + 3)) {
                 return FALSE;
@@ -297,12 +297,12 @@ ForBreakArgumentsAsNeeded(
     __in PYORI_LIBSH_CMD_CONTEXT CmdContext
     )
 {
-    DWORD ArgCount;
-    DWORD ArgIndex;
-    DWORD ExistingArg;
-    DWORD CharsToConsume;
-    DWORD InitialArgOffset;
-    DWORD BraceNestingLevel;
+    YORI_ALLOC_SIZE_T ArgCount;
+    YORI_ALLOC_SIZE_T ArgIndex;
+    YORI_ALLOC_SIZE_T ExistingArg;
+    YORI_ALLOC_SIZE_T CharsToConsume;
+    YORI_ALLOC_SIZE_T InitialArgOffset;
+    YORI_ALLOC_SIZE_T BraceNestingLevel;
     PYORI_STRING Arg;
     YORI_STRING Char;
     YORI_STRING Section;
@@ -410,7 +410,7 @@ ForBreakArgumentsAsNeeded(
                     Char.LengthInChars >= 2 &&
                     Char.StartOfString[1] == '(') {
 
-                    Section.LengthInChars = (DWORD)(Char.StartOfString - Section.StartOfString);
+                    Section.LengthInChars = (YORI_ALLOC_SIZE_T)(Char.StartOfString - Section.StartOfString);
                     ForQuoteSectionIfNeeded(&CmdContext->ArgV[ArgIndex],
                                             &CmdContext->ArgContexts[ArgIndex],
                                             &Section,
@@ -422,7 +422,7 @@ ForBreakArgumentsAsNeeded(
                 } else if (Char.StartOfString[0] == ')' &&
                            BraceNestingLevel > 0) {
 
-                    Section.LengthInChars = (DWORD)(Char.StartOfString - Section.StartOfString);
+                    Section.LengthInChars = (YORI_ALLOC_SIZE_T)(Char.StartOfString - Section.StartOfString);
                     ForQuoteSectionIfNeeded(&CmdContext->ArgV[ArgIndex],
                                             &CmdContext->ArgContexts[ArgIndex],
                                             &Section,
@@ -432,7 +432,7 @@ ForBreakArgumentsAsNeeded(
                     WhiteSpaceInSection = FALSE;
                     BraceNestingLevel--;
                 } else if (Char.StartOfString[0] == '`') {
-                    Section.LengthInChars = (DWORD)(Char.StartOfString - Section.StartOfString);
+                    Section.LengthInChars = (YORI_ALLOC_SIZE_T)(Char.StartOfString - Section.StartOfString);
                     ForQuoteSectionIfNeeded(&CmdContext->ArgV[ArgIndex],
                                             &CmdContext->ArgContexts[ArgIndex],
                                             &Section,
@@ -447,10 +447,10 @@ ForBreakArgumentsAsNeeded(
                 if (!CmdContext->ArgContexts[ArgIndex].Quoted &&
                     YoriLibShIsArgumentSeperator(&Char, &CharsToConsume, &TerminateNextArg)) {
 
-                    DWORD NewArgCount;
+                    YORI_ALLOC_SIZE_T NewArgCount;
                     YORI_LIBSH_CMD_CONTEXT NewCmd;
 
-                    Section.LengthInChars = (DWORD)(Char.StartOfString - Section.StartOfString);
+                    Section.LengthInChars = (YORI_ALLOC_SIZE_T)(Char.StartOfString - Section.StartOfString);
                     ForQuoteSectionIfNeeded(&CmdContext->ArgV[ArgIndex],
                                             &CmdContext->ArgContexts[ArgIndex],
                                             &Section,
@@ -478,6 +478,12 @@ ForBreakArgumentsAsNeeded(
                     //  Char.LengthInChars is zero, and continue.
                     //
 
+
+                    //
+                    //  MSFIX This should probably use
+                    //  YoriLibShExpandCmdContext now it exists
+                    //
+
                     if (TerminateNextArg) {
                         NewArgCount = ArgCount + 2;
                     } else {
@@ -492,7 +498,7 @@ ForBreakArgumentsAsNeeded(
                         YoriLibShCopyArg(CmdContext, ExistingArg, &NewCmd, ExistingArg);
                     }
 
-                    NewCmd.ArgV[ArgIndex].LengthInChars = (DWORD)(Char.StartOfString - Arg[ArgIndex].StartOfString);
+                    NewCmd.ArgV[ArgIndex].LengthInChars = (YORI_ALLOC_SIZE_T)(Char.StartOfString - Arg[ArgIndex].StartOfString);
                     YoriLibShCheckIfArgNeedsQuotes(&NewCmd, ArgIndex);
                     YoriLibInitEmptyString(&NewCmd.ArgV[ArgIndex + 1]);
                     NewCmd.ArgV[ArgIndex + 1].StartOfString = Char.StartOfString;
@@ -542,7 +548,8 @@ ForBreakArgumentsAsNeeded(
                     CmdContext->ArgC = NewArgCount;
                     CmdContext->ArgV = NewCmd.ArgV;
                     CmdContext->ArgContexts = NewCmd.ArgContexts;
-                    CmdContext->MemoryToFree = NewCmd.MemoryToFree;
+                    CmdContext->MemoryToFreeArgV = NewCmd.MemoryToFreeArgV;
+                    CmdContext->MemoryToFreeArgContexts = NewCmd.MemoryToFreeArgContexts;
 
                     ArgCount = NewArgCount;
                     Arg = NewCmd.ArgV;
@@ -556,7 +563,7 @@ ForBreakArgumentsAsNeeded(
         }
 
         if (WhiteSpaceInSection) {
-            Section.LengthInChars = (DWORD)(Char.StartOfString - Section.StartOfString);
+            Section.LengthInChars = (YORI_ALLOC_SIZE_T)(Char.StartOfString - Section.StartOfString);
             ForQuoteSectionIfNeeded(&CmdContext->ArgV[ArgIndex],
                                     &CmdContext->ArgContexts[ArgIndex],
                                     &Section,
@@ -583,12 +590,12 @@ ForExecuteCommand(
     __in PFOR_EXEC_CONTEXT ExecContext
     )
 {
-    DWORD ArgsNeeded = ExecContext->ArgC;
-    DWORD PrefixArgCount;
-    DWORD FoundOffset;
-    DWORD Count;
-    DWORD SubstitutesFound;
-    DWORD ArgLengthNeeded;
+    YORI_ALLOC_SIZE_T ArgsNeeded = ExecContext->ArgC;
+    YORI_ALLOC_SIZE_T PrefixArgCount;
+    YORI_ALLOC_SIZE_T FoundOffset;
+    YORI_ALLOC_SIZE_T Count;
+    YORI_ALLOC_SIZE_T SubstitutesFound;
+    YORI_ALLOC_SIZE_T ArgLengthNeeded;
     YORI_STRING OldArg;
     YORI_STRING NewArgWritePoint;
     YORI_STRING CmdLine;
@@ -609,7 +616,7 @@ ForExecuteCommand(
     PrefixArgCount = 2;
 #endif
 
-    ArgsNeeded += PrefixArgCount;
+    ArgsNeeded = ArgsNeeded + PrefixArgCount;
 
     if (!YoriLibShAllocateArgCount(&NewCmd, ArgsNeeded, 0, NULL)) {
         return;
@@ -622,10 +629,10 @@ ForExecuteCommand(
 
     if (PrefixArgCount > 0) {
         if (ExecContext->InvokeCmd) {
-            ArgLengthNeeded = GetEnvironmentVariable(_T("COMSPEC"), NULL, 0);
+            ArgLengthNeeded = (YORI_ALLOC_SIZE_T)GetEnvironmentVariable(_T("COMSPEC"), NULL, 0);
             if (ArgLengthNeeded != 0) {
                 if (YoriLibAllocateString(&NewCmd.ArgV[0], ArgLengthNeeded)) {
-                    NewCmd.ArgV[0].LengthInChars = GetEnvironmentVariable(_T("COMSPEC"), NewCmd.ArgV[0].StartOfString, NewCmd.ArgV[0].LengthAllocated);
+                    NewCmd.ArgV[0].LengthInChars = (YORI_ALLOC_SIZE_T)GetEnvironmentVariable(_T("COMSPEC"), NewCmd.ArgV[0].StartOfString, NewCmd.ArgV[0].LengthAllocated);
                     if (NewCmd.ArgV[0].LengthInChars == 0) {
                         YoriLibFreeStringContents(&NewCmd.ArgV[0]);
                     }
@@ -635,10 +642,10 @@ ForExecuteCommand(
                 YoriLibConstantString(&NewCmd.ArgV[0], _T("cmd.exe"));
             }
         } else {
-            ArgLengthNeeded = GetEnvironmentVariable(_T("YORISPEC"), NULL, 0);
+            ArgLengthNeeded = (YORI_ALLOC_SIZE_T)GetEnvironmentVariable(_T("YORISPEC"), NULL, 0);
             if (ArgLengthNeeded != 0) {
                 if (YoriLibAllocateString(&NewCmd.ArgV[0], ArgLengthNeeded)) {
-                    NewCmd.ArgV[0].LengthInChars = GetEnvironmentVariable(_T("YORISPEC"), NewCmd.ArgV[0].StartOfString, NewCmd.ArgV[0].LengthAllocated);
+                    NewCmd.ArgV[0].LengthInChars = (YORI_ALLOC_SIZE_T)GetEnvironmentVariable(_T("YORISPEC"), NewCmd.ArgV[0].StartOfString, NewCmd.ArgV[0].LengthAllocated);
                     if (NewCmd.ArgV[0].LengthInChars == 0) {
                         YoriLibFreeStringContents(&NewCmd.ArgV[0]);
                     }
@@ -680,7 +687,7 @@ ForExecuteCommand(
 
         YoriLibShCheckIfArgNeedsQuotes(&NewCmd, Count + PrefixArgCount);
 
-        while (YoriLibFindFirstMatchingSubstring(&OldArg, 1, ExecContext->SubstituteVariable, &FoundOffset)) {
+        while (YoriLibFindFirstMatchSubstr(&OldArg, 1, ExecContext->SubstituteVariable, &FoundOffset)) {
             SubstitutesFound++;
             OldArg.StartOfString += FoundOffset + 1;
             OldArg.LengthInChars -= FoundOffset + 1;
@@ -700,23 +707,23 @@ ForExecuteCommand(
         OldArg.LengthInChars = ExecContext->ArgV[Count].LengthInChars;
 
         while (TRUE) {
-            if (YoriLibFindFirstMatchingSubstring(&OldArg, 1, ExecContext->SubstituteVariable, &FoundOffset)) {
+            if (YoriLibFindFirstMatchSubstr(&OldArg, 1, ExecContext->SubstituteVariable, &FoundOffset)) {
                 memcpy(NewArgWritePoint.StartOfString, OldArg.StartOfString, FoundOffset * sizeof(TCHAR));
                 NewArgWritePoint.StartOfString += FoundOffset;
-                NewArgWritePoint.LengthAllocated -= FoundOffset;
+                NewArgWritePoint.LengthAllocated = NewArgWritePoint.LengthAllocated - FoundOffset;
                 memcpy(NewArgWritePoint.StartOfString, Match->StartOfString, Match->LengthInChars * sizeof(TCHAR));
                 NewArgWritePoint.StartOfString += Match->LengthInChars;
-                NewArgWritePoint.LengthAllocated -= Match->LengthInChars;
+                NewArgWritePoint.LengthAllocated = NewArgWritePoint.LengthAllocated - Match->LengthInChars;
 
                 OldArg.StartOfString += FoundOffset + ExecContext->SubstituteVariable->LengthInChars;
                 OldArg.LengthInChars -= FoundOffset + ExecContext->SubstituteVariable->LengthInChars;
             } else {
                 memcpy(NewArgWritePoint.StartOfString, OldArg.StartOfString, OldArg.LengthInChars * sizeof(TCHAR));
                 NewArgWritePoint.StartOfString += OldArg.LengthInChars;
-                NewArgWritePoint.LengthAllocated -= OldArg.LengthInChars;
+                NewArgWritePoint.LengthAllocated = NewArgWritePoint.LengthAllocated - OldArg.LengthInChars;
                 NewArgWritePoint.StartOfString[0] = '\0';
 
-                NewCmd.ArgV[Count + PrefixArgCount].LengthInChars = (DWORD)(NewArgWritePoint.StartOfString - NewCmd.ArgV[Count + PrefixArgCount].StartOfString);
+                NewCmd.ArgV[Count + PrefixArgCount].LengthInChars = (YORI_ALLOC_SIZE_T)(NewArgWritePoint.StartOfString - NewCmd.ArgV[Count + PrefixArgCount].StartOfString);
                 ASSERT(NewCmd.ArgV[Count + PrefixArgCount].LengthInChars < NewCmd.ArgV[Count + PrefixArgCount].LengthAllocated);
                 ASSERT(YoriLibIsStringNullTerminated(&NewCmd.ArgV[Count + PrefixArgCount]));
                 break;
@@ -844,25 +851,25 @@ ForFileFoundCallback(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
+    BOOLEAN ArgumentUnderstood;
     YORI_STRING Arg;
-    BOOL LeftBraceOpen;
-    BOOL RequiresExpansion;
-    BOOL MatchDirectories;
-    BOOL Recurse;
-    BOOL BasicEnumeration;
-    BOOL StepMode;
-    DWORD CharIndex;
-    DWORD MatchFlags;
-    DWORD StartArg = 0;
-    DWORD ListArg = 0;
-    DWORD CmdArg = 0;
-    DWORD ArgIndex;
-    DWORD i;
+    BOOLEAN LeftBraceOpen;
+    BOOLEAN RequiresExpansion;
+    BOOLEAN MatchDirectories;
+    BOOLEAN Recurse;
+    BOOLEAN BasicEnumeration;
+    BOOLEAN StepMode;
+    YORI_ALLOC_SIZE_T CharIndex;
+    WORD MatchFlags;
+    YORI_ALLOC_SIZE_T StartArg = 0;
+    YORI_ALLOC_SIZE_T ListArg = 0;
+    YORI_ALLOC_SIZE_T CmdArg = 0;
+    YORI_ALLOC_SIZE_T ArgIndex;
+    YORI_ALLOC_SIZE_T i;
     FOR_EXEC_CONTEXT ExecContext;
 
     ZeroMemory(&ExecContext, sizeof(ExecContext));
@@ -881,22 +888,22 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 ForHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2019"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("b")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("b")) == 0) {
                 BasicEnumeration = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("c")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("c")) == 0) {
                 ExecContext.InvokeCmd = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("d")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("d")) == 0) {
                 MatchDirectories = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("i")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("i")) == 0) {
                 if (i + 1 < ArgC) {
                     YORI_STRING ErrorSubstring;
                     YORI_LIB_FILE_FILTER Filter;
@@ -914,17 +921,17 @@ ENTRYPOINT(
                     i++;
                     ArgumentUnderstood = TRUE;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("l")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("l")) == 0) {
                 StepMode = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("p")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("p")) == 0) {
                 if (i + 1 < ArgC) {
-                    LONGLONG LlNumberProcesses = 0;
-                    DWORD CharsConsumed = 0;
+                    YORI_MAX_SIGNED_T LlNumberProcesses = 0;
+                    YORI_ALLOC_SIZE_T CharsConsumed = 0;
                     if (YoriLibStringToNumber(&ArgV[i + 1], TRUE, &LlNumberProcesses, &CharsConsumed) &&
                         CharsConsumed > 0) {
 
-                        ExecContext.TargetConcurrentCount = (DWORD)LlNumberProcesses;
+                        ExecContext.TargetConcurrentCount = (YORI_ALLOC_SIZE_T)LlNumberProcesses;
                         ArgumentUnderstood = TRUE;
                         if (ExecContext.TargetConcurrentCount < 1) {
                             ExecContext.TargetConcurrentCount = 1;
@@ -932,10 +939,10 @@ ENTRYPOINT(
                         i++;
                     }
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("r")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("r")) == 0) {
                 Recurse = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 ArgumentUnderstood = TRUE;
                 StartArg = i + 1;
                 break;
@@ -967,12 +974,12 @@ ENTRYPOINT(
         goto cleanup_and_exit;
     }
 
-    if (YoriLibCompareStringWithLiteralInsensitive(&ArgV[StartArg + 1], _T("in")) != 0) {
+    if (YoriLibCompareStringLitIns(&ArgV[StartArg + 1], _T("in")) != 0) {
         YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("for: 'in' not found\n"));
         goto cleanup_and_exit;
     }
 
-    if (YoriLibCompareStringWithLiteralInsensitiveCount(&ArgV[StartArg + 2], _T("("), 1) != 0) {
+    if (YoriLibCompareStringLitInsCnt(&ArgV[StartArg + 2], _T("("), 1) != 0) {
         YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("for: left bracket not found\n"));
         goto cleanup_and_exit;
     }
@@ -992,7 +999,7 @@ ENTRYPOINT(
                 LeftBraceOpen = FALSE;
             }
         } else {
-            if (YoriLibCompareStringWithLiteralInsensitive(&ArgV[ArgIndex], _T("do")) == 0) {
+            if (YoriLibCompareStringLitIns(&ArgV[ArgIndex], _T("do")) == 0) {
                 CmdArg = ArgIndex + 1;
                 break;
             }
@@ -1036,11 +1043,11 @@ ENTRYPOINT(
     }
 
     if (StepMode) {
-        LONGLONG Start;
-        LONGLONG Step;
-        LONGLONG End;
-        LONGLONG Current;
-        DWORD CharsConsumed;
+        YORI_MAX_SIGNED_T Start;
+        YORI_MAX_SIGNED_T Step;
+        YORI_MAX_SIGNED_T End;
+        YORI_MAX_SIGNED_T Current;
+        YORI_ALLOC_SIZE_T CharsConsumed;
         YORI_STRING FoundMatch;
         YORI_STRING Criteria;
 
@@ -1067,7 +1074,7 @@ ENTRYPOINT(
         }
 
         Criteria.StartOfString += CharsConsumed;
-        Criteria.LengthInChars -= CharsConsumed;
+        Criteria.LengthInChars = Criteria.LengthInChars - CharsConsumed;
         YoriLibTrimSpaces(&Criteria);
 
         if (Criteria.StartOfString[0] != ',') {
@@ -1092,7 +1099,7 @@ ENTRYPOINT(
         }
 
         Criteria.StartOfString += CharsConsumed;
-        Criteria.LengthInChars -= CharsConsumed;
+        Criteria.LengthInChars = Criteria.LengthInChars - CharsConsumed;
         YoriLibTrimSpaces(&Criteria);
 
         if (Criteria.StartOfString[0] != ',') {

@@ -40,8 +40,8 @@ typedef enum _YORI_DLG_DIR_CONTROLS {
 } YORI_DLG_DIR_CONTROLS;
 
 /**
- State specific to a file dialog that is in operation.  Currently this is
- process global (can we really nest open dialogs anyway?)  But this should
+ State specific to a directory dialog that is in operation.  Currently this
+ is process global (can we really nest open dialogs anyway?)  But this should
  be moved to a per-window allocation.
  */
 typedef struct _YORI_DLG_DIR_STATE {
@@ -174,7 +174,7 @@ YoriDlgDirOkButtonClicked(
     YORI_STRING FullFilePath;
     YORI_STRING FullDirPath;
     PYORI_DLG_DIR_STATE State;
-    DWORD Index;
+    YORI_ALLOC_SIZE_T Index;
     DWORD Attributes;
     BOOLEAN WildFound;
 
@@ -269,7 +269,7 @@ YoriDlgDirOkButtonClicked(
     //
 
     if (PathComponent.StartOfString == NULL &&
-        YoriLibCompareStringWithLiteral(&FileComponent, _T(".")) == 0) {
+        YoriLibCompareStringLit(&FileComponent, _T(".")) == 0) {
 
         ASSERT(!WildFound);
         YoriLibCloneString(&FullFilePath, &State->CurrentDirectory);
@@ -396,40 +396,6 @@ YoriDlgDirCancelButtonClicked(
 }
 
 /**
- A callback invoked when the selection within the file list changes.
-
- @param Ctrl Pointer to the list whose selection changed.
- */
-VOID
-YoriDlgDirFileSelectionChanged(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
-    )
-{
-    DWORD ActiveOption;
-    YORI_STRING String;
-    PYORI_WIN_CTRL_HANDLE Parent;
-    PYORI_WIN_CTRL_HANDLE EditCtrl;
-
-    if (!YoriWinListGetActiveOption(Ctrl, &ActiveOption)) {
-        return;
-    }
-
-    Parent = YoriWinGetControlParent(Ctrl);
-    YoriLibInitEmptyString(&String);
-    if (!YoriWinListGetItemText(Ctrl, ActiveOption, &String)) {
-        return;
-    }
-
-    EditCtrl = YoriWinFindControlById(Parent, YoriDlgDirControlFileText);
-    ASSERT(EditCtrl != NULL);
-    __analysis_assume(EditCtrl != NULL);
-
-    YoriWinEditSetText(EditCtrl, &String);
-    YoriWinEditSetSelectionRange(EditCtrl, 0, String.LengthInChars);
-    YoriLibFreeStringContents(&String);
-}
-
-/**
  A callback invoked when the selection within the directory list changes.
 
  @param Ctrl Pointer to the list whose selection changed.
@@ -439,7 +405,7 @@ YoriDlgDirDirectorySelectionChanged(
     __in PYORI_WIN_CTRL_HANDLE Ctrl
     )
 {
-    DWORD ActiveOption;
+    YORI_ALLOC_SIZE_T ActiveOption;
     YORI_STRING String;
     PYORI_WIN_CTRL_HANDLE Parent;
     PYORI_WIN_CTRL_HANDLE EditCtrl;
@@ -503,7 +469,7 @@ YoriDlgDirDirFoundCallback(
     )
 {
     YORI_STRING FileNameOnly;
-    PYORI_WIN_CTRL_HANDLE DirListCtrl;
+    PYORI_STRING_ARRAY StringArray;
 
     UNREFERENCED_PARAMETER(FilePath);
     UNREFERENCED_PARAMETER(Depth);
@@ -520,10 +486,10 @@ YoriDlgDirDirFoundCallback(
         return TRUE;
     }
 
-    DirListCtrl = (PYORI_WIN_CTRL_HANDLE)Context;
+    StringArray = (PYORI_STRING_ARRAY)Context;
     YoriLibConstantString(&FileNameOnly, FileInfo->cFileName);
 
-    YoriWinListAddItems(DirListCtrl, &FileNameOnly, 1);
+    YoriStringArrayAddItems(StringArray, &FileNameOnly, 1);
     return TRUE;
 }
 
@@ -547,6 +513,7 @@ YoriDlgDirRefreshView(
     )
 {
     YORI_STRING FullDir;
+    YORI_STRING UnescapedPath;
     YORI_STRING SearchString;
     PYORI_WIN_CTRL_HANDLE CurDirLabel;
     PYORI_WIN_CTRL_HANDLE DirList;
@@ -555,8 +522,15 @@ YoriDlgDirRefreshView(
     TCHAR DriveProbeString[sizeof("A:\\")];
     TCHAR DriveDisplayString[sizeof("[-A-]")];
     UINT DriveProbeResult;
+    YORI_STRING_ARRAY NewListItems;
 
-    if (!YoriLibUserStringToSingleFilePath(Directory, FALSE, &FullDir)) {
+    if (!YoriLibUserStringToSingleFilePath(Directory, TRUE, &FullDir)) {
+        return;
+    }
+
+    YoriLibInitEmptyString(&UnescapedPath);
+    if (!YoriLibUnescapePath(&FullDir, &UnescapedPath)) {
+        YoriLibFreeStringContents(&FullDir);
         return;
     }
 
@@ -567,13 +541,8 @@ YoriDlgDirRefreshView(
     ASSERT(DirList != NULL);
     __analysis_assume(DirList != NULL);
 
-    YoriWinLabelSetCaption(CurDirLabel, &FullDir);
-
-    YoriLibFreeStringContents(&FullDir);
-
-    if (!YoriLibUserStringToSingleFilePath(Directory, TRUE, &FullDir)) {
-        return;
-    }
+    YoriWinLabelSetCaption(CurDirLabel, &UnescapedPath);
+    YoriLibFreeStringContents(&UnescapedPath);
 
     State = YoriWinGetControlContext(Dialog);
     YoriLibFreeStringContents(&State->CurrentDirectory);
@@ -591,7 +560,11 @@ YoriDlgDirRefreshView(
     }
 
     YoriWinListClearAllItems(DirList);
-    YoriLibForEachFile(&SearchString, YORILIB_FILEENUM_RETURN_DIRECTORIES | YORILIB_FILEENUM_INCLUDE_DOTFILES | YORILIB_FILEENUM_BASIC_EXPANSION, 0, YoriDlgDirDirFoundCallback, NULL, DirList);
+    YoriStringArrayInitialize(&NewListItems);
+    YoriLibForEachFile(&SearchString, YORILIB_FILEENUM_RETURN_DIRECTORIES | YORILIB_FILEENUM_INCLUDE_DOTFILES | YORILIB_FILEENUM_BASIC_EXPANSION, 0, YoriDlgDirDirFoundCallback, NULL, &NewListItems);
+    YoriLibSortStringArray(NewListItems.Items, NewListItems.Count);
+    YoriWinListAddItems(DirList, NewListItems.Items, NewListItems.Count);
+    YoriStringArrayCleanup(&NewListItems);
     State->NumberDirectories = YoriWinListGetItemCount(DirList);
 
     //
@@ -612,7 +585,9 @@ YoriDlgDirRefreshView(
 
     for (DriveProbeString[0] = 'A'; DriveProbeString[0] <= 'Z'; DriveProbeString[0]++) {
         DriveProbeResult = GetDriveType(DriveProbeString);
-        if (DriveProbeResult != 0 && DriveProbeResult != 1) {
+        if (DriveProbeResult != DRIVE_UNKNOWN &&
+            DriveProbeResult != DRIVE_NO_ROOT_DIR) {
+
             DriveDisplayString[2] = DriveProbeString[0];
             YoriWinListAddItems(DirList, &DriveDisplay, 1);
         }
@@ -689,13 +664,13 @@ YoriDlgDir(
         }
     }
 
-    if ((WORD)WinMgrSize.Y < 14 + OptionCount) {
-        WinMgrSize.Y = (SHORT)(14 + OptionCount);
+    if ((WORD)WinMgrSize.Y < 13 + OptionCount) {
+        WinMgrSize.Y = (SHORT)(13 + OptionCount);
     }
 
     YoriLibInitEmptyString(&State.CurrentDirectory);
     YoriLibInitEmptyString(&State.FileToReturn);
-    if (!YoriWinCreateWindow(WinMgrHandle, 50, (WORD)(14 + OptionCount), WinMgrSize.X, WinMgrSize.Y, YORI_WIN_WINDOW_STYLE_BORDER_SINGLE | YORI_WIN_WINDOW_STYLE_SHADOW_SOLID, Title, &Parent)) {
+    if (!YoriWinCreateWindow(WinMgrHandle, 50, (WORD)(13 + OptionCount), WinMgrSize.X, WinMgrSize.Y, YORI_WIN_WINDOW_STYLE_BORDER_SINGLE | YORI_WIN_WINDOW_STYLE_SHADOW_SOLID, Title, &Parent)) {
         return FALSE;
     }
 
@@ -761,12 +736,13 @@ YoriDlgDir(
     Area.Bottom = (WORD)(WindowSize.Y - OptionCount - 4);
     Area.Right = (WORD)(WindowSize.X - 2);
 
-    Ctrl = YoriWinListCreate(Parent, &Area, YORI_WIN_LIST_STYLE_VSCROLLBAR | YORI_WIN_LIST_STYLE_DESELECT_ON_LOSE_FOCUS);
+    Ctrl = YoriWinListCreate(Parent, &Area, YORI_WIN_LIST_STYLE_VSCROLLBAR | YORI_WIN_LIST_STYLE_DESELECT_ON_LOSE_FOCUS | YORI_WIN_LIST_STYLE_AUTO_HSCROLLBAR);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;
     }
 
+    YoriWinControlSetFocusOnMouseClick(Ctrl, FALSE);
     YoriWinSetControlId(Ctrl, YoriDlgDirControlDirectoryList);
     YoriWinListSetSelectionNotifyCallback(Ctrl, YoriDlgDirDirectorySelectionChanged);
 

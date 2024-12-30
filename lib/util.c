@@ -46,6 +46,59 @@ YoriLibIsEscapeChar(
 }
 
 /**
+ Returns TRUE if the character should be displayed in two console cells,
+ FALSE if it is a conventional, narrow character.
+
+ @param Char The character whose width should be determined.
+
+ @return TRUE if the character should be double-wide, FALSE if it should
+         be narrow.
+ */
+BOOLEAN
+YoriLibIsDoubleWideChar(
+    __in TCHAR Char
+    )
+{
+    if (Char < 0x1100) {
+        return FALSE;
+    }
+
+    if (Char < 0x115F ||
+        (Char >= 0x2e80 && Char < 0xA4CF) ||
+        (Char >= 0xAC00 && Char <= 0xD7A3) ||
+        (Char >= 0xF900 && Char <= 0xFAFF) ||
+        (Char >= 0xFE10 && Char <= 0xFE19) ||
+        (Char >= 0xFE30 && Char <= 0xFE6F)) {
+
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+/**
+ Set an unsigned value into a large integer.  This is an abstraction to allow
+ the large integer to be larger than the compiler's native type.
+
+ @param Li Pointer to the large integer to assign a value to.
+
+ @param Value The value to assign.
+ */
+VOID
+YoriLibLiAssignUnsigned(
+    __out PLARGE_INTEGER Li,
+    __in YORI_MAX_UNSIGNED_T Value
+    )
+{
+#if YORI_LARGE_INT_NO_QUADPART
+    Li->LowPart = Value;
+    Li->HighPart = 0;
+#else
+    Li->QuadPart = Value;
+#endif
+}
+
+/**
  Convert a noninheritable handle into an inheritable handle.
 
  @param OriginalHandle A handle to convert, which is presumably not
@@ -194,9 +247,9 @@ YoriLibCreateDirectoryAndParents(
     __inout PYORI_STRING DirName
     )
 {
-    DWORD MaxIndex = DirName->LengthInChars - 1;
+    YORI_ALLOC_SIZE_T MaxIndex = DirName->LengthInChars - 1;
     DWORD Err;
-    DWORD SepIndex = MaxIndex;
+    YORI_ALLOC_SIZE_T SepIndex = MaxIndex;
     BOOL Result;
     BOOL StartedSucceeding = FALSE;
 
@@ -276,16 +329,16 @@ YoriLibCreateDirectoryAndParents(
 __success(return)
 BOOL
 YoriLibRenameFileToBackupName(
-    __in PYORI_STRING FullPath,
+    __in PCYORI_STRING FullPath,
     __out PYORI_STRING NewName
     )
 {
-    DWORD ProbeIndex;
+    YORI_ALLOC_SIZE_T ProbeIndex;
     HANDLE hDeadFile;
     YORI_STRING ShortFullPath;
     BOOLEAN ShortMode;
-    DWORD Index;
-    DWORD EndIndex;
+    YORI_ALLOC_SIZE_T Index;
+    YORI_ALLOC_SIZE_T EndIndex;
     DWORD Err;
 
     ShortMode = FALSE;
@@ -297,6 +350,7 @@ YoriLibRenameFileToBackupName(
     //  Find the short name by truncating to any period until a seperator
     //  is reached, and once the seperator is reached, truncate to 8 chars.
     //  This is used if the file system can't handle long file names.
+    //
 
     EndIndex = ShortFullPath.LengthInChars;
     for (Index = ShortFullPath.LengthInChars; Index > 0; Index--) {
@@ -394,9 +448,9 @@ YoriLibIsPathUrl(
     __in PCYORI_STRING PackagePath
     )
 {
-    if (YoriLibCompareStringWithLiteralInsensitiveCount(PackagePath, _T("http://"), sizeof("http://") - 1) == 0 ||
-        YoriLibCompareStringWithLiteralInsensitiveCount(PackagePath, _T("https://"), sizeof("https://") - 1) == 0 ||
-        YoriLibCompareStringWithLiteralInsensitiveCount(PackagePath, _T("ftp://"), sizeof("ftp://") - 1) == 0) {
+    if (YoriLibCompareStringLitInsCnt(PackagePath, _T("http://"), sizeof("http://") - 1) == 0 ||
+        YoriLibCompareStringLitInsCnt(PackagePath, _T("https://"), sizeof("https://") - 1) == 0 ||
+        YoriLibCompareStringLitInsCnt(PackagePath, _T("ftp://"), sizeof("ftp://") - 1) == 0) {
 
         return TRUE;
     }
@@ -510,5 +564,287 @@ YoriLibPosixDeleteFile(
     CloseHandle(hFile);
     return TRUE;
 }
+
+/**
+ The 32 bit math assembly routines currently can't support a 64 bit
+ denominator.  Wrapping them in this function ensures that they will not be
+ invoked with a 64 bit denominator.  This function is used as a barrier so
+ that multiple 32 bit divisions can be performed without the compiler
+ upgrading them into fewer 64 bit divisions.
+ 
+ @param Numerator The numerator of the division operation.
+ 
+ @param Denominator The denominator of the division operation.
+
+ @return The result of the division operation.
+ */
+DWORDLONG
+YoriLibDivide32(
+    __in DWORDLONG Numerator,
+    __in DWORD Denominator
+    )
+{
+    return Numerator/Denominator;
+}
+
+/**
+ Return TRUE to indicate that a character can be printed as a character.
+ Return FALSE to indicate that a character is a control character that will
+ modify terminal behavior.
+
+ @param Char The character to test.
+
+ @return TRUE if the character can be printed as a character, FALSE if it can
+         not.
+ */
+BOOLEAN
+YoriLibIsCharPrintable(
+    __in WCHAR Char
+    )
+{
+    if (Char == 0x00 ||
+        (Char >= 0x07 && Char <= 0x0F) ||
+        Char == 0x1B ||
+        (Char >= 0x7F && Char <= 0x9F)) {
+
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+/**
+ Query the sector size that applies to a given handle.  If zero is returned,
+ the device does not impose sector alignment requirements.
+
+ @param FileHandle The file handle to query.
+
+ @return The logical sector size, or zero.
+ */
+DWORD
+YoriLibGetHandleSectorSize(
+    __in HANDLE FileHandle
+    )
+{
+    DWORD SectorSize;
+    DISK_GEOMETRY DiskGeometry;
+    DWORD BytesCopied;
+
+    SectorSize = 0;
+    if (DeviceIoControl(FileHandle, IOCTL_DISK_GET_DRIVE_GEOMETRY, NULL, 0, &DiskGeometry, sizeof(DiskGeometry), &BytesCopied, NULL)) {
+        SectorSize = DiskGeometry.BytesPerSector;
+    }
+
+    return SectorSize;
+}
+
+/**
+ Query a file or device length.  These use different APIs so this function
+ tries a few to see if any work.
+
+ @param FileHandle A handle to a file or device.
+
+ @param FileSizePtr On successful completion, updated to point to the file
+        or device size in bytes.
+
+ @return ERROR_SUCCESS to indicate success, or alternative Win32 code to
+         indicate failure.
+ */
+__success(return == ERROR_SUCCESS)
+DWORD
+YoriLibGetFileOrDeviceSize(
+    __in HANDLE FileHandle,
+    __out PDWORDLONG FileSizePtr
+    )
+{
+    LARGE_INTEGER FileSize;
+    DISK_GEOMETRY DiskGeometry;
+    DWORD BytesReturned;
+    DWORD Err;
+
+    Err = ERROR_SUCCESS;
+    FileSize.LowPart = GetFileSize(FileHandle, &FileSize.HighPart);
+    if (FileSize.LowPart == INVALID_FILE_SIZE) {
+        Err = GetLastError();
+    }
+
+    if (Err == ERROR_SUCCESS) {
+        *FileSizePtr = FileSize.QuadPart;
+        return Err;
+    }
+
+    if (Err != ERROR_INVALID_PARAMETER) {
+        return Err;
+    }
+
+    if (DeviceIoControl(FileHandle, IOCTL_DISK_GET_LENGTH_INFO, NULL, 0, &FileSize, sizeof(FileSize), &BytesReturned, NULL)) {
+        *FileSizePtr = FileSize.QuadPart;
+        return ERROR_SUCCESS;
+    }
+
+    if (DeviceIoControl(FileHandle, IOCTL_DISK_GET_DRIVE_GEOMETRY, NULL, 0, &DiskGeometry, sizeof(DiskGeometry), &BytesReturned, NULL)) {
+        FileSize.HighPart = DiskGeometry.Cylinders.HighPart;
+        FileSize.LowPart = DiskGeometry.Cylinders.LowPart;
+        FileSize.QuadPart = FileSize.QuadPart * DiskGeometry.TracksPerCylinder * DiskGeometry.SectorsPerTrack * DiskGeometry.BytesPerSector;
+        *FileSizePtr = FileSize.QuadPart;
+        return ERROR_SUCCESS;
+    }
+
+    return GetLastError();
+}
+
+/**
+ Multiply a 32 bit number by a 32 bit number and divide by a 32 bit number.
+ Since we have a 64 bit math library, this can be implemented fairly simply.
+ Note that on x86 the assembly routines are limited to 32 bit denominators,
+ which works fine for this.
+
+ @param Number One of the numbers to multiply.
+
+ @param Numerator The second number to multiply.
+
+ @param Denominator The number to divide by.
+
+ @return The result.
+ */
+INT
+YoriLibMulDiv(
+    __in INT Number,
+    __in INT Numerator,
+    __in INT Denominator
+    )
+{
+    LONGLONG LongNumber;
+
+    LongNumber = Number;
+    LongNumber = LongNumber * Numerator;
+    LongNumber = LongNumber / Denominator;
+
+    return (INT)LongNumber;
+}
+
+/**
+ Calculate the FAT timestamp values from a FILETIME structure.
+
+ @param FileTime Pointer to the FILETIME structure.
+
+ @param FatDate On successful completion, the FAT date value.
+
+ @param FatTime On successful completion, the FAT time value.
+
+ @return TRUE to indicate success, FALSE to indicate failure.
+ */
+__success(return)
+BOOL
+YoriLibFileTimeToDosDateTime(
+    __in CONST FILETIME *FileTime,
+    __out LPWORD FatDate,
+    __out LPWORD FatTime
+    )
+{
+    SYSTEMTIME SystemTime;
+    FILETIME LocalFileTime;
+    WORD LocalFatDate;
+    WORD LocalFatTime;
+
+    FileTimeToLocalFileTime(FileTime, &LocalFileTime);
+    FileTimeToSystemTime(&LocalFileTime, &SystemTime);
+
+    if (SystemTime.wYear < 1980 || SystemTime.wYear > (1980 + 127)) {
+        return FALSE;
+    }
+
+    LocalFatDate = (WORD)((SystemTime.wDay & 0x1F) | ((SystemTime.wMonth & 0xF) << 5) | (((SystemTime.wYear - 1980) & 0x7F) << 9));
+    LocalFatTime = (WORD)(((SystemTime.wSecond >> 1) & 0x1F) | ((SystemTime.wMinute & 0x3F) << 5) | ((SystemTime.wHour & 0x1F) << 11));
+
+    *FatDate = LocalFatDate;
+    *FatTime = LocalFatTime;
+
+    return TRUE;
+}
+
+/**
+ Calculate the FILETIME structure from FAT timestamp values.
+
+ @param FatDate The FAT date value.
+
+ @param FatTime The FAT time value.
+
+ @param FileTime On successful completion, updated to contain the FILETIME
+        value.
+
+ @return TRUE to indicate success, FALSE to indicate failure.
+ */
+__success(return)
+BOOL
+YoriLibDosDateTimeToFileTime(
+    __in WORD FatDate,
+    __in WORD FatTime,
+    __out LPFILETIME FileTime
+    )
+{
+    SYSTEMTIME SystemTime;
+
+    ZeroMemory(&SystemTime, sizeof(SystemTime));
+    SystemTime.wSecond = (WORD)((FatTime & 0x1F) << 1);
+    SystemTime.wMinute = (WORD)((FatTime >> 5) & 0x3F);
+    SystemTime.wHour = (WORD)((FatTime >> 11) & 0x1F);
+    SystemTime.wDay = (WORD)((FatDate & 0x1F));
+    SystemTime.wMonth = (WORD)((FatDate >> 5) & 0xF);
+    SystemTime.wYear = (WORD)(((FatDate >> 9) & 0x7F) + 1980);
+
+    //
+    //  For some strange reason, the OS version of this function doesn't do
+    //  timezone adjustment, so this doesn't either
+    //
+
+    if (!SystemTimeToFileTime(&SystemTime, FileTime)) {
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+
+/**
+ The original ShellExecute predates NT and returns 32 error values, or a
+ greater value to indicate success.  Translate these into their NT
+ counterparts.
+
+ @param hInst Instance returned from ShellExecute.
+
+ @return Win32 error code, including ERROR_SUCCESS to indicate success.
+ */
+DWORD
+YoriLibShellExecuteInstanceToError(
+    __in_opt HINSTANCE hInst
+    )
+{
+    DWORD Err;
+
+    Err = ERROR_SUCCESS;
+    if (hInst < (HINSTANCE)(DWORD_PTR)32) {
+        switch((DWORD_PTR)hInst) {
+            case 0:
+                Err = ERROR_NOT_ENOUGH_MEMORY;
+                break;
+            case ERROR_FILE_NOT_FOUND:
+            case ERROR_PATH_NOT_FOUND:
+            case ERROR_ACCESS_DENIED:
+            case ERROR_BAD_FORMAT:
+                Err = (DWORD)(DWORD_PTR)hInst;
+                break;
+            case SE_ERR_SHARE:
+                Err = ERROR_SHARING_VIOLATION;
+                break;
+            default:
+                Err = ERROR_TOO_MANY_OPEN_FILES;
+                break;
+        }
+    }
+
+    return Err;
+}
+
 
 // vim:sw=4:ts=4:et:

@@ -180,7 +180,7 @@ YoriDlgFileOkButtonClicked(
     YORI_STRING FullFilePath;
     YORI_STRING FullDirPath;
     PYORI_DLG_FILE_STATE State;
-    DWORD Index;
+    YORI_ALLOC_SIZE_T Index;
     DWORD Attributes;
     BOOLEAN WildFound;
 
@@ -408,7 +408,7 @@ YoriDlgFileFileSelectionChanged(
     __in PYORI_WIN_CTRL_HANDLE Ctrl
     )
 {
-    DWORD ActiveOption;
+    YORI_ALLOC_SIZE_T ActiveOption;
     YORI_STRING String;
     PYORI_WIN_CTRL_HANDLE Parent;
     PYORI_WIN_CTRL_HANDLE EditCtrl;
@@ -442,7 +442,7 @@ YoriDlgFileDirectorySelectionChanged(
     __in PYORI_WIN_CTRL_HANDLE Ctrl
     )
 {
-    DWORD ActiveOption;
+    YORI_ALLOC_SIZE_T ActiveOption;
     YORI_STRING String;
     PYORI_WIN_CTRL_HANDLE Parent;
     PYORI_WIN_CTRL_HANDLE EditCtrl;
@@ -506,7 +506,7 @@ YoriDlgFileFileFoundCallback(
     )
 {
     YORI_STRING FileNameOnly;
-    PYORI_WIN_CTRL_HANDLE FileListCtrl;
+    PYORI_STRING_ARRAY StringArray;
 
     UNREFERENCED_PARAMETER(FilePath);
     UNREFERENCED_PARAMETER(Depth);
@@ -515,10 +515,10 @@ YoriDlgFileFileFoundCallback(
         return TRUE;
     }
 
-    FileListCtrl = (PYORI_WIN_CTRL_HANDLE)Context;
+    StringArray = (PYORI_STRING_ARRAY)Context;
     YoriLibConstantString(&FileNameOnly, FileInfo->cFileName);
 
-    YoriWinListAddItems(FileListCtrl, &FileNameOnly, 1);
+    YoriStringArrayAddItems(StringArray, &FileNameOnly, 1);
     return TRUE;
 }
 
@@ -547,7 +547,7 @@ YoriDlgFileDirFoundCallback(
     )
 {
     YORI_STRING FileNameOnly;
-    PYORI_WIN_CTRL_HANDLE DirListCtrl;
+    PYORI_STRING_ARRAY StringArray;
 
     UNREFERENCED_PARAMETER(FilePath);
     UNREFERENCED_PARAMETER(Depth);
@@ -564,10 +564,10 @@ YoriDlgFileDirFoundCallback(
         return TRUE;
     }
 
-    DirListCtrl = (PYORI_WIN_CTRL_HANDLE)Context;
+    StringArray = (PYORI_STRING_ARRAY)Context;
     YoriLibConstantString(&FileNameOnly, FileInfo->cFileName);
 
-    YoriWinListAddItems(DirListCtrl, &FileNameOnly, 1);
+    YoriStringArrayAddItems(StringArray, &FileNameOnly, 1);
     return TRUE;
 }
 
@@ -591,6 +591,7 @@ YoriDlgFileRefreshView(
     )
 {
     YORI_STRING FullDir;
+    YORI_STRING UnescapedPath;
     YORI_STRING SearchString;
     PYORI_WIN_CTRL_HANDLE CurDirLabel;
     PYORI_WIN_CTRL_HANDLE DirList;
@@ -600,8 +601,15 @@ YoriDlgFileRefreshView(
     TCHAR DriveProbeString[sizeof("A:\\")];
     TCHAR DriveDisplayString[sizeof("[-A-]")];
     UINT DriveProbeResult;
+    YORI_STRING_ARRAY NewListItems;
 
-    if (!YoriLibUserStringToSingleFilePath(Directory, FALSE, &FullDir)) {
+    if (!YoriLibUserStringToSingleFilePath(Directory, TRUE, &FullDir)) {
+        return;
+    }
+
+    YoriLibInitEmptyString(&UnescapedPath);
+    if (!YoriLibUnescapePath(&FullDir, &UnescapedPath)) {
+        YoriLibFreeStringContents(&FullDir);
         return;
     }
 
@@ -615,13 +623,9 @@ YoriDlgFileRefreshView(
     ASSERT(FileList != NULL);
     __analysis_assume(FileList != NULL);
 
-    YoriWinLabelSetCaption(CurDirLabel, &FullDir);
+    YoriWinLabelSetCaption(CurDirLabel, &UnescapedPath);
 
-    YoriLibFreeStringContents(&FullDir);
-
-    if (!YoriLibUserStringToSingleFilePath(Directory, TRUE, &FullDir)) {
-        return;
-    }
+    YoriLibFreeStringContents(&UnescapedPath);
 
     State = YoriWinGetControlContext(Dialog);
     YoriLibFreeStringContents(&State->CurrentDirectory);
@@ -636,13 +640,10 @@ YoriDlgFileRefreshView(
         Wildcard->LengthInChars != State->CurrentWildcard.LengthInChars) {
 
         YoriLibInitEmptyString(&SearchString);
-        if (!YoriLibAllocateString(&SearchString, Wildcard->LengthInChars + 1)) {
+        if (!YoriLibCopyString(&SearchString, Wildcard)) {
             return;
         }
 
-        memcpy(SearchString.StartOfString, Wildcard->StartOfString, Wildcard->LengthInChars * sizeof(TCHAR));
-        SearchString.StartOfString[Wildcard->LengthInChars] = '\0';
-        SearchString.LengthInChars = Wildcard->LengthInChars;
         YoriLibFreeStringContents(&State->CurrentWildcard);
         memcpy(&State->CurrentWildcard, &SearchString, sizeof(YORI_STRING));
     }
@@ -659,7 +660,11 @@ YoriDlgFileRefreshView(
     }
 
     YoriWinListClearAllItems(FileList);
-    YoriLibForEachFile(&SearchString, YORILIB_FILEENUM_RETURN_FILES | YORILIB_FILEENUM_BASIC_EXPANSION, 0, YoriDlgFileFileFoundCallback, NULL, FileList);
+    YoriStringArrayInitialize(&NewListItems);
+    YoriLibForEachFile(&SearchString, YORILIB_FILEENUM_RETURN_FILES | YORILIB_FILEENUM_BASIC_EXPANSION, 0, YoriDlgFileFileFoundCallback, NULL, &NewListItems);
+    YoriLibSortStringArray(NewListItems.Items, NewListItems.Count);
+    YoriWinListAddItems(FileList, NewListItems.Items, NewListItems.Count);
+    YoriStringArrayCleanup(&NewListItems);
 
 
     //
@@ -672,7 +677,10 @@ YoriDlgFileRefreshView(
     }
 
     YoriWinListClearAllItems(DirList);
-    YoriLibForEachFile(&SearchString, YORILIB_FILEENUM_RETURN_DIRECTORIES | YORILIB_FILEENUM_INCLUDE_DOTFILES | YORILIB_FILEENUM_BASIC_EXPANSION, 0, YoriDlgFileDirFoundCallback, NULL, DirList);
+    YoriLibForEachFile(&SearchString, YORILIB_FILEENUM_RETURN_DIRECTORIES | YORILIB_FILEENUM_INCLUDE_DOTFILES | YORILIB_FILEENUM_BASIC_EXPANSION, 0, YoriDlgFileDirFoundCallback, NULL, &NewListItems);
+    YoriLibSortStringArray(NewListItems.Items, NewListItems.Count);
+    YoriWinListAddItems(DirList, NewListItems.Items, NewListItems.Count);
+    YoriStringArrayCleanup(&NewListItems);
     State->NumberDirectories = YoriWinListGetItemCount(DirList);
 
     //
@@ -693,7 +701,9 @@ YoriDlgFileRefreshView(
 
     for (DriveProbeString[0] = 'A'; DriveProbeString[0] <= 'Z'; DriveProbeString[0]++) {
         DriveProbeResult = GetDriveType(DriveProbeString);
-        if (DriveProbeResult != 0 && DriveProbeResult != 1) {
+        if (DriveProbeResult != DRIVE_UNKNOWN &&
+            DriveProbeResult != DRIVE_NO_ROOT_DIR) {
+
             DriveDisplayString[2] = DriveProbeString[0];
             YoriWinListAddItems(DirList, &DriveDisplay, 1);
         }
@@ -770,14 +780,14 @@ YoriDlgFile(
         }
     }
 
-    if ((WORD)WinMgrSize.Y < 14 + OptionCount) {
-        WinMgrSize.Y = (SHORT)(14 + OptionCount);
+    if ((WORD)WinMgrSize.Y < 13 + OptionCount) {
+        WinMgrSize.Y = (SHORT)(13 + OptionCount);
     }
 
     YoriLibInitEmptyString(&State.CurrentDirectory);
     YoriLibInitEmptyString(&State.CurrentWildcard);
     YoriLibInitEmptyString(&State.FileToReturn);
-    if (!YoriWinCreateWindow(WinMgrHandle, 50, (WORD)(14 + OptionCount), WinMgrSize.X, WinMgrSize.Y, YORI_WIN_WINDOW_STYLE_BORDER_SINGLE | YORI_WIN_WINDOW_STYLE_SHADOW_SOLID, Title, &Parent)) {
+    if (!YoriWinCreateWindow(WinMgrHandle, 50, (WORD)(13 + OptionCount), WinMgrSize.X, WinMgrSize.Y, YORI_WIN_WINDOW_STYLE_BORDER_SINGLE | YORI_WIN_WINDOW_STYLE_SHADOW_SOLID, Title, &Parent)) {
         return FALSE;
     }
 
@@ -843,12 +853,13 @@ YoriDlgFile(
     Area.Bottom = (WORD)(WindowSize.Y - OptionCount - 4);
     Area.Right = (WORD)(WindowSize.X / 2 - 1);
 
-    Ctrl = YoriWinListCreate(Parent, &Area, YORI_WIN_LIST_STYLE_VSCROLLBAR | YORI_WIN_LIST_STYLE_DESELECT_ON_LOSE_FOCUS);
+    Ctrl = YoriWinListCreate(Parent, &Area, YORI_WIN_LIST_STYLE_VSCROLLBAR | YORI_WIN_LIST_STYLE_DESELECT_ON_LOSE_FOCUS | YORI_WIN_LIST_STYLE_AUTO_HSCROLLBAR);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;
     }
 
+    YoriWinControlSetFocusOnMouseClick(Ctrl, FALSE);
     YoriWinSetControlId(Ctrl, YoriDlgFileControlFileList);
     YoriWinListSetSelectionNotifyCallback(Ctrl, YoriDlgFileFileSelectionChanged);
 
@@ -870,12 +881,13 @@ YoriDlgFile(
     Area.Bottom = (WORD)(WindowSize.Y - OptionCount - 4);
     Area.Right = (WORD)(WindowSize.X - 2);
 
-    Ctrl = YoriWinListCreate(Parent, &Area, YORI_WIN_LIST_STYLE_VSCROLLBAR | YORI_WIN_LIST_STYLE_DESELECT_ON_LOSE_FOCUS);
+    Ctrl = YoriWinListCreate(Parent, &Area, YORI_WIN_LIST_STYLE_VSCROLLBAR | YORI_WIN_LIST_STYLE_DESELECT_ON_LOSE_FOCUS | YORI_WIN_LIST_STYLE_AUTO_HSCROLLBAR);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;
     }
 
+    YoriWinControlSetFocusOnMouseClick(Ctrl, FALSE);
     YoriWinSetControlId(Ctrl, YoriDlgFileControlDirectoryList);
     YoriWinListSetSelectionNotifyCallback(Ctrl, YoriDlgFileDirectorySelectionChanged);
 

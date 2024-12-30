@@ -109,7 +109,7 @@ extern CONST YORI_SH_BUILTIN_NAME_MAPPING YoriShBuiltins[];
 DWORD
 YoriShBuckPass (
     __in PYORI_LIBSH_SINGLE_EXEC_CONTEXT ExecContext,
-    __in DWORD ExtraArgCount,
+    __in YORI_ALLOC_SIZE_T ExtraArgCount,
     ...
     );
 
@@ -172,7 +172,7 @@ YoriShClearTabCompletionMatches(
 BOOLEAN
 YoriShTabCompletion(
     __inout PYORI_SH_INPUT_BUFFER Buffer,
-    __in DWORD TabFlags
+    __in WORD TabFlags
     );
 
 VOID
@@ -193,32 +193,32 @@ YoriShCompleteSuggestion(
 
 // *** ENV.C ***
 
-BOOL
+BOOLEAN
 YoriShIsEnvironmentVariableChar(
     __in TCHAR Char
     );
 
 __success(return != 0)
-DWORD
+YORI_ALLOC_SIZE_T
 YoriShGetEnvironmentVariableWithoutSubstitution(
     __in LPCTSTR Name,
-    __out_opt LPTSTR Variable,
-    __in DWORD Size,
+    __out_opt _When_(Size > 0, __out) LPTSTR Variable,
+    __in YORI_ALLOC_SIZE_T Size,
     __out_opt PDWORD Generation
     );
 
 __success(return)
-BOOL
+BOOLEAN
 YoriShGetEnvironmentVariable(
     __in LPCTSTR Name,
     __out_ecount_opt(Size) LPTSTR Variable,
-    __in DWORD Size,
-    __out PDWORD ReturnedSize,
+    __in YORI_ALLOC_SIZE_T Size,
+    __out PYORI_ALLOC_SIZE_T ReturnedSize,
     __out_opt PDWORD Generation
     );
 
 __success(return)
-BOOL
+BOOLEAN
 YoriShAllocateAndGetEnvironmentVariable(
     __in LPCTSTR Name,
     __out PYORI_STRING Value,
@@ -226,29 +226,29 @@ YoriShAllocateAndGetEnvironmentVariable(
     );
 
 __success(return)
-BOOL
+BOOLEAN
 YoriShGetEnvironmentVariableYS(
     __in PYORI_STRING VariableName,
     __out PYORI_STRING Value
     );
 
 __success(return)
-BOOL
+BOOLEAN
 YoriShExpandEnvironmentVariables(
     __in PYORI_STRING Expression,
     __out PYORI_STRING ResultingExpression,
-    __inout_opt PDWORD CurrentOffset
+    __inout_opt PYORI_ALLOC_SIZE_T CurrentOffset
     );
 
 __success(return)
-BOOL
+BOOLEAN
 YoriShSetEnvironmentVariable(
     __in PYORI_STRING VariableName,
     __in_opt PYORI_STRING Value
     );
 
 __success(return)
-BOOL
+BOOLEAN
 YoriShSetEnvironmentStrings(
     __in PYORI_STRING NewEnv
     );
@@ -325,10 +325,10 @@ YoriShGetHistoryStrings(
 // *** INPUT.C ***
 
 __success(return)
-BOOL
+BOOLEAN
 YoriShEnsureStringHasEnoughCharacters(
     __inout PYORI_STRING String,
-    __in DWORD CharactersNeeded
+    __in YORI_ALLOC_SIZE_T CharactersNeeded
     );
 
 __success(return)
@@ -352,9 +352,7 @@ YoriShCleanupInputContext(VOID);
 __success(return)
 BOOL
 YoriShCreateNewJob(
-    __in PYORI_LIBSH_SINGLE_EXEC_CONTEXT ExecContext,
-    __in HANDLE hProcess,
-    __in DWORD dwProcessId
+    __in PYORI_LIBSH_SINGLE_EXEC_CONTEXT ExecContext
     );
 
 __success(return)
@@ -427,10 +425,10 @@ YoriShExpandEnvironmentInCmdContext(
     );
 
 __success(return)
-BOOL
+BOOLEAN
 YoriShResolveCommandToExecutable(
     __in PYORI_LIBSH_CMD_CONTEXT CmdContext,
-    __out PBOOL ExecutableFound
+    __out PBOOLEAN ExecutableFound
     );
 
 // *** PROMPT.C ***
@@ -456,6 +454,29 @@ YoriShLoadSavedRestartState(
 VOID
 YoriShDiscardSavedRestartState(
     __in_opt PYORI_STRING ProcessId
+    );
+
+// *** WAIT.C ***
+
+VOID
+YoriShInitializeWaitContext(
+    __out PYORI_SH_WAIT_INPUT_CONTEXT WaitContext,
+    __in HANDLE WaitHandle
+    );
+
+VOID
+YoriShCleanupWaitContext(
+    __in PYORI_SH_WAIT_INPUT_CONTEXT WaitContext
+    );
+
+YORI_SH_WAIT_OUTCOME
+YoriShWaitForProcessOrInput(
+    __inout PYORI_SH_WAIT_INPUT_CONTEXT WaitContext
+    );
+
+VOID
+YoriShWaitForProcessToTerminate(
+    __in PYORI_LIBSH_SINGLE_EXEC_CONTEXT ExecContext
     );
 
 // *** WINDOW.C ***

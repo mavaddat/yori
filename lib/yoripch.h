@@ -52,6 +52,11 @@
 #pragma warning(disable: 4820) // implicit padding added in structure
 #pragma warning(disable: 4061) // not all enumerators handled in switch statement
 #pragma warning(disable: 4062) // not all enumerators handled in switch statement
+#pragma warning(disable: 4191) // casting to function ptr of different type (GetProcAddress)
+#endif
+
+#if defined(__clang__)
+#pragma clang diagnostic ignored "-Wswitch" // not all enumerators handled in switch statement
 #endif
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1910)
@@ -62,9 +67,18 @@
 #pragma warning(push)
 #endif
 
+#if defined(_MSC_VER) && (_MSC_VER >= 1300) && (defined(_M_ALPHA))
+#pragma warning(disable: 4305)
+#endif
+
 #if defined(_MSC_VER) && (_MSC_VER >= 1500)
 #pragma warning(disable: 4255) // no function prototype given.  8.1 and earlier SDKs exhibit this.
 #endif
+
+/**
+ Indicate support for compiling for ARM32 if an SDK is available.
+ */
+#define _ARM_WINAPI_PARTITION_DESKTOP_SDK_AVAILABLE 1
 
 #include <windows.h>
 
@@ -106,9 +120,45 @@
                                // annoying.
 #endif
 
+#if defined(_MSC_VER) && defined(_M_PPC)
+#pragma warning(disable: 4701) // Using uninitialized variable.  The PowerPC
+                               // compiler considers a pointer to a variable
+                               // to be "using" it, but that's how to
+                               // populate output parameters from functions,
+                               // so the warning here is quite overactive.
+#pragma warning(disable: 4310) // Cast truncates constant value
+#endif
+
 #if defined(_MSC_VER) && (_MSC_VER >= 1700)
 #pragma warning(disable: 26451) // Arithmetic overflow
+#if (_MSC_VER >= 1939)
+//
+//  These warnings aim to check for integer overflows when allocating memory,
+//  resulting in a smaller allocation than expected.  Unfortunately the
+//  implementation is quite bad:
+//
+//   - An allocator is a function with "alloc" in its name, which matches
+//     Yori's bounds check functions
+//   - There is no annotation or awareness of a bounds check function, so it
+//     will catch overflows that have already been checked.
+//
+//  The "best" thing Yori could do here is implement bounds check functions,
+//  without "alloc" in their names, that return an integer value which is
+//  supplied directly to the allocator.  Note this has the effect of
+//  disabling these warnings completely anyway, because they only apply to
+//  "alloc" functions and would not catch overflows as the input of the
+//  bounds check.
+//
+//  This is quite frustrating because the class of bug these exist to catch
+//  does exist in Yori and is challenging to completely eliminate.
+//
+#pragma warning(disable: 26831) // Allocation size might be from overflow
+#pragma warning(disable: 26832) // Allocation size from narrowing conversion
+#pragma warning(disable: 26833) // Potential overflow before a bounds check 
 #endif
+#endif
+
+#include <winsock.h>
 
 #ifdef _UNICODE
 /**
@@ -189,6 +239,12 @@
 
 /**
  SAL annotation describing an output buffer with a specified number of
+ bytes.
+ */
+#define __out_bcount(x)
+
+/**
+ SAL annotation describing an output buffer with a specified number of
  elements.
  */
 #define __out_ecount(x)
@@ -198,6 +254,18 @@
  elements.
  */
 #define __out_ecount_opt(x)
+
+/**
+ SAL annotation describing an output buffer with a specified number of
+ elements that will be partially written to.
+ */
+#define __out_ecount_part(x, y)
+
+/**
+ SAL annotation describing an optional output buffer with a specified number of
+ elements that will be partially written to.
+ */
+#define __out_ecount_part_opt(x, y)
 
 /**
  SAL annotation describing an optional output pointer whose value is changed.
@@ -236,6 +304,13 @@
  failure.
  */
 #define _Always_(x)
+#endif
+
+#ifndef _Field_size_
+/**
+ SAL annotation to indicate the size of a field within a structure.
+ */
+#define _Field_size_(x)
 #endif
 
 #ifndef _Interlocked_operand_

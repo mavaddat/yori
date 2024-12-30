@@ -3,7 +3,7 @@
  *
  * Yori window multiline edit control
  *
- * Copyright (c) 2020 Malcolm J. Smith
+ * Copyright (c) 2020-2024 Malcolm J. Smith
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -29,13 +29,21 @@
 #include "yoriwin.h"
 #include "winpriv.h"
 
-
+#if DBG
+/**
+ When reallocating a line, add this many extra characters.  For debug, set
+ this to a low value to force plenty of allocations and frees, since these
+ invalidate freed memory to force access violations on memory errors.
+ */
+#define YORI_WIN_MULTILINE_EDIT_LINE_PADDING (0x4)
+#else
 /**
  When reallocating a line, add this many extra characters on the assumption
  that the user is actively working on the line and another modification
  that needs space is likely.  This value is arbitrary.
  */
 #define YORI_WIN_MULTILINE_EDIT_LINE_PADDING (0x40)
+#endif
 
 /**
  Information about the selection region within a multiline edit control.
@@ -58,24 +66,24 @@ typedef struct _YORI_WIN_MULTILINE_EDIT_SELECT {
     /**
      Specifies the line index containing the beginning of the selection.
      */
-    DWORD FirstLine;
+    YORI_ALLOC_SIZE_T FirstLine;
 
     /**
      Specifies the character offset containing the beginning of the selection.
      */
-    DWORD FirstCharOffset;
+    YORI_ALLOC_SIZE_T FirstCharOffset;
 
     /**
      Specifies the line index containing the end of the selection.
      */
-    DWORD LastLine;
+    YORI_ALLOC_SIZE_T LastLine;
 
     /**
      Specifies the index after the final character selected on the final line.
      This value can therefore be zero through to the length of string
      inclusive.
      */
-    DWORD LastCharOffset;
+    YORI_ALLOC_SIZE_T LastCharOffset;
 
 } YORI_WIN_MULTILINE_EDIT_SELECT, *PYORI_WIN_MULTILINE_EDIT_SELECT;
 
@@ -105,6 +113,13 @@ typedef struct _YORI_WIN_CTRL_MULTILINE_EDIT_UNDO {
     YORI_WIN_CTRL_MULTILINE_EDIT_UNDO_OPERATION Op;
 
     /**
+     If TRUE, when this record is applied, the next record should be applied
+     at the same time.  This allows insert + delete type operations to be
+     combined.  If FALSE, this record is the final record to apply.
+     */
+    BOOLEAN ChainWithNext;
+
+    /**
      Information specific to each type of operation.
      */
     union {
@@ -114,25 +129,25 @@ typedef struct _YORI_WIN_CTRL_MULTILINE_EDIT_UNDO {
              The first line of the range that was inserted and should be
              deleted on undo.
              */
-            DWORD FirstLineToDelete;
+            YORI_ALLOC_SIZE_T FirstLineToDelete;
 
             /**
              The first offset of the range that was inserted and should be
              deleted on undo.
              */
-            DWORD FirstCharOffsetToDelete;
+            YORI_ALLOC_SIZE_T FirstCharOffsetToDelete;
 
             /**
              The last line of the range that was inserted and should be
              deleted on undo.
              */
-            DWORD LastLineToDelete;
+            YORI_ALLOC_SIZE_T LastLineToDelete;
 
             /**
              The last offset of the range that was inserted and should be
              deleted on undo.
              */
-            DWORD LastCharOffsetToDelete;
+            YORI_ALLOC_SIZE_T LastCharOffsetToDelete;
         } InsertText;
 
         struct {
@@ -141,18 +156,19 @@ typedef struct _YORI_WIN_CTRL_MULTILINE_EDIT_UNDO {
              The first line of the range that was deleted and needs to be
              reinserted.
              */
-            DWORD FirstLine;
+            YORI_ALLOC_SIZE_T FirstLine;
 
             /**
              The first character of the range that was deleted and needs to be
              reinserted.
              */
-            DWORD FirstCharOffset;
+            YORI_ALLOC_SIZE_T FirstCharOffset;
 
             /**
              The text to reinsert on undo.
              */
             YORI_STRING Text;
+
         } DeleteText;
 
         struct {
@@ -160,37 +176,37 @@ typedef struct _YORI_WIN_CTRL_MULTILINE_EDIT_UNDO {
              The first line of the range that was overwritten and should be
              deleted on undo.
              */
-            DWORD FirstLineToDelete;
+            YORI_ALLOC_SIZE_T FirstLineToDelete;
 
             /**
              The first offset of the range that was overwritten and should be
              deleted on undo.
              */
-            DWORD FirstCharOffsetToDelete;
+            YORI_ALLOC_SIZE_T FirstCharOffsetToDelete;
 
             /**
              The last line of the range that was overwritten and should be
              deleted on undo.
              */
-            DWORD LastLineToDelete;
+            YORI_ALLOC_SIZE_T LastLineToDelete;
 
             /**
              The last offset of the range that was overwritten and should be
              deleted on undo.
              */
-            DWORD LastCharOffsetToDelete;
+            YORI_ALLOC_SIZE_T LastCharOffsetToDelete;
 
             /**
              The first line of the range that should be inserted to replace
              the overwritten text.
              */
-            DWORD FirstLine;
+            YORI_ALLOC_SIZE_T FirstLine;
 
             /**
              The first character of the range that should be inserted to replace
              the overwritten text.
              */
-            DWORD FirstCharOffset;
+            YORI_ALLOC_SIZE_T FirstCharOffset;
 
             /**
              The offset of the first character that the user changed.  This
@@ -199,7 +215,7 @@ typedef struct _YORI_WIN_CTRL_MULTILINE_EDIT_UNDO {
              range that the user modified.  This value is used to determine
              the cursor location on undo.
              */
-            DWORD FirstCharOffsetModified;
+            YORI_ALLOC_SIZE_T FirstCharOffsetModified;
 
             /**
              The offset of the last character that the user changed.  This
@@ -209,7 +225,7 @@ typedef struct _YORI_WIN_CTRL_MULTILINE_EDIT_UNDO {
              determine if a later modification should be part of an earlier
              undo record.
              */
-            DWORD LastCharOffsetModified;
+            YORI_ALLOC_SIZE_T LastCharOffsetModified;
 
             /**
              The text to reinsert on undo.
@@ -237,7 +253,7 @@ typedef struct _YORI_WIN_CTRL_MULTILINE_EDIT {
     /**
      Optional pointer to a callback to invoke when the cursor moves.
      */
-    PYORI_WIN_NOTIFY_CURSOR_MOVE CursorMoveCallback;
+    PYORI_WIN_NOTIFY_MULTILINE_EDIT_CURSOR_MOVE CursorMoveCallback;
 
     /**
      The caption to display above the edit control.
@@ -252,12 +268,12 @@ typedef struct _YORI_WIN_CTRL_MULTILINE_EDIT {
     /**
      The number of lines allocated within LineArray.
      */
-    DWORD LinesAllocated;
+    YORI_ALLOC_SIZE_T LinesAllocated;
 
     /**
      The number of lines populated with text within LineArray.
      */
-    DWORD LinesPopulated;
+    YORI_ALLOC_SIZE_T LinesPopulated;
 
     /**
      A stack of changes which can be undone.
@@ -272,30 +288,30 @@ typedef struct _YORI_WIN_CTRL_MULTILINE_EDIT {
     /**
      The index within LineArray that is displayed at the top of the control.
      */
-    DWORD ViewportTop;
+    YORI_ALLOC_SIZE_T ViewportTop;
 
     /**
      The horizontal offset within each line to display.
      */
-    DWORD ViewportLeft;
+    YORI_ALLOC_SIZE_T ViewportLeft;
 
     /**
      The index within LineArray that the cursor is located at.
      */
-    DWORD CursorLine;
+    YORI_ALLOC_SIZE_T CursorLine;
 
     /**
      The horizontal offset of the cursor in terms of the offset within the
      line buffer.
      */
-    DWORD CursorOffset;
+    YORI_ALLOC_SIZE_T CursorOffset;
 
     /**
      The horizontal offset of the cursor in terms of the cell where it should
      be displayed.  This is typically the same as CursorOffset but can differ
      due to things like tab expansion.
      */
-    DWORD DisplayCursorOffset;
+    YORI_ALLOC_SIZE_T DisplayCursorOffset;
 
     /**
      The desired horizontal offset from the beginning of the display.  This
@@ -305,12 +321,12 @@ typedef struct _YORI_WIN_CTRL_MULTILINE_EDIT {
      is used to indicate that this value is not populated, because navigation
      is not currently occurring.
      */
-    DWORD DesiredDisplayCursorOffset;
+    YORI_ALLOC_SIZE_T DesiredDisplayCursorOffset;
 
     /**
      The current number of spaces to display for each tab.
      */
-    DWORD TabWidth;
+    YORI_ALLOC_SIZE_T TabWidth;
 
     /**
      The first line, in cursor coordinates, that requires redrawing.  Lines
@@ -319,14 +335,14 @@ typedef struct _YORI_WIN_CTRL_MULTILINE_EDIT {
      occurs.  This is a fairly common scenario when the cursor is moved,
      where a repaint is needed but no data changes are occurring.
      */
-    DWORD FirstDirtyLine;
+    YORI_ALLOC_SIZE_T FirstDirtyLine;
 
     /**
      The last line, in cursor coordinates, that requires redrawing.  Lines
      between the first line above and this line (inclusive) will be redrawn
      on paint.
      */
-    DWORD LastDirtyLine;
+    YORI_ALLOC_SIZE_T LastDirtyLine;
 
     /**
      Specifies the selection state of text within the multiline edit control.
@@ -334,6 +350,31 @@ typedef struct _YORI_WIN_CTRL_MULTILINE_EDIT {
      */
     YORI_WIN_MULTILINE_EDIT_SELECT Selection;
 
+    /**
+     If TRUE, the previous edit has started a new line which has auto indent
+     applied.  When this occurs, backspace should remove an entire indent,
+     not just a character.  Any modification or cursor movement should set
+     this to FALSE, with the frustrating exception of backspace itself,
+     which leaves this mode in effect.
+     */
+    BOOLEAN AutoIndentApplied;
+
+    /**
+     When AutoIndentApplied is TRUE, specifies the number of characters to
+     obtain from the previous indented line.  This can be less than the total
+     number of indentation characters if the lines contain different
+     white space characters (eg. if the first line contains a space and tab,
+     and a later line contains two spaces, the first space is considered a
+     match but the tab is not.
+     */
+    YORI_ALLOC_SIZE_T AutoIndentSourceLength;
+
+    /**
+     When AutoIndentApplied is TRUE, specifies the line that has an auto
+     indent applied.  This is used to detect cursor movement away from the
+     line and reset auto indent state.
+     */
+    YORI_ALLOC_SIZE_T AutoIndentAppliedLine;
 
     /**
      Records the last observed mouse location when a mouse selection is
@@ -425,6 +466,19 @@ typedef struct _YORI_WIN_CTRL_MULTILINE_EDIT {
      */
     BOOLEAN TraditionalEditNavigation;
 
+    /**
+     TRUE if new lines should start with leading whitespace characters from
+     previous lines.  FALSE if new lines should start at offset zero.
+     */
+    BOOLEAN AutoIndent;
+
+    /**
+     TRUE if a tab key should be substituted with the number of spaces
+     specified in TabWidth.  FALSE if it should be retained as a tab and only
+     visually rendered according to TabWidth.
+     */
+    BOOLEAN ExpandTab;
+
 } YORI_WIN_CTRL_MULTILINE_EDIT, *PYORI_WIN_CTRL_MULTILINE_EDIT;
 
 //
@@ -434,78 +488,26 @@ typedef struct _YORI_WIN_CTRL_MULTILINE_EDIT {
 //
 
 /**
- Calculate the line of text to display.  This is typically the exact same
- string as the line from the file's contents, but can diverge due to 
- display requirements such as tab expansion.
+ Return TRUE if the multiline edit control supports double-wide characters.
+ If FALSE, all characters are rendered as narrow.
 
  @param MultilineEdit Pointer to the multiline edit control.
 
- @param LineIndex Specifies the line number to obtain a display line for.
-
- @param DisplayLine On successful completion, populated with a string to
-        display.  This may point back into the same data as the original
-        line, or may be a fresh allocation.  The caller should free it with
-        @ref YoriLibFreeStringContents .  If the result points back to the
-        original string, the MemoryToFree member will be NULL to indicate
-        that the caller has nothing to deallocate.
-
- @return TRUE to indicate success, FALSE to indicate failure.
+ @return TRUE to indicate double wide characters are supported, FALSE if they
+         are not.
  */
 BOOLEAN
-YoriWinMultilineEditGenerateDisplayLine(
-    __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
-    __in DWORD LineIndex,
-    __out PYORI_STRING DisplayLine
+YoriWinMultilineEditIsDoubleWideCharSupported(
+    __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit
     )
 {
-    DWORD CharIndex;
-    DWORD DestIndex;
-    PYORI_STRING SourceLine;
-    DWORD TabCount;
-    BOOLEAN NeedDoubleBuffer;
+    PYORI_WIN_WINDOW TopLevelWindow;
+    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr;
 
-    ASSERT(LineIndex < MultilineEdit->LinesPopulated);
+    TopLevelWindow = YoriWinGetTopLevelWindow(&MultilineEdit->Ctrl);
+    WinMgr = YoriWinGetWindowManagerHandle(TopLevelWindow);
 
-    SourceLine = &MultilineEdit->LineArray[LineIndex];
-
-    NeedDoubleBuffer = FALSE;
-    TabCount = 0;
-    for (CharIndex = 0; CharIndex < SourceLine->LengthInChars; CharIndex++) {
-        if (SourceLine->StartOfString[CharIndex] == '\t') {
-            NeedDoubleBuffer = TRUE;
-            TabCount++;
-        }
-    }
-
-    if (!NeedDoubleBuffer) {
-        YoriLibInitEmptyString(DisplayLine);
-        DisplayLine->StartOfString = SourceLine->StartOfString;
-        DisplayLine->LengthInChars = SourceLine->LengthInChars;
-        return TRUE;
-    }
-
-    if (!YoriLibAllocateString(DisplayLine, SourceLine->LengthInChars + TabCount * MultilineEdit->TabWidth)) {
-        return FALSE;
-    }
-
-    DestIndex = 0;
-    for (CharIndex = 0; CharIndex < SourceLine->LengthInChars; CharIndex++) {
-        if (SourceLine->StartOfString[CharIndex] == '\t') {
-            DWORD TabIndex;
-
-            for (TabIndex = 0; TabIndex < MultilineEdit->TabWidth; TabIndex++) {
-                DisplayLine->StartOfString[DestIndex + TabIndex] = ' ';
-            }
-            DestIndex = DestIndex + MultilineEdit->TabWidth;
-
-        } else {
-            DisplayLine->StartOfString[DestIndex] = SourceLine->StartOfString[CharIndex];
-            DestIndex++;
-        }
-    }
-
-    DisplayLine->LengthInChars = DestIndex;
-    return TRUE;
+    return YoriWinIsDoubleWideCharSupported(WinMgr);
 }
 
 /**
@@ -522,54 +524,46 @@ YoriWinMultilineEditGenerateDisplayLine(
 
  @param CursorChar On completion, populated with the offset in the line buffer
         corresponding to the display offset.
+
+ @param Remainder If specified, on completion, updated with the number of
+        empty display cells before the data at CursorChar is displayed.
+        This can be caused by a tab or wide char that encompasses the
+        DisplayChar cell along with other cells, where no single character
+        starts at the requested DisplayChar.
  */
 VOID
 YoriWinMultilineEditFindCursorCharFromDisplayChar(
     __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
-    __in DWORD LineIndex,
-    __in DWORD DisplayChar,
-    __out PDWORD CursorChar
+    __in YORI_ALLOC_SIZE_T LineIndex,
+    __in YORI_ALLOC_SIZE_T DisplayChar,
+    __out PYORI_ALLOC_SIZE_T CursorChar,
+    __out_opt PYORI_ALLOC_SIZE_T Remainder
     )
 {
-    DWORD CharIndex;
-    DWORD CurrentDisplayIndex;
-    DWORD DesiredCursorChar;
     PYORI_STRING Line;
+    PYORI_WIN_WINDOW TopLevelWindow;
+    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+
+    TopLevelWindow = YoriWinGetTopLevelWindow(&MultilineEdit->Ctrl);
+    WinMgrHandle = YoriWinGetWindowManagerHandle(TopLevelWindow);
 
     if (LineIndex >= MultilineEdit->LinesPopulated) {
         *CursorChar = DisplayChar;
+        if (Remainder != NULL) {
+            *Remainder = 0;
+        }
         return;
     }
 
     Line = &MultilineEdit->LineArray[LineIndex];
 
-    CurrentDisplayIndex = 0;
-    for (CharIndex = 0; CharIndex < Line->LengthInChars; CharIndex++) {
-        if (CurrentDisplayIndex >= DisplayChar) {
-            *CursorChar = CharIndex;
-            return;
-        }
-
-        if (Line->StartOfString[CharIndex] == '\t') {
-            CurrentDisplayIndex += MultilineEdit->TabWidth;
-        } else {
-            CurrentDisplayIndex++;
-        }
-    }
-
-    //
-    //  In a modern control, the cursor can't be beyond the end of the text,
-    //  so cap it here.
-    //
-
-    DesiredCursorChar = DisplayChar - (CurrentDisplayIndex - CharIndex);
-    if (!MultilineEdit->TraditionalEditNavigation) {
-        if (DesiredCursorChar > Line->LengthInChars) {
-            DesiredCursorChar = Line->LengthInChars;
-        }
-    }
-
-    *CursorChar = DesiredCursorChar;
+    YoriWinTextBufferOffsetFromDisplayCellOffset(WinMgrHandle,
+                                                 Line,
+                                                 MultilineEdit->TabWidth,
+                                                 DisplayChar,
+                                                 MultilineEdit->TraditionalEditNavigation,
+                                                 CursorChar,
+                                                 Remainder);
 }
 
 /**
@@ -589,14 +583,17 @@ YoriWinMultilineEditFindCursorCharFromDisplayChar(
 VOID
 YoriWinMultilineEditFindDisplayCharFromCursorChar(
     __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
-    __in DWORD LineIndex,
-    __in DWORD CursorChar,
-    __out PDWORD DisplayChar
+    __in YORI_ALLOC_SIZE_T LineIndex,
+    __in YORI_ALLOC_SIZE_T CursorChar,
+    __out PYORI_ALLOC_SIZE_T DisplayChar
     )
 {
-    DWORD CharIndex;
-    DWORD CurrentDisplayIndex;
     PYORI_STRING Line;
+    PYORI_WIN_WINDOW TopLevelWindow;
+    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+
+    TopLevelWindow = YoriWinGetTopLevelWindow(&MultilineEdit->Ctrl);
+    WinMgrHandle = YoriWinGetWindowManagerHandle(TopLevelWindow);
 
     if (LineIndex >= MultilineEdit->LinesPopulated) {
         *DisplayChar = CursorChar;
@@ -605,21 +602,11 @@ YoriWinMultilineEditFindDisplayCharFromCursorChar(
 
     Line = &MultilineEdit->LineArray[LineIndex];
 
-    CurrentDisplayIndex = 0;
-    for (CharIndex = 0; CharIndex < Line->LengthInChars; CharIndex++) {
-        if (CharIndex >= CursorChar) {
-            *DisplayChar = CurrentDisplayIndex;
-            return;
-        }
-
-        if (Line->StartOfString[CharIndex] == '\t') {
-            CurrentDisplayIndex += MultilineEdit->TabWidth;
-        } else {
-            CurrentDisplayIndex++;
-        }
-    }
-
-    *DisplayChar = CursorChar + (CurrentDisplayIndex - CharIndex);
+    YoriWinTextDisplayCellOffsetFromBufferOffset(WinMgrHandle,
+                                                 Line,
+                                                 MultilineEdit->TabWidth,
+                                                 CursorChar,
+                                                 DisplayChar);
 }
 
 /**
@@ -643,14 +630,14 @@ YoriWinMultilineEditFindDisplayCharFromCursorChar(
 BOOLEAN
 YoriWinMultilineEditTranslateViewportCoordinatesToCursorCoordinates(
     __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
-    __in DWORD ViewportLeftOffset,
-    __in DWORD ViewportTopOffset,
-    __out PDWORD LineIndex,
-    __out PDWORD CursorChar
+    __in YORI_ALLOC_SIZE_T ViewportLeftOffset,
+    __in YORI_ALLOC_SIZE_T ViewportTopOffset,
+    __out PYORI_ALLOC_SIZE_T LineIndex,
+    __out PYORI_ALLOC_SIZE_T CursorChar
     )
 {
-    DWORD LineOffset;
-    DWORD DisplayOffset;
+    YORI_ALLOC_SIZE_T LineOffset;
+    YORI_ALLOC_SIZE_T DisplayOffset;
     BOOLEAN Result = TRUE;
 
     LineOffset = ViewportTopOffset + MultilineEdit->ViewportTop;
@@ -665,7 +652,12 @@ YoriWinMultilineEditTranslateViewportCoordinatesToCursorCoordinates(
 
     DisplayOffset = ViewportLeftOffset + MultilineEdit->ViewportLeft;
 
-    YoriWinMultilineEditFindCursorCharFromDisplayChar(MultilineEdit, LineOffset, DisplayOffset, CursorChar);
+    //
+    //  MSFIX Review callers to this function and see what they need for
+    //  Remainder
+    //
+
+    YoriWinMultilineEditFindCursorCharFromDisplayChar(MultilineEdit, LineOffset, DisplayOffset, CursorChar, NULL);
     *LineIndex = LineOffset;
     return Result;
 }
@@ -800,7 +792,11 @@ YoriWinMultilineEditPaintNonClient(
 
         StartOffset = (ClientSize.X - CaptionCharsToDisplay) / 2;
         for (ColumnIndex = 0; ColumnIndex < CaptionCharsToDisplay; ColumnIndex++) {
-            YoriWinSetControlNonClientCell(&MultilineEdit->Ctrl, (WORD)(ColumnIndex + StartOffset), 0, MultilineEdit->Caption.StartOfString[ColumnIndex], MultilineEdit->CaptionAttributes);
+            YoriWinSetControlNonClientCell(&MultilineEdit->Ctrl,
+                                           (WORD)(ColumnIndex + StartOffset),
+                                           0,
+                                           MultilineEdit->Caption.StartOfString[ColumnIndex],
+                                           MultilineEdit->CaptionAttributes);
         }
     }
 
@@ -810,6 +806,88 @@ YoriWinMultilineEditPaintNonClient(
 
     YoriWinMultilineEditRepaintScrollBar(MultilineEdit);
     return TRUE;
+}
+
+/**
+ Calculate the line of text to display.  This is typically the exact same
+ string as the line from the file's contents, but can diverge due to
+ display requirements such as tab expansion or wide characters.  The
+ generated line contains the text visible within the viewport (ie., is
+ truncated according to the current state of ViewportLeft.)
+
+ @param MultilineEdit Pointer to the multiline edit control.
+
+ @param LineIndex Specifies the line number to obtain a display line for.
+
+ @param ClientWidth Specifies the number of cells that will be displayed
+        within the control.  There is no need to populate more data than
+        this.
+
+ @param DisplayLine On successful completion, populated with a string to
+        display.  This may point back into the same data as the original
+        line, or may be a fresh allocation.  The caller should free it with
+        @ref YoriLibFreeStringContents .  If the result points back to the
+        original string, the MemoryToFree member will be NULL to indicate
+        that the caller has nothing to deallocate.
+
+ @return TRUE to indicate success, FALSE to indicate failure.
+ */
+BOOLEAN
+YoriWinMultilineEditGenerateDisplayLine(
+    __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
+    __in YORI_ALLOC_SIZE_T LineIndex,
+    __in YORI_ALLOC_SIZE_T ClientWidth,
+    __out PYORI_STRING DisplayLine
+    )
+{
+    PYORI_STRING SourceLine;
+    YORI_STRING SourceString;
+    PYORI_WIN_WINDOW TopLevelWindow;
+    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+    YORI_ALLOC_SIZE_T BufferChar;
+    YORI_ALLOC_SIZE_T Remainder;
+
+    ASSERT(LineIndex < MultilineEdit->LinesPopulated);
+
+    TopLevelWindow = YoriWinGetTopLevelWindow(&MultilineEdit->Ctrl);
+    WinMgrHandle = YoriWinGetWindowManagerHandle(TopLevelWindow);
+    SourceLine = &MultilineEdit->LineArray[LineIndex];
+
+    //
+    //  Create a string that corresponds to the current position in the
+    //  viewport.
+    //
+
+    YoriWinMultilineEditFindCursorCharFromDisplayChar(MultilineEdit,
+                                                      LineIndex,
+                                                      MultilineEdit->ViewportLeft,
+                                                      &BufferChar,
+                                                      &Remainder);
+
+    //
+    //  If none of the source line is visible, return nothing.
+    //
+
+    if (BufferChar >= SourceLine->LengthInChars) {
+        YoriLibInitEmptyString(DisplayLine);
+        return TRUE;
+    }
+
+    YoriLibInitEmptyString(DisplayLine);
+    YoriLibInitEmptyString(&SourceString);
+    SourceString.StartOfString = &SourceLine->StartOfString[BufferChar];
+    SourceString.LengthInChars = SourceLine->LengthInChars - BufferChar;
+
+    //
+    //  Generate display cells for the text.
+    //
+
+    return YoriWinTextStringToDisplayCells(WinMgrHandle,
+                                           &SourceString,
+                                           Remainder,
+                                           MultilineEdit->TabWidth,
+                                           ClientWidth,
+                                           DisplayLine);
 }
 
 /**
@@ -828,7 +906,7 @@ VOID
 YoriWinMultilineEditPaintSingleLine(
     __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
     __in PCOORD ClientSize,
-    __in DWORD LineIndex
+    __in YORI_ALLOC_SIZE_T LineIndex
     )
 {
     WORD ColumnIndex;
@@ -838,11 +916,13 @@ YoriWinMultilineEditPaintSingleLine(
     BOOLEAN SelectionActive;
     YORI_STRING Line;
     TCHAR Char;
+    YORI_ALLOC_SIZE_T ClientWidth;
 
     ColumnIndex = 0;
     RowIndex = (WORD)(LineIndex - MultilineEdit->ViewportTop);
     WindowAttributes = MultilineEdit->TextAttributes;
     SelectionActive = YoriWinMultilineEditSelectionActive(&MultilineEdit->Ctrl);
+    ClientWidth = (YORI_ALLOC_SIZE_T)ClientSize->X;
 
     if (LineIndex < MultilineEdit->LinesPopulated) {
         TextAttributes = WindowAttributes;
@@ -857,53 +937,66 @@ YoriWinMultilineEditPaintSingleLine(
             TextAttributes = MultilineEdit->SelectedAttributes;
         }
 
-        if (!YoriWinMultilineEditGenerateDisplayLine(MultilineEdit, LineIndex, &Line)) {
+        //
+        //  Capture a display string.  This contains one char per cell,
+        //  substituting spaces for tabs, and applying any NULLs needed
+        //  for wide char display.
+        //
+
+        if (!YoriWinMultilineEditGenerateDisplayLine(MultilineEdit, LineIndex, ClientWidth, &Line)) {
             YoriLibInitEmptyString(&Line);
         }
-        for (; ColumnIndex < ClientSize->X && ColumnIndex + MultilineEdit->ViewportLeft < Line.LengthInChars; ColumnIndex++) {
+
+        for (; ColumnIndex < ClientSize->X && ColumnIndex < Line.LengthInChars; ColumnIndex++) {
+
+            //
+            //  If a selection is active, calculate which display cells
+            //  should be selected.
+            //
+
             if (SelectionActive) {
-                DWORD DisplayFirstCharOffset;
-                DWORD DisplayLastCharOffset;
-                YoriWinMultilineEditFindDisplayCharFromCursorChar(MultilineEdit, MultilineEdit->Selection.FirstLine, MultilineEdit->Selection.FirstCharOffset, &DisplayFirstCharOffset);
-                YoriWinMultilineEditFindDisplayCharFromCursorChar(MultilineEdit, MultilineEdit->Selection.LastLine, MultilineEdit->Selection.LastCharOffset, &DisplayLastCharOffset);
+                YORI_ALLOC_SIZE_T DisplayFirstCharOffset;
+                YORI_ALLOC_SIZE_T DisplayLastCharOffset;
+                YORI_ALLOC_SIZE_T DisplayCurrentOffset;
+                YoriWinMultilineEditFindDisplayCharFromCursorChar(MultilineEdit,
+                                                                  MultilineEdit->Selection.FirstLine,
+                                                                  MultilineEdit->Selection.FirstCharOffset,
+                                                                  &DisplayFirstCharOffset);
+                YoriWinMultilineEditFindDisplayCharFromCursorChar(MultilineEdit,
+                                                                  MultilineEdit->Selection.LastLine,
+                                                                  MultilineEdit->Selection.LastCharOffset,
+                                                                  &DisplayLastCharOffset);
 
 
+                DisplayCurrentOffset = MultilineEdit->ViewportLeft + ColumnIndex;
                 if (LineIndex == MultilineEdit->Selection.FirstLine &&
                     LineIndex == MultilineEdit->Selection.LastLine) {
                     TextAttributes = WindowAttributes;
-                    if (ColumnIndex + MultilineEdit->ViewportLeft >= DisplayFirstCharOffset &&
-                        ColumnIndex + MultilineEdit->ViewportLeft < DisplayLastCharOffset) {
+                    if (DisplayCurrentOffset >= DisplayFirstCharOffset &&
+                        DisplayCurrentOffset < DisplayLastCharOffset) {
                         TextAttributes = MultilineEdit->SelectedAttributes;
                     }
                 } else if (LineIndex == MultilineEdit->Selection.FirstLine) {
                     TextAttributes = WindowAttributes;
-                    if (ColumnIndex + MultilineEdit->ViewportLeft >= DisplayFirstCharOffset) {
+                    if (DisplayCurrentOffset >= DisplayFirstCharOffset) {
                         TextAttributes = MultilineEdit->SelectedAttributes;
                     }
                 } else if (LineIndex == MultilineEdit->Selection.LastLine) {
                     TextAttributes = WindowAttributes;
-                    if (ColumnIndex + MultilineEdit->ViewportLeft < DisplayLastCharOffset) {
+                    if (DisplayCurrentOffset < DisplayLastCharOffset) {
                         TextAttributes = MultilineEdit->SelectedAttributes;
                     }
                 }
             }
 
-            Char = Line.StartOfString[ColumnIndex + MultilineEdit->ViewportLeft];
 
-            //
-            //  Nano server interprets NULL as "leave previous contents alone"
-            //  which is hazardous for an editor.
-            //
-
-            if (Char == 0 && YoriLibIsNanoServer()) {
-                Char = ' ';
-            }
+            Char = Line.StartOfString[ColumnIndex];
 
             YoriWinSetControlClientCell(&MultilineEdit->Ctrl, ColumnIndex, RowIndex, Char, TextAttributes);
         }
 
         //
-        //  Unless a tab is present, this is a no-op
+        //  Unless a tab or wide char is present, this is a no-op
         //
 
         YoriLibFreeStringContents(&Line);
@@ -926,7 +1019,7 @@ YoriWinMultilineEditPaint(
     )
 {
     WORD RowIndex;
-    DWORD LineIndex;
+    YORI_ALLOC_SIZE_T LineIndex;
     COORD ClientSize;
 
     YoriWinGetControlClientSize(&MultilineEdit->Ctrl, &ClientSize);
@@ -949,11 +1042,14 @@ YoriWinMultilineEditPaint(
             }
         }
 
-        MultilineEdit->FirstDirtyLine = (DWORD)-1;
+        MultilineEdit->FirstDirtyLine = (YORI_ALLOC_SIZE_T)-1;
         MultilineEdit->LastDirtyLine = 0;
     }
 
-    YoriWinMultilineEditFindDisplayCharFromCursorChar(MultilineEdit, MultilineEdit->CursorLine, MultilineEdit->CursorOffset, &MultilineEdit->DisplayCursorOffset);
+    YoriWinMultilineEditFindDisplayCharFromCursorChar(MultilineEdit,
+                                                      MultilineEdit->CursorLine,
+                                                      MultilineEdit->CursorOffset,
+                                                      &MultilineEdit->DisplayCursorOffset);
 
     {
         WORD CursorLineWithinDisplay = 0;
@@ -1035,8 +1131,8 @@ YoriWinMultilineEditPaint(
 VOID
 YoriWinMultilineEditExpandDirtyRange(
     __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
-    __in DWORD NewFirstDirtyLine,
-    __in DWORD NewLastDirtyLine
+    __in YORI_ALLOC_SIZE_T NewFirstDirtyLine,
+    __in YORI_ALLOC_SIZE_T NewLastDirtyLine
     )
 {
     if (NewFirstDirtyLine < MultilineEdit->FirstDirtyLine) {
@@ -1080,14 +1176,22 @@ YoriWinMultilineEditClearSelection(
 VOID
 YoriWinMultilineEditSetCursorLocationInternal(
     __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
-    __in DWORD NewCursorOffset,
-    __in DWORD NewCursorLine
+    __in YORI_ALLOC_SIZE_T NewCursorOffset,
+    __in YORI_ALLOC_SIZE_T NewCursorLine
     )
 {
     if (NewCursorOffset == MultilineEdit->CursorOffset &&
         NewCursorLine == MultilineEdit->CursorLine) {
 
         return;
+    }
+
+    if (MultilineEdit->AutoIndentApplied) {
+        if (NewCursorLine != MultilineEdit->AutoIndentAppliedLine ||
+            NewCursorOffset != MultilineEdit->AutoIndentSourceLength) {
+
+            MultilineEdit->AutoIndentApplied = FALSE;
+        }
     }
 
     ASSERT(NewCursorLine == 0 || NewCursorLine < MultilineEdit->LinesPopulated);
@@ -1112,8 +1216,8 @@ YoriWinMultilineEditEnsureCursorVisible(
     )
 {
     COORD ClientSize;
-    DWORD NewViewportLeft;
-    DWORD NewViewportTop;
+    YORI_ALLOC_SIZE_T NewViewportLeft;
+    YORI_ALLOC_SIZE_T NewViewportTop;
 
     NewViewportLeft = MultilineEdit->ViewportLeft;
     NewViewportTop = MultilineEdit->ViewportTop;
@@ -1128,11 +1232,17 @@ YoriWinMultilineEditEnsureCursorVisible(
     //
 
     if (YoriWinMultilineEditSelectionActive(MultilineEdit)) {
-        DWORD StartSelection;
-        DWORD EndSelection;
+        YORI_ALLOC_SIZE_T StartSelection;
+        YORI_ALLOC_SIZE_T EndSelection;
 
-        YoriWinMultilineEditFindDisplayCharFromCursorChar(MultilineEdit, MultilineEdit->Selection.FirstLine, MultilineEdit->Selection.FirstCharOffset, &StartSelection);
-        YoriWinMultilineEditFindDisplayCharFromCursorChar(MultilineEdit, MultilineEdit->Selection.LastLine, MultilineEdit->Selection.LastCharOffset, &EndSelection);
+        YoriWinMultilineEditFindDisplayCharFromCursorChar(MultilineEdit,
+                                                          MultilineEdit->Selection.FirstLine,
+                                                          MultilineEdit->Selection.FirstCharOffset,
+                                                          &StartSelection);
+        YoriWinMultilineEditFindDisplayCharFromCursorChar(MultilineEdit,
+                                                          MultilineEdit->Selection.LastLine,
+                                                          MultilineEdit->Selection.LastCharOffset,
+                                                          &EndSelection);
 
         if (StartSelection < NewViewportLeft) {
             NewViewportLeft = StartSelection;
@@ -1141,7 +1251,10 @@ YoriWinMultilineEditEnsureCursorVisible(
         }
     }
 
-    YoriWinMultilineEditFindDisplayCharFromCursorChar(MultilineEdit, MultilineEdit->CursorLine, MultilineEdit->CursorOffset, &MultilineEdit->DisplayCursorOffset);
+    YoriWinMultilineEditFindDisplayCharFromCursorChar(MultilineEdit,
+                                                      MultilineEdit->CursorLine,
+                                                      MultilineEdit->CursorOffset,
+                                                      &MultilineEdit->DisplayCursorOffset);
 
     if (MultilineEdit->DisplayCursorOffset < NewViewportLeft) {
         NewViewportLeft = MultilineEdit->DisplayCursorOffset;
@@ -1157,13 +1270,13 @@ YoriWinMultilineEditEnsureCursorVisible(
 
     if (NewViewportTop != MultilineEdit->ViewportTop) {
         MultilineEdit->ViewportTop = NewViewportTop;
-        YoriWinMultilineEditExpandDirtyRange(MultilineEdit, NewViewportTop, (DWORD)-1);
+        YoriWinMultilineEditExpandDirtyRange(MultilineEdit, NewViewportTop, (YORI_ALLOC_SIZE_T)-1);
         YoriWinMultilineEditRepaintScrollBar(MultilineEdit);
     }
 
     if (NewViewportLeft != MultilineEdit->ViewportLeft) {
         MultilineEdit->ViewportLeft = NewViewportLeft;
-        YoriWinMultilineEditExpandDirtyRange(MultilineEdit, NewViewportTop, (DWORD)-1);
+        YoriWinMultilineEditExpandDirtyRange(MultilineEdit, NewViewportTop, (YORI_ALLOC_SIZE_T)-1);
     }
 }
 
@@ -1394,10 +1507,10 @@ PYORI_WIN_CTRL_MULTILINE_EDIT_UNDO
 YoriWinMultilineEditGetUndoRecordForOperation(
     __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
     __in YORI_WIN_CTRL_MULTILINE_EDIT_UNDO_OPERATION Op,
-    __in DWORD FirstLine,
-    __in DWORD FirstCharOffset,
-    __in DWORD LastLine,
-    __in DWORD LastCharOffset,
+    __in YORI_ALLOC_SIZE_T FirstLine,
+    __in YORI_ALLOC_SIZE_T FirstCharOffset,
+    __in YORI_ALLOC_SIZE_T LastLine,
+    __in YORI_ALLOC_SIZE_T LastCharOffset,
     __out PBOOLEAN NewRangeBeforeExistingRange
     )
 {
@@ -1416,19 +1529,35 @@ YoriWinMultilineEditGetUndoRecordForOperation(
         } else {
             switch (Op) {
                 case YoriWinMultilineEditUndoInsertText:
-                    if (!YoriWinMultilineEditRangeImmediatelyFollows(MultilineEdit, Undo->u.InsertText.LastLineToDelete, Undo->u.InsertText.LastCharOffsetToDelete, FirstLine, FirstCharOffset)) {
+                    if (!YoriWinMultilineEditRangeImmediatelyFollows(MultilineEdit,
+                                                                     Undo->u.InsertText.LastLineToDelete,
+                                                                     Undo->u.InsertText.LastCharOffsetToDelete,
+                                                                     FirstLine,
+                                                                     FirstCharOffset)) {
                         Undo = NULL;
                     }
                     break;
                 case YoriWinMultilineEditUndoDeleteText:
-                    if (YoriWinMultilineEditRangeImmediatelyPreceeds(MultilineEdit, Undo->u.DeleteText.FirstLine, Undo->u.DeleteText.FirstCharOffset, LastLine, LastCharOffset)) {
+                    if (YoriWinMultilineEditRangeImmediatelyPreceeds(MultilineEdit,
+                                                                     Undo->u.DeleteText.FirstLine,
+                                                                     Undo->u.DeleteText.FirstCharOffset,
+                                                                     LastLine,
+                                                                     LastCharOffset)) {
                         *NewRangeBeforeExistingRange = TRUE;
-                    } else if (!YoriWinMultilineEditRangeImmediatelyFollows(MultilineEdit, Undo->u.DeleteText.FirstLine, Undo->u.DeleteText.FirstCharOffset, FirstLine, FirstCharOffset)) {
+                    } else if (!YoriWinMultilineEditRangeImmediatelyFollows(MultilineEdit,
+                                                                            Undo->u.DeleteText.FirstLine,
+                                                                            Undo->u.DeleteText.FirstCharOffset,
+                                                                            FirstLine,
+                                                                            FirstCharOffset)) {
                         Undo = NULL;
                     }
                     break;
                 case YoriWinMultilineEditUndoOverwriteText:
-                    if (!YoriWinMultilineEditRangeImmediatelyFollows(MultilineEdit, Undo->u.OverwriteText.LastLineToDelete, Undo->u.OverwriteText.LastCharOffsetModified, FirstLine, FirstCharOffset)) {
+                    if (!YoriWinMultilineEditRangeImmediatelyFollows(MultilineEdit,
+                                                                     Undo->u.OverwriteText.LastLineToDelete,
+                                                                     Undo->u.OverwriteText.LastCharOffsetModified,
+                                                                     FirstLine,
+                                                                     FirstCharOffset)) {
                         Undo = NULL;
                     }
                     break;
@@ -1512,17 +1641,17 @@ __success(return)
 BOOLEAN
 YoriWinMultilineEditEnsureSpaceBeforeOrAfterString(
     __in PYORI_STRING CombinedString,
-    __in DWORD CharsNeeded,
+    __in YORI_ALLOC_SIZE_T CharsNeeded,
     __in BOOLEAN CharsBefore,
     __out PYORI_STRING Substring
     )
 {
-    DWORD CurrentCharsBefore;
-    DWORD CurrentCharsAfter;
-    DWORD LengthNeeded;
+    YORI_ALLOC_SIZE_T CurrentCharsBefore;
+    YORI_ALLOC_SIZE_T CurrentCharsAfter;
+    YORI_ALLOC_SIZE_T LengthNeeded;
     YORI_STRING Temp;
 
-    CurrentCharsBefore = (DWORD)(CombinedString->StartOfString - (LPTSTR)CombinedString->MemoryToFree);
+    CurrentCharsBefore = (YORI_ALLOC_SIZE_T)(CombinedString->StartOfString - (LPTSTR)CombinedString->MemoryToFree);
     CurrentCharsAfter = CombinedString->LengthAllocated - CurrentCharsBefore - CombinedString->LengthInChars;
 
     while(TRUE) {
@@ -1633,10 +1762,10 @@ __success(return)
 BOOLEAN
 YoriWinMultilineEditGetTextRange(
     __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
-    __in DWORD FirstLine,
-    __in DWORD FirstCharOffset,
-    __in DWORD LastLine,
-    __in DWORD LastCharOffset,
+    __in YORI_ALLOC_SIZE_T FirstLine,
+    __in YORI_ALLOC_SIZE_T FirstCharOffset,
+    __in YORI_ALLOC_SIZE_T LastLine,
+    __in YORI_ALLOC_SIZE_T LastCharOffset,
     __in PYORI_STRING NewlineString,
     __out PYORI_STRING SelectedText
     );
@@ -1645,11 +1774,13 @@ __success(return)
 BOOLEAN
 YoriWinMultilineEditDeleteTextRange(
     __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
+    __in BOOLEAN ProcessingBackspace,
     __in BOOLEAN ProcessingUndo,
-    __in DWORD FirstLine,
-    __in DWORD FirstCharOffset,
-    __in DWORD LastLine,
-    __in DWORD LastCharOffset
+    __in BOOLEAN ChainWithNext,
+    __in YORI_ALLOC_SIZE_T FirstLine,
+    __in YORI_ALLOC_SIZE_T FirstCharOffset,
+    __in YORI_ALLOC_SIZE_T LastLine,
+    __in YORI_ALLOC_SIZE_T LastCharOffset
     );
 
 __success(return)
@@ -1657,20 +1788,20 @@ BOOLEAN
 YoriWinMultilineEditInsertTextRange(
     __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
     __in BOOLEAN ProcessingUndo,
-    __in DWORD FirstLine,
-    __in DWORD FirstCharOffset,
+    __in YORI_ALLOC_SIZE_T FirstLine,
+    __in YORI_ALLOC_SIZE_T FirstCharOffset,
     __in PYORI_STRING Text,
-    __out PDWORD LastLine,
-    __out PDWORD LastCharOffset
+    __out PYORI_ALLOC_SIZE_T LastLine,
+    __out PYORI_ALLOC_SIZE_T LastCharOffset
     );
 
 VOID
 YoriWinMultilineEditCalculateEndingPointOfText(
-    __in DWORD FirstLine,
-    __in DWORD FirstCharOffset,
+    __in YORI_ALLOC_SIZE_T FirstLine,
+    __in YORI_ALLOC_SIZE_T FirstCharOffset,
     __in PYORI_STRING Text,
-    __out PDWORD LastLine,
-    __out PDWORD LastCharOffset
+    __out PYORI_ALLOC_SIZE_T LastLine,
+    __out PYORI_ALLOC_SIZE_T LastCharOffset
     );
 
 /**
@@ -1795,32 +1926,64 @@ YoriWinMultilineEditApplyUndoRecord(
     )
 {
     BOOLEAN Success;
-    DWORD NewLastLine;
-    DWORD NewLastCharOffset;
+    YORI_ALLOC_SIZE_T NewLastLine;
+    YORI_ALLOC_SIZE_T NewLastCharOffset;
 
     Success = FALSE;
     switch(Undo->Op) {
         case YoriWinMultilineEditUndoInsertText:
-            Success = YoriWinMultilineEditDeleteTextRange(MultilineEdit, TRUE, Undo->u.InsertText.FirstLineToDelete, Undo->u.InsertText.FirstCharOffsetToDelete, Undo->u.InsertText.LastLineToDelete, Undo->u.InsertText.LastCharOffsetToDelete);
+            Success = YoriWinMultilineEditDeleteTextRange(MultilineEdit,
+                                                          FALSE,
+                                                          TRUE,
+                                                          FALSE,
+                                                          Undo->u.InsertText.FirstLineToDelete,
+                                                          Undo->u.InsertText.FirstCharOffsetToDelete,
+                                                          Undo->u.InsertText.LastLineToDelete,
+                                                          Undo->u.InsertText.LastCharOffsetToDelete);
             if (Success) {
-                YoriWinMultilineEditSetCursorLocationInternal(MultilineEdit, Undo->u.InsertText.FirstCharOffsetToDelete, Undo->u.InsertText.FirstLineToDelete);
+                YoriWinMultilineEditSetCursorLocationInternal(MultilineEdit,
+                                                              Undo->u.InsertText.FirstCharOffsetToDelete,
+                                                              Undo->u.InsertText.FirstLineToDelete);
             }
             break;
         case YoriWinMultilineEditUndoDeleteText:
-            Success = YoriWinMultilineEditInsertTextRange(MultilineEdit, TRUE, Undo->u.DeleteText.FirstLine, Undo->u.DeleteText.FirstCharOffset, &Undo->u.DeleteText.Text, &NewLastLine, &NewLastCharOffset);
+            Success = YoriWinMultilineEditInsertTextRange(MultilineEdit,
+                                                          TRUE,
+                                                          Undo->u.DeleteText.FirstLine,
+                                                          Undo->u.DeleteText.FirstCharOffset,
+                                                          &Undo->u.DeleteText.Text,
+                                                          &NewLastLine,
+                                                          &NewLastCharOffset);
             if (Success) {
-                YoriWinMultilineEditSetCursorLocationInternal(MultilineEdit, NewLastCharOffset, NewLastLine);
+                YoriWinMultilineEditSetCursorLocationInternal(MultilineEdit,
+                                                              NewLastCharOffset,
+                                                              NewLastLine);
             }
             break;
         case YoriWinMultilineEditUndoOverwriteText:
             NewLastLine = 0;
             NewLastCharOffset = 0;
-            Success = YoriWinMultilineEditDeleteTextRange(MultilineEdit, TRUE, Undo->u.OverwriteText.FirstLineToDelete, Undo->u.OverwriteText.FirstCharOffsetToDelete, Undo->u.OverwriteText.LastLineToDelete, Undo->u.OverwriteText.LastCharOffsetToDelete);
+            Success = YoriWinMultilineEditDeleteTextRange(MultilineEdit,
+                                                          FALSE,
+                                                          TRUE,
+                                                          FALSE,
+                                                          Undo->u.OverwriteText.FirstLineToDelete,
+                                                          Undo->u.OverwriteText.FirstCharOffsetToDelete,
+                                                          Undo->u.OverwriteText.LastLineToDelete,
+                                                          Undo->u.OverwriteText.LastCharOffsetToDelete);
             if (Success) {
-                Success = YoriWinMultilineEditInsertTextRange(MultilineEdit, TRUE, Undo->u.OverwriteText.FirstLine, Undo->u.OverwriteText.FirstCharOffset, &Undo->u.OverwriteText.Text, &NewLastLine, &NewLastCharOffset);
+                Success = YoriWinMultilineEditInsertTextRange(MultilineEdit,
+                                                              TRUE,
+                                                              Undo->u.OverwriteText.FirstLine,
+                                                              Undo->u.OverwriteText.FirstCharOffset,
+                                                              &Undo->u.OverwriteText.Text,
+                                                              &NewLastLine,
+                                                              &NewLastCharOffset);
             }
             if (Success) {
-                YoriWinMultilineEditSetCursorLocationInternal(MultilineEdit, Undo->u.OverwriteText.FirstCharOffsetModified, Undo->u.OverwriteText.FirstLine);
+                YoriWinMultilineEditSetCursorLocationInternal(MultilineEdit,
+                                                              Undo->u.OverwriteText.FirstCharOffsetModified,
+                                                              Undo->u.OverwriteText.FirstLine);
             }
             break;
     }
@@ -1845,30 +2008,45 @@ YoriWinMultilineEditUndo(
     PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit;
     PYORI_WIN_CTRL Ctrl;
     BOOLEAN Success;
+    BOOLEAN ChainWithNext;
+    BOOLEAN ChainWithPrevious;
 
     Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
     MultilineEdit = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_MULTILINE_EDIT, Ctrl);
 
-    if (YoriLibIsListEmpty(&MultilineEdit->Undo)) {
-        return FALSE;
-    }
+    Success = FALSE;
+    ChainWithPrevious = FALSE;
 
-    Undo = CONTAINING_RECORD(MultilineEdit->Undo.Next, YORI_WIN_CTRL_MULTILINE_EDIT_UNDO, ListEntry);
+    do {
+        if (YoriLibIsListEmpty(&MultilineEdit->Undo)) {
+            break;
+        }
 
-    Redo = YoriWinMultilineEditGenerateRedoRecordForUndo(MultilineEdit, Undo, FALSE);
-    if (Redo == NULL) {
-        return FALSE;
-    }
+        Undo = CONTAINING_RECORD(MultilineEdit->Undo.Next, YORI_WIN_CTRL_MULTILINE_EDIT_UNDO, ListEntry);
+        ChainWithNext = Undo->ChainWithNext;
 
-    Success = YoriWinMultilineEditApplyUndoRecord(MultilineEdit, Undo);
+        Redo = YoriWinMultilineEditGenerateRedoRecordForUndo(MultilineEdit, Undo, FALSE);
+        if (Redo == NULL) {
+            break;
+        }
 
-    if (Success) {
-        YoriLibRemoveListItem(&Undo->ListEntry);
-        YoriWinMultilineEditFreeSingleUndo(Undo);
-    } else {
-        YoriLibRemoveListItem(&Redo->ListEntry);
-        YoriWinMultilineEditFreeSingleUndo(Redo);
-    }
+        if (ChainWithPrevious) {
+            Redo->ChainWithNext = TRUE;
+        }
+
+        Success = YoriWinMultilineEditApplyUndoRecord(MultilineEdit, Undo);
+
+        if (Success) {
+            YoriLibRemoveListItem(&Undo->ListEntry);
+            YoriWinMultilineEditFreeSingleUndo(Undo);
+        } else {
+            YoriLibRemoveListItem(&Redo->ListEntry);
+            YoriWinMultilineEditFreeSingleUndo(Redo);
+        }
+
+        ChainWithPrevious = TRUE;
+
+    } while (Success && ChainWithNext);
 
     return Success;
 }
@@ -1889,31 +2067,49 @@ YoriWinMultilineEditRedo(
     PYORI_WIN_CTRL_MULTILINE_EDIT_UNDO Redo;
     PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit;
     PYORI_WIN_CTRL Ctrl;
+    BOOLEAN Success;
+    BOOLEAN ChainWithNext;
+    BOOLEAN ChainWithPrevious;
 
     Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
     MultilineEdit = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_MULTILINE_EDIT, Ctrl);
 
-    if (YoriLibIsListEmpty(&MultilineEdit->Redo)) {
-        return FALSE;
-    }
+    Success = FALSE;
+    ChainWithPrevious = FALSE;
 
-    Undo = CONTAINING_RECORD(MultilineEdit->Redo.Next, YORI_WIN_CTRL_MULTILINE_EDIT_UNDO, ListEntry);
+    do {
 
-    Redo = YoriWinMultilineEditGenerateRedoRecordForUndo(MultilineEdit, Undo, TRUE);
-    if (Redo == NULL) {
-        return FALSE;
-    }
+        if (YoriLibIsListEmpty(&MultilineEdit->Redo)) {
+            break;
+        }
 
-    if (!YoriWinMultilineEditApplyUndoRecord(MultilineEdit, Undo)) {
-        YoriLibRemoveListItem(&Redo->ListEntry);
-        YoriWinMultilineEditFreeSingleUndo(Redo);
-        return FALSE;
-    }
+        Undo = CONTAINING_RECORD(MultilineEdit->Redo.Next, YORI_WIN_CTRL_MULTILINE_EDIT_UNDO, ListEntry);
+        ChainWithNext = Undo->ChainWithNext;
 
-    YoriLibRemoveListItem(&Undo->ListEntry);
-    YoriWinMultilineEditFreeSingleUndo(Undo);
+        Redo = YoriWinMultilineEditGenerateRedoRecordForUndo(MultilineEdit, Undo, TRUE);
+        if (Redo == NULL) {
+            break;
+        }
 
-    return TRUE;
+        if (ChainWithPrevious) {
+            Redo->ChainWithNext = TRUE;
+        }
+
+        Success = YoriWinMultilineEditApplyUndoRecord(MultilineEdit, Undo);
+
+        if (Success) {
+            YoriLibRemoveListItem(&Undo->ListEntry);
+            YoriWinMultilineEditFreeSingleUndo(Undo);
+        } else {
+            YoriLibRemoveListItem(&Redo->ListEntry);
+            YoriWinMultilineEditFreeSingleUndo(Redo);
+        }
+
+        ChainWithPrevious = TRUE;
+
+    } while (Success && ChainWithNext);
+
+    return Success;
 }
 
 //
@@ -1921,143 +2117,6 @@ YoriWinMultilineEditRedo(
 //  BUFFER MANIPULATION FUNCTIONS
 //  =========================================
 //
-
-/**
- Merge two lines into one.  This occurs when the user deletes a line break.
-
- @param MultilineEdit Pointer to the multiline edit control.
-
- @param FirstLineIndex Specifies the first of two lines to merge.  The line
-        immediately following this line is the other line to merge.
-
- @return TRUE to indicate success, FALSE to indicate failure.
- */
-BOOLEAN
-YoriWinMultilineEditMergeLines(
-    __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
-    __in DWORD FirstLineIndex
-    )
-{
-    PYORI_STRING Line[2];
-    DWORD LinesToCopy;
-
-    if (FirstLineIndex + 1 > MultilineEdit->LinesPopulated) {
-        return FALSE;
-    }
-
-    Line[0] = &MultilineEdit->LineArray[FirstLineIndex];
-    Line[1] = &MultilineEdit->LineArray[FirstLineIndex + 1];
-
-    if (Line[0]->LengthInChars + Line[1]->LengthInChars > Line[0]->LengthAllocated) {
-        YORI_STRING TargetLine;
-
-        if (!YoriLibAllocateString(&TargetLine, Line[0]->LengthInChars + Line[1]->LengthInChars + YORI_WIN_MULTILINE_EDIT_LINE_PADDING)) {
-            return FALSE;
-        }
-
-        memcpy(TargetLine.StartOfString, Line[0]->StartOfString, Line[0]->LengthInChars * sizeof(TCHAR));
-        TargetLine.LengthInChars = Line[0]->LengthInChars;
-        YoriLibFreeStringContents(Line[0]);
-        memcpy(Line[0], &TargetLine, sizeof(YORI_STRING));
-    }
-
-    memcpy(&Line[0]->StartOfString[Line[0]->LengthInChars], Line[1]->StartOfString, Line[1]->LengthInChars * sizeof(TCHAR));
-    Line[0]->LengthInChars += Line[1]->LengthInChars;
-
-    YoriLibFreeStringContents(Line[1]);
-
-    LinesToCopy = MultilineEdit->LinesPopulated - FirstLineIndex - 2;
-    if (LinesToCopy > 0) {
-        memmove(&MultilineEdit->LineArray[FirstLineIndex + 1],
-                &MultilineEdit->LineArray[FirstLineIndex + 2], 
-                LinesToCopy * sizeof(YORI_STRING));
-    }
-    MultilineEdit->LinesPopulated--;
-    YoriWinMultilineEditExpandDirtyRange(MultilineEdit, FirstLineIndex, MultilineEdit->LinesPopulated);
-
-    return TRUE;
-}
-
-/**
- Split one line into two.  This occurs when the user presses enter.
-
- @param MultilineEdit Pointer to the multiline edit control.
-
- @param LineIndex Specifies the line to split.
-
- @param CharOffset Specifies the number of characters to include in the first
-        line.
-
- @return TRUE to indicate success, FALSE to indicate failure.
- */
-BOOLEAN
-YoriWinMultilineEditSplitLines(
-    __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
-    __in DWORD LineIndex,
-    __in DWORD CharOffset
-    )
-{
-    PYORI_STRING Line[2];
-    YORI_STRING TargetLine;
-    DWORD LinesToCopy;
-    DWORD CharsNeededOnNewLine;
-
-    if (LineIndex >= MultilineEdit->LinesPopulated) {
-        return FALSE;
-    }
-
-    //
-    //  The caller should have reallocated the line array as needed before
-    //  calling this function.
-    //
-
-    ASSERT(LineIndex + 1 < MultilineEdit->LinesAllocated);
-    if (LineIndex + 1 >= MultilineEdit->LinesAllocated) {
-        return FALSE;
-    }
-
-    Line[0] = &MultilineEdit->LineArray[LineIndex];
-    Line[1] = &MultilineEdit->LineArray[LineIndex + 1];
-
-    //
-    //  If there is text to preserve from the end of the first line, allocate
-    //  a new line and copy the text into it.
-    //
-
-    if (CharOffset < Line[0]->LengthInChars) {
-        CharsNeededOnNewLine = Line[0]->LengthInChars - CharOffset;
-        if (!YoriLibAllocateString(&TargetLine, CharsNeededOnNewLine + YORI_WIN_MULTILINE_EDIT_LINE_PADDING)) {
-            return FALSE;
-        }
-
-        memcpy(TargetLine.StartOfString, &Line[0]->StartOfString[CharOffset], CharsNeededOnNewLine * sizeof(TCHAR));
-        TargetLine.LengthInChars = CharsNeededOnNewLine;
-        Line[0]->LengthInChars = CharOffset;
-    } else {
-        YoriLibInitEmptyString(&TargetLine);
-    }
-
-    //
-    //  If there are lines following this point, move them down.
-    //
-
-    LinesToCopy = MultilineEdit->LinesPopulated - LineIndex - 1;
-    if (LinesToCopy > 0) {
-        memmove(&MultilineEdit->LineArray[LineIndex + 2],
-                &MultilineEdit->LineArray[LineIndex + 1], 
-                LinesToCopy * sizeof(YORI_STRING));
-    }
-
-    //
-    //  Copy the new line into position.
-    //
-
-    memcpy(Line[1], &TargetLine, sizeof(YORI_STRING));
-    MultilineEdit->LinesPopulated++;
-    YoriWinMultilineEditExpandDirtyRange(MultilineEdit, LineIndex, MultilineEdit->LinesPopulated);
-
-    return TRUE;
-}
 
 /**
  Find the length in characters needed to store a single continuous string
@@ -2085,30 +2144,161 @@ YoriWinMultilineEditSplitLines(
 DWORD
 YoriWinMultilineEditGetTextRangeLength(
     __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
-    __in DWORD FirstLine,
-    __in DWORD FirstCharOffset,
-    __in DWORD LastLine,
-    __in DWORD LastCharOffset,
-    __in DWORD NewlineLength
+    __in YORI_ALLOC_SIZE_T FirstLine,
+    __in YORI_ALLOC_SIZE_T FirstCharOffset,
+    __in YORI_ALLOC_SIZE_T LastLine,
+    __in YORI_ALLOC_SIZE_T LastCharOffset,
+    __in YORI_ALLOC_SIZE_T NewlineLength
     )
 {
     DWORD CharsInRange;
-    DWORD LinesInRange;
-    DWORD LineIndex;
+    YORI_ALLOC_SIZE_T LinesInRange;
+    YORI_ALLOC_SIZE_T LineIndex;
 
     if (FirstLine == LastLine) {
-        CharsInRange = LastCharOffset - FirstCharOffset;
+        ASSERT(LastCharOffset >= FirstCharOffset);
+        CharsInRange = 0;
+        if (FirstCharOffset >= MultilineEdit->LineArray[FirstLine].LengthInChars) {
+            CharsInRange = 0;
+        } else if (LastCharOffset >= MultilineEdit->LineArray[FirstLine].LengthInChars) {
+            CharsInRange = MultilineEdit->LineArray[FirstLine].LengthInChars - FirstCharOffset;
+        } else {
+            CharsInRange = LastCharOffset - FirstCharOffset;
+        }
     } else {
         LinesInRange = LastLine - FirstLine;
-        CharsInRange = MultilineEdit->LineArray[FirstLine].LengthInChars - FirstCharOffset;
+        CharsInRange = 0;
+        if (FirstCharOffset < MultilineEdit->LineArray[FirstLine].LengthInChars) {
+            CharsInRange += MultilineEdit->LineArray[FirstLine].LengthInChars - FirstCharOffset;
+        }
         for (LineIndex = FirstLine + 1; LineIndex < LastLine; LineIndex++) {
             CharsInRange += MultilineEdit->LineArray[LineIndex].LengthInChars;
         }
-        CharsInRange += LastCharOffset;
+        if (LastCharOffset < MultilineEdit->LineArray[LineIndex].LengthInChars) {
+            CharsInRange += LastCharOffset;
+        } else {
+            CharsInRange += MultilineEdit->LineArray[LineIndex].LengthInChars;
+        }
         CharsInRange += LinesInRange * NewlineLength;
     }
 
     return CharsInRange;
+}
+
+/**
+ Count the leading whitespace characters in a line and return a substring
+ that can be used to apply an indentation to a later line.
+
+ @param Line Specifies the contents of the line that contains the indentation
+        string to return.
+
+ @param Indent On successful completion, updated to point to the substring
+        within the line that consists of initial white space characters.
+ */
+VOID
+YoriWinMultilineEditGetIndentationOnString(
+    __in PCYORI_STRING Line,
+    __out PYORI_STRING Indent
+    )
+{
+    YORI_ALLOC_SIZE_T Index;
+
+    YoriLibInitEmptyString(Indent);
+    for (Index = 0; Index < Line->LengthInChars; Index++) {
+        if (Line->StartOfString[Index] != ' ' &&
+            Line->StartOfString[Index] != '\t') {
+
+            break;
+        }
+    }
+    if (Index > 0) {
+        Indent->StartOfString = Line->StartOfString;
+        Indent->LengthInChars = Index;
+    }
+}
+
+/**
+ Count the leading whitespace characters in a line and return a substring
+ that can be used to apply an indentation to a later line.
+
+ @param MultilineEdit Pointer to the multiline edit control containing the
+        contents of the buffer.
+
+ @param LineIndex Specifies the line that contains the indentation string
+        to return.
+
+ @param Indent On successful completion, updated to point to the substring
+        within the line that consists of initial white space characters.
+ */
+VOID
+YoriWinMultilineEditGetIndentationOnLine(
+    __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
+    __in YORI_ALLOC_SIZE_T LineIndex,
+    __out PYORI_STRING Indent
+    )
+{
+    PCYORI_STRING Line;
+
+    Line = &MultilineEdit->LineArray[LineIndex];
+    YoriWinMultilineEditGetIndentationOnString(Line, Indent);
+}
+
+/**
+ When an auto indent has been applied to a line and the backspace key is
+ pressed, search backwards through previous lines to find one that contains
+ less indentation than the current match, and return that line index along
+ with the new indentation to apply.
+
+ @param MultilineEdit Pointer to the multiline edit control containing the
+        contents of the buffer.
+
+ @param NewLine On successful completion, updated to indicate the line
+        index containing the new indentation.
+
+ @param NewIndent On successful completion, updated to point to a substring
+        within the NewLine buffer containing the new indentation to apply.
+        This should be a subset of the current indentation, up to zero
+        characters.
+ */
+VOID
+YoriWinMultilineEditFindPreviousIndentLine(
+    __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
+    __out PYORI_ALLOC_SIZE_T NewLine,
+    __out PYORI_STRING NewIndent
+    )
+{
+    YORI_ALLOC_SIZE_T ProbeLine;
+    PCYORI_STRING ProbeLineString;
+    YORI_STRING ProbeIndent;
+    YORI_STRING CurrentIndent;
+    YORI_ALLOC_SIZE_T MatchingLength;
+
+    ASSERT(MultilineEdit->AutoIndentApplied);
+    YoriWinMultilineEditGetIndentationOnLine(MultilineEdit, MultilineEdit->AutoIndentAppliedLine, &CurrentIndent);
+    ASSERT(CurrentIndent.LengthInChars >= MultilineEdit->AutoIndentSourceLength);
+    CurrentIndent.LengthInChars = MultilineEdit->AutoIndentSourceLength;
+
+    //
+    //  Count backwards from one prior to the current auto indent line up
+    //  to the first
+    //
+
+    for (ProbeLine = MultilineEdit->AutoIndentAppliedLine; ProbeLine > 0; ProbeLine--) {
+        ProbeLineString = &MultilineEdit->LineArray[ProbeLine - 1];
+        if (ProbeLineString->LengthInChars > 0) {
+            YoriWinMultilineEditGetIndentationOnString(ProbeLineString, &ProbeIndent);
+            MatchingLength = YoriLibCntStringMatchChars(&CurrentIndent, &ProbeIndent);
+            if (MatchingLength < CurrentIndent.LengthInChars) {
+                *NewLine = ProbeLine - 1;
+                ProbeIndent.LengthInChars = MatchingLength;
+                memcpy(NewIndent, &ProbeIndent, sizeof(YORI_STRING));
+                return;
+            }
+        }
+    }
+
+    *NewLine = 0;
+    YoriLibInitEmptyString(NewIndent);
 }
 
 /**
@@ -2141,29 +2331,40 @@ YoriWinMultilineEditGetTextRangeLength(
 VOID
 YoriWinMultilineEditPopulateTextRange(
     __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
-    __in DWORD FirstLine,
-    __in DWORD FirstCharOffset,
-    __in DWORD LastLine,
-    __in DWORD LastCharOffset,
+    __in YORI_ALLOC_SIZE_T FirstLine,
+    __in YORI_ALLOC_SIZE_T FirstCharOffset,
+    __in YORI_ALLOC_SIZE_T LastLine,
+    __in YORI_ALLOC_SIZE_T LastCharOffset,
     __in PYORI_STRING NewlineString,
     __inout PYORI_STRING SelectedText
     )
 {
-    DWORD CharsInRange;
-    DWORD LineIndex;
+    YORI_ALLOC_SIZE_T CharsInRange;
+    YORI_ALLOC_SIZE_T LineIndex;
     PYORI_STRING Line;
     LPTSTR Ptr;
 
     Line = &MultilineEdit->LineArray[FirstLine];
 
     if (FirstLine == LastLine) {
-        CharsInRange = LastCharOffset - FirstCharOffset;
-        memcpy(SelectedText->StartOfString, &Line->StartOfString[FirstCharOffset], CharsInRange * sizeof(TCHAR));
+        if (FirstCharOffset > Line->LengthInChars) {
+            CharsInRange = 0;
+        } else if (LastCharOffset > Line->LengthInChars) {
+            CharsInRange = Line->LengthInChars - FirstCharOffset;
+        } else {
+            CharsInRange = LastCharOffset - FirstCharOffset;
+        }
+
+        if (CharsInRange > 0) {
+            memcpy(SelectedText->StartOfString, &Line->StartOfString[FirstCharOffset], CharsInRange * sizeof(TCHAR));
+        }
         SelectedText->LengthInChars = CharsInRange;
     } else {
         Ptr = SelectedText->StartOfString;
-        memcpy(Ptr, &Line->StartOfString[FirstCharOffset], (Line->LengthInChars - FirstCharOffset) * sizeof(TCHAR));
-        Ptr += (Line->LengthInChars - FirstCharOffset);
+        if (FirstCharOffset < Line->LengthInChars) {
+            memcpy(Ptr, &Line->StartOfString[FirstCharOffset], (Line->LengthInChars - FirstCharOffset) * sizeof(TCHAR));
+            Ptr += (Line->LengthInChars - FirstCharOffset);
+        }
         for (LineIndex = FirstLine + 1; LineIndex < LastLine; LineIndex++) {
             memcpy(Ptr, NewlineString->StartOfString, NewlineString->LengthInChars * sizeof(TCHAR));
             Ptr += NewlineString->LengthInChars;
@@ -2174,10 +2375,15 @@ YoriWinMultilineEditPopulateTextRange(
         }
         memcpy(Ptr, NewlineString->StartOfString, NewlineString->LengthInChars * sizeof(TCHAR));
         Ptr += NewlineString->LengthInChars;
-        memcpy(Ptr, MultilineEdit->LineArray[LastLine].StartOfString, LastCharOffset * sizeof(TCHAR));
+        if (LastCharOffset < MultilineEdit->LineArray[LastLine].LengthInChars) {
+            CharsInRange = LastCharOffset;
+        } else {
+            CharsInRange = MultilineEdit->LineArray[LastLine].LengthInChars;
+        }
+        memcpy(Ptr, MultilineEdit->LineArray[LastLine].StartOfString, CharsInRange * sizeof(TCHAR));
         Ptr += LastCharOffset;
 
-        SelectedText->LengthInChars = (DWORD)(Ptr - SelectedText->StartOfString);
+        SelectedText->LengthInChars = (YORI_ALLOC_SIZE_T)(Ptr - SelectedText->StartOfString);
     }
 }
 
@@ -2206,31 +2412,47 @@ YoriWinMultilineEditPopulateTextRange(
  @param SelectedText On successful completion, populated with a newly
         allocated buffer containing the selected text.  The caller is
         expected to free this buffer with @ref YoriLibFreeStringContents .
- 
+
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 __success(return)
 BOOLEAN
 YoriWinMultilineEditGetTextRange(
     __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
-    __in DWORD FirstLine,
-    __in DWORD FirstCharOffset,
-    __in DWORD LastLine,
-    __in DWORD LastCharOffset,
+    __in YORI_ALLOC_SIZE_T FirstLine,
+    __in YORI_ALLOC_SIZE_T FirstCharOffset,
+    __in YORI_ALLOC_SIZE_T LastLine,
+    __in YORI_ALLOC_SIZE_T LastCharOffset,
     __in PYORI_STRING NewlineString,
     __out PYORI_STRING SelectedText
     )
 {
     DWORD CharsInRange;
 
-    CharsInRange = YoriWinMultilineEditGetTextRangeLength(MultilineEdit, FirstLine, FirstCharOffset, LastLine, LastCharOffset, NewlineString->LengthInChars);
+    CharsInRange = YoriWinMultilineEditGetTextRangeLength(MultilineEdit,
+                                                          FirstLine,
+                                                          FirstCharOffset,
+                                                          LastLine,
+                                                          LastCharOffset,
+                                                          NewlineString->LengthInChars);
 
-    if (!YoriLibAllocateString(SelectedText, CharsInRange + 1)) {
+    CharsInRange = CharsInRange + 1;
+    if (!YoriLibIsSizeAllocatable(CharsInRange)) {
         return FALSE;
     }
 
-    YoriWinMultilineEditPopulateTextRange(MultilineEdit, FirstLine, FirstCharOffset, LastLine, LastCharOffset, NewlineString, SelectedText);
-    SelectedText->StartOfString[CharsInRange] = '\0';
+    if (!YoriLibAllocateString(SelectedText, (YORI_ALLOC_SIZE_T)CharsInRange)) {
+        return FALSE;
+    }
+
+    YoriWinMultilineEditPopulateTextRange(MultilineEdit,
+                                          FirstLine,
+                                          FirstCharOffset,
+                                          LastLine,
+                                          LastCharOffset,
+                                          NewlineString,
+                                          SelectedText);
+    SelectedText->StartOfString[CharsInRange - 1] = '\0';
 
     return TRUE;
 }
@@ -2244,8 +2466,21 @@ YoriWinMultilineEditGetTextRange(
  @param MultilineEdit Pointer to the multiline edit control containing the
         contents of the buffer.
 
+ @param ProcessingBackspace If TRUE, this delete is a response to the
+        backspace key, which means any auto indent that has previously
+        been applied should remain in effect.  Backspace processing should
+        clear this explicitly if the indentation has been reduced to zero.
+        If FALSE, this routine is considered a buffer modification that
+        invalidates auto indent.
+
  @param ProcessingUndo If TRUE, this delete is being invoked by undo and
         should not try to create or maintain an undo entry.
+
+ @param ChainWithNext If TRUE, when this delete is undone, the next operation
+        should be undone with it.  This allows combined insert + delete
+        operations to be combined for undo.  If FALSE, this delete is a normal
+        standalone operation to undo.  If ProcessingUndo is TRUE, this
+        parameter is meaningless.
 
  @param FirstLine Specifies the line that contains the first character to
         remove.
@@ -2258,52 +2493,97 @@ YoriWinMultilineEditGetTextRange(
 
  @param LastCharOffset Specifies the offset beyond the last character to
         remove.
- 
+
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 __success(return)
 BOOLEAN
 YoriWinMultilineEditDeleteTextRange(
     __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
+    __in BOOLEAN ProcessingBackspace,
     __in BOOLEAN ProcessingUndo,
-    __in DWORD FirstLine,
-    __in DWORD FirstCharOffset,
-    __in DWORD LastLine,
-    __in DWORD LastCharOffset
+    __in BOOLEAN ChainWithNext,
+    __in YORI_ALLOC_SIZE_T FirstLine,
+    __in YORI_ALLOC_SIZE_T FirstCharOffset,
+    __in YORI_ALLOC_SIZE_T LastLine,
+    __in YORI_ALLOC_SIZE_T LastCharOffset
     )
 {
     PYORI_WIN_CTRL_MULTILINE_EDIT_UNDO Undo = NULL;
-    DWORD CharsToCopy;
-    DWORD CharsToDelete;
-    DWORD LinesToDelete;
-    DWORD LinesToCopy;
-    DWORD FirstLineIndexToKeep;
-    DWORD LineIndexToDelete;
+    YORI_ALLOC_SIZE_T CharsToCopy;
+    YORI_ALLOC_SIZE_T CharsToDelete;
+    YORI_ALLOC_SIZE_T LinesToDelete;
+    YORI_ALLOC_SIZE_T LinesToCopy;
+    YORI_ALLOC_SIZE_T FirstLineIndexToKeep;
+    YORI_ALLOC_SIZE_T LineIndexToDelete;
     PYORI_STRING Line;
     PYORI_STRING FinalLine;
 
+    if (!ProcessingBackspace) {
+        MultilineEdit->AutoIndentApplied = FALSE;
+    }
+
+    //
+    //  In the majority of cases, selection ought to be cleared due to the
+    //  input that triggered the operation.  It's cleared here
+    //  unconditionally though because maintaining the same text range as
+    //  selected implies manipulating the selection range to reflect
+    //  changes earlier in the buffer (eg. if lines 3-5 are selected and
+    //  line 2 is deleted, selection logically moves up.)  Sometimes all
+    //  text selected is being deleted, and the selection would need to
+    //  be cleared anyway.
+    //
+
+    YoriWinMultilineEditClearSelection(MultilineEdit);
+
     if (!ProcessingUndo) {
         BOOLEAN RangeBeforeExistingRange;
-        Undo = YoriWinMultilineEditGetUndoRecordForOperation(MultilineEdit, YoriWinMultilineEditUndoDeleteText, FirstLine, FirstCharOffset, LastLine, LastCharOffset, &RangeBeforeExistingRange);
+        Undo = YoriWinMultilineEditGetUndoRecordForOperation(MultilineEdit,
+                                                             YoriWinMultilineEditUndoDeleteText,
+                                                             FirstLine,
+                                                             FirstCharOffset,
+                                                             LastLine,
+                                                             LastCharOffset,
+                                                             &RangeBeforeExistingRange);
         if (Undo != NULL) {
             YORI_STRING Newline;
             YORI_STRING Text;
             DWORD CharsNeeded;
             YoriLibConstantString(&Newline, _T("\n"));
 
-            CharsNeeded = YoriWinMultilineEditGetTextRangeLength(MultilineEdit, FirstLine, FirstCharOffset, LastLine, LastCharOffset, Newline.LengthInChars);
+            CharsNeeded = YoriWinMultilineEditGetTextRangeLength(MultilineEdit,
+                                                                 FirstLine,
+                                                                 FirstCharOffset,
+                                                                 LastLine,
+                                                                 LastCharOffset,
+                                                                 Newline.LengthInChars);
+
+            if (!YoriLibIsSizeAllocatable(CharsNeeded)) {
+                return FALSE;
+            }
 
             if (!YoriWinMultilineEditEnsureSpaceBeforeOrAfterString(&Undo->u.DeleteText.Text,
-                                                                    CharsNeeded,
+                                                                    (YORI_ALLOC_SIZE_T)CharsNeeded,
                                                                     RangeBeforeExistingRange,
                                                                     &Text)) {
                 return FALSE;
             }
 
-            YoriWinMultilineEditPopulateTextRange(MultilineEdit, FirstLine, FirstCharOffset, LastLine, LastCharOffset, &Newline, &Text);
+            YoriWinMultilineEditPopulateTextRange(MultilineEdit,
+                                                  FirstLine,
+                                                  FirstCharOffset,
+                                                  LastLine,
+                                                  LastCharOffset,
+                                                  &Newline,
+                                                  &Text);
+
             if (RangeBeforeExistingRange) {
                 Undo->u.DeleteText.FirstLine = FirstLine;
                 Undo->u.DeleteText.FirstCharOffset = FirstCharOffset;
+            }
+
+            if (ChainWithNext) {
+                Undo->ChainWithNext = TRUE;
             }
         }
     }
@@ -2335,7 +2615,7 @@ YoriWinMultilineEditDeleteTextRange(
                     CharsToCopy * sizeof(TCHAR));
         }
 
-        Line->LengthInChars -= CharsToDelete;
+        Line->LengthInChars = Line->LengthInChars - CharsToDelete;
         YoriWinMultilineEditExpandDirtyRange(MultilineEdit, FirstLine, FirstLine);
         MultilineEdit->UserModified = TRUE;
         return TRUE;
@@ -2358,12 +2638,12 @@ YoriWinMultilineEditDeleteTextRange(
 
     //
     //  If the first part of the first line and the last part of the last
-    //  line (the unselected regions of each) don't fit in the final line's
+    //  line (the unselected regions of each) don't fit in the first line's
     //  allocation, reallocate it.
     //
 
     if (FinalLine != NULL &&
-        FirstCharOffset + CharsToCopy > FinalLine->LengthAllocated) {
+        FirstCharOffset + CharsToCopy > Line->LengthAllocated) {
 
         YORI_STRING NewLine;
         DWORD CharsFromFirstLine;
@@ -2457,16 +2737,16 @@ YoriWinMultilineEditDeleteTextRange(
  */
 VOID
 YoriWinMultilineEditCalculateEndingPointOfText(
-    __in DWORD FirstLine,
-    __in DWORD FirstCharOffset,
+    __in YORI_ALLOC_SIZE_T FirstLine,
+    __in YORI_ALLOC_SIZE_T FirstCharOffset,
     __in PYORI_STRING Text,
-    __out PDWORD LastLine,
-    __out PDWORD LastCharOffset
+    __out PYORI_ALLOC_SIZE_T LastLine,
+    __out PYORI_ALLOC_SIZE_T LastCharOffset
     )
 {
-    DWORD LineCount;
-    DWORD Index;
-    DWORD LineCharCount;
+    YORI_ALLOC_SIZE_T LineCount;
+    YORI_ALLOC_SIZE_T Index;
+    YORI_ALLOC_SIZE_T LineCharCount;
 
     //
     //  Count the number of lines in the input text.  This may be zero.
@@ -2502,19 +2782,39 @@ YoriWinMultilineEditCalculateEndingPointOfText(
 
  @param MultilineEdit Pointer to the multiline edit control.
 
- @param NewLineCount Specifies the new total number of lines that the control
-        should have allocated.
+ @param LinesRequired Specifies the new minimum number of lines that the
+        control should have allocated.
+
+ @param LinesDesired Specifies the number of lines that should be allocated if
+        possible.
 
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 BOOLEAN
 YoriWinMultilineEditReallocateLineArray(
     __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
-    __in DWORD NewLineCount
+    __in DWORD LinesRequired,
+    __in DWORD LinesDesired
     )
 {
+    DWORD BytesRequired;
+    DWORD BytesDesired;
     PYORI_STRING NewLineArray;
-    ASSERT(NewLineCount > MultilineEdit->LinesPopulated);
+    YORI_ALLOC_SIZE_T BytesToAllocate;
+    YORI_ALLOC_SIZE_T NewLineCount;
+
+    ASSERT(LinesDesired >= LinesRequired);
+    ASSERT(LinesRequired > MultilineEdit->LinesPopulated);
+
+    BytesRequired = LinesRequired * sizeof(YORI_STRING);
+    BytesDesired = LinesDesired * sizeof(YORI_STRING);
+
+    BytesToAllocate = YoriLibMaximumAllocationInRange(BytesRequired, BytesDesired);
+    if (BytesToAllocate == 0) {
+        return FALSE;
+    }
+
+    NewLineCount = BytesToAllocate / sizeof(YORI_STRING);
 
     NewLineArray = YoriLibReferencedMalloc(NewLineCount * sizeof(YORI_STRING));
     if (NewLineArray == NULL) {
@@ -2532,6 +2832,79 @@ YoriWinMultilineEditReallocateLineArray(
 }
 
 /**
+ Trim any autoindent back to the specified offset.
+
+ @param MultilineEdit Pointer to the multiline edit control.
+
+ @param LineIndex The line that may have an autoindent.
+
+ @param MaxOffset The maximum amount of autoindent to retain.
+
+ @return TRUE if autoindent was removed, FALSE if it was not.
+ */
+BOOLEAN
+YoriWinMultilineEditTrimAutoIndent(
+    __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
+    __in YORI_ALLOC_SIZE_T LineIndex,
+    __in YORI_ALLOC_SIZE_T MaxOffset
+    )
+{
+    PYORI_STRING Line;
+    YORI_ALLOC_SIZE_T CharsToTruncate;
+    BOOLEAN Result;
+
+    if (!MultilineEdit->AutoIndentApplied) {
+        return FALSE;
+    }
+
+    ASSERT(MultilineEdit->AutoIndentAppliedLine == LineIndex);
+    if (MultilineEdit->AutoIndentAppliedLine != LineIndex) {
+        return FALSE;
+    }
+
+    ASSERT(LineIndex < MultilineEdit->LinesPopulated);
+    if (LineIndex >=MultilineEdit->LinesPopulated) {
+        return FALSE;
+    }
+
+    Line = &MultilineEdit->LineArray[LineIndex];
+
+    ASSERT(Line->LengthInChars == MultilineEdit->AutoIndentSourceLength);
+    ASSERT(Line->LengthInChars != 0);
+    if (Line->LengthInChars == 0) {
+        MultilineEdit->AutoIndentApplied = FALSE;
+        return FALSE;
+    }
+
+    ASSERT(MaxOffset < Line->LengthInChars);
+    if (MaxOffset >= Line->LengthInChars) {
+        return FALSE;
+    }
+
+    CharsToTruncate = Line->LengthInChars - MaxOffset;
+    if (CharsToTruncate == 0) {
+        return FALSE;
+    }
+
+    Result = YoriWinMultilineEditDeleteTextRange(MultilineEdit,
+                                                 TRUE,
+                                                 FALSE,
+                                                 FALSE,
+                                                 LineIndex,
+                                                 MaxOffset,
+                                                 LineIndex,
+                                                 MaxOffset + CharsToTruncate);
+    if (Result) {
+        MultilineEdit->AutoIndentSourceLength = MaxOffset;
+        if (MaxOffset == 0) {
+            MultilineEdit->AutoIndentApplied = FALSE;
+        }
+    }
+
+    return Result;
+}
+
+/**
  Create new empty lines after an insertion point, and move all existing lines
  further down.
 
@@ -2546,32 +2919,35 @@ YoriWinMultilineEditReallocateLineArray(
 BOOLEAN
 YoriWinMultilineEditInsertLines(
     __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
-    __in DWORD FirstLine,
-    __in DWORD LineCount
+    __in YORI_ALLOC_SIZE_T FirstLine,
+    __in YORI_ALLOC_SIZE_T LineCount
     )
 {
-    DWORD SourceLine;
-    DWORD TargetLine;
-    DWORD LinesNeeded;
-    DWORD Index;
+    YORI_ALLOC_SIZE_T SourceLine;
+    YORI_ALLOC_SIZE_T TargetLine;
+    YORI_ALLOC_SIZE_T Index;
+    DWORD LinesRequired;
+    DWORD LinesDesired;
 
-    LinesNeeded = MultilineEdit->LinesPopulated + LineCount;
+    LinesRequired = MultilineEdit->LinesPopulated;
+    LinesRequired = LinesRequired + LineCount;
     if (MultilineEdit->LinesPopulated == 0) {
-        LinesNeeded++;
+        LinesRequired++;
     }
-    if (LinesNeeded > MultilineEdit->LinesAllocated) {
-        DWORD NewLineCount;
-        NewLineCount = MultilineEdit->LinesAllocated * 2;
+    if (LinesRequired > MultilineEdit->LinesAllocated) {
 
-        if (NewLineCount < LinesNeeded) {
-            NewLineCount = LinesNeeded;
-            NewLineCount += 0x1000;
-            NewLineCount = NewLineCount & ~(0xfff);
-        } else if (NewLineCount < 0x1000) {
-            NewLineCount = 0x1000;
+        LinesDesired = MultilineEdit->LinesAllocated;
+        LinesDesired = LinesDesired * 2;
+
+        if (LinesDesired < LinesRequired) {
+            LinesDesired = LinesRequired;
+            LinesDesired = LinesDesired + 0x1000;
+            LinesDesired = LinesDesired & ~(0xfff);
+        } else if (LinesDesired < 0x1000) {
+            LinesDesired = 0x1000;
         }
 
-        if (!YoriWinMultilineEditReallocateLineArray(MultilineEdit, NewLineCount)) {
+        if (!YoriWinMultilineEditReallocateLineArray(MultilineEdit, LinesRequired, LinesDesired)) {
             return FALSE;
         }
     }
@@ -2595,13 +2971,14 @@ YoriWinMultilineEditInsertLines(
         YoriLibInitEmptyString(&MultilineEdit->LineArray[Index]);
     }
 
-    MultilineEdit->LinesPopulated = LinesNeeded;
+    MultilineEdit->LinesPopulated = (YORI_ALLOC_SIZE_T)LinesRequired;
     return TRUE;
 }
 
 /**
  Insert a block of text, which may contain newlines, into the control at the
- specified position.
+ specified position.  Currently, this happens in three scenarios: user input,
+ clipboard paste, or undo.
 
  @param MultilineEdit Pointer to the multiline edit control.
 
@@ -2629,26 +3006,31 @@ BOOLEAN
 YoriWinMultilineEditInsertTextRange(
     __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
     __in BOOLEAN ProcessingUndo,
-    __in DWORD FirstLine,
-    __in DWORD FirstCharOffset,
+    __in YORI_ALLOC_SIZE_T FirstLine,
+    __in YORI_ALLOC_SIZE_T FirstCharOffset,
     __in PYORI_STRING Text,
-    __out PDWORD LastLine,
-    __out PDWORD LastCharOffset
+    __out PYORI_ALLOC_SIZE_T LastLine,
+    __out PYORI_ALLOC_SIZE_T LastCharOffset
     )
 {
     PYORI_WIN_CTRL_MULTILINE_EDIT_UNDO Undo = NULL;
-    DWORD LineCount;
-    DWORD LineIndex;
-    DWORD Index;
-    DWORD CharsThisLine;
-    DWORD CharsFirstLine;
-    DWORD CharsLastLine;
-    DWORD CharsNeeded;
-    DWORD LocalLastLine;
-    DWORD LocalLastCharOffset;
+    YORI_ALLOC_SIZE_T LineCount;
+    YORI_ALLOC_SIZE_T LineIndex;
+    YORI_ALLOC_SIZE_T Index;
+    YORI_ALLOC_SIZE_T CharsThisLine;
+    YORI_ALLOC_SIZE_T CharsFirstLine;
+    YORI_ALLOC_SIZE_T CharsLastLine;
+    YORI_ALLOC_SIZE_T CharsNeeded;
+    YORI_ALLOC_SIZE_T LocalLastLine;
+    YORI_ALLOC_SIZE_T LocalLastCharOffset;
     YORI_STRING TrailingPortionOfFirstLine;
+    YORI_STRING AutoIndentLeadingString;
     PYORI_STRING Line;
     BOOLEAN TerminateLine;
+    BOOLEAN TruncateFirstLine;
+
+    TruncateFirstLine = FALSE;
+    YoriLibInitEmptyString(&AutoIndentLeadingString);
 
     //
     //  Count the number of lines in the input text.  This may be zero.
@@ -2656,6 +3038,50 @@ YoriWinMultilineEditInsertTextRange(
 
     YoriWinMultilineEditCalculateEndingPointOfText(FirstLine, FirstCharOffset, Text, &LocalLastLine, &LocalLastCharOffset);
     LineCount = LocalLastLine - FirstLine;
+
+    //
+    //  If auto indent is in effect, and the text ends on the beginning of
+    //  a subsequent line, calculate any indentation prefix.
+    //
+
+    if (LineCount > 0 &&
+        LocalLastCharOffset == 0 &&
+        MultilineEdit->AutoIndent &&
+        !ProcessingUndo &&
+        FirstLine < MultilineEdit->LinesPopulated) {
+
+        YoriWinMultilineEditGetIndentationOnLine(MultilineEdit, FirstLine, &AutoIndentLeadingString);
+
+        //
+        //  Truncate if a line is being inserted within the indent itself.
+        //  This is to avoid double-indenting - the new line will contain the
+        //  trailing portion of the current line's indent, and auto indent
+        //  should only fill in the leading portion, which may be empty.
+        //
+
+        if (FirstCharOffset < AutoIndentLeadingString.LengthInChars) {
+            AutoIndentLeadingString.LengthInChars = FirstCharOffset;
+        }
+        LocalLastCharOffset = AutoIndentLeadingString.LengthInChars;
+
+        //
+        //  If the first line is entirely autoindent, and the first character
+        //  is a newline, that indicates the autoindent should be removed.
+        //  Do this last, along with other first line manipulations, which
+        //  helps ensure the indent string is still available when needed.
+        //
+
+        if (AutoIndentLeadingString.LengthInChars > 0 && Text->LengthInChars > 0) {
+            TCHAR FirstChar;
+            Line = &MultilineEdit->LineArray[FirstLine];
+            FirstChar = Text->StartOfString[0];
+            if (AutoIndentLeadingString.LengthInChars == Line->LengthInChars &&
+                (FirstChar == '\n' || FirstChar == '\r')) {
+
+                TruncateFirstLine = TRUE;
+            }
+        }
+    }
 
     //
     //  If new lines are being added, check if the line array is large
@@ -2682,10 +3108,15 @@ YoriWinMultilineEditInsertTextRange(
     if (FirstLine < MultilineEdit->LinesPopulated) {
         Line = &MultilineEdit->LineArray[FirstLine];
         if (FirstCharOffset < Line->LengthInChars) {
+            ASSERT(Line->MemoryToFree != NULL);
+            YoriLibReference(Line->MemoryToFree);
+            TrailingPortionOfFirstLine.MemoryToFree = Line->MemoryToFree;
             TrailingPortionOfFirstLine.StartOfString = &Line->StartOfString[FirstCharOffset];
             TrailingPortionOfFirstLine.LengthInChars = Line->LengthInChars - FirstCharOffset;
         }
     }
+
+    MultilineEdit->AutoIndentApplied = FALSE;
 
     //
     //  Go through each line.  For all lines except the first, construct the
@@ -2731,21 +3162,47 @@ YoriWinMultilineEditInsertTextRange(
                 ASSERT(Line->LengthInChars == 0);
                 CharsNeeded = CharsThisLine;
                 if (LineIndex == LineCount) {
-                    CharsNeeded += TrailingPortionOfFirstLine.LengthInChars;
+                    CharsNeeded += AutoIndentLeadingString.LengthInChars + TrailingPortionOfFirstLine.LengthInChars;
                 }
                 if (Line->LengthAllocated < CharsNeeded) {
                     YoriLibFreeStringContents(Line);
                     if (!YoriLibAllocateString(Line, CharsNeeded + YORI_WIN_MULTILINE_EDIT_LINE_PADDING)) {
+                        YoriLibFreeStringContents(&TrailingPortionOfFirstLine);
                         return FALSE;
                     }
                 }
 
+                //
+                //  On the final line, apply any auto indent if needed.  Auto
+                //  indent wouldn't make sense if new data is arriving.
+                //
+
+                Line->LengthInChars = 0;
+                if (LineIndex == LineCount) {
+                    if (AutoIndentLeadingString.LengthInChars > 0) {
+
+                        ASSERT(CharsThisLine == 0);
+
+                        memcpy(Line->StartOfString,
+                               AutoIndentLeadingString.StartOfString,
+                               AutoIndentLeadingString.LengthInChars * sizeof(TCHAR));
+                        Line->LengthInChars = AutoIndentLeadingString.LengthInChars;
+                        MultilineEdit->AutoIndentApplied = TRUE;
+                        MultilineEdit->AutoIndentSourceLength = AutoIndentLeadingString.LengthInChars;
+                        MultilineEdit->AutoIndentAppliedLine = LocalLastLine;
+                    }
+                }
+
+                //
+                //  Add the new text to the beginning of the line
+                //
+
                 if (CharsThisLine > 0) {
-                    memcpy(Line->StartOfString,
+                    memcpy(&Line->StartOfString[Line->LengthInChars],
                            &Text->StartOfString[Index - CharsThisLine],
                            CharsThisLine * sizeof(TCHAR));
                 }
-                Line->LengthInChars = CharsThisLine;
+                Line->LengthInChars = Line->LengthInChars + CharsThisLine;
 
                 //
                 //  On the final line, copy the final portion currently in the
@@ -2755,12 +3212,12 @@ YoriWinMultilineEditInsertTextRange(
                 //
 
                 if (LineIndex == LineCount) {
-                    CharsLastLine = CharsThisLine;
+                    CharsLastLine = AutoIndentLeadingString.LengthInChars + CharsThisLine;
                     if (TrailingPortionOfFirstLine.LengthInChars > 0) {
-                        memcpy(&Line->StartOfString[CharsThisLine],
+                        memcpy(&Line->StartOfString[CharsThisLine + AutoIndentLeadingString.LengthInChars],
                                TrailingPortionOfFirstLine.StartOfString,
                                TrailingPortionOfFirstLine.LengthInChars * sizeof(TCHAR));
-                        Line->LengthInChars += TrailingPortionOfFirstLine.LengthInChars;
+                        Line->LengthInChars = Line->LengthInChars + TrailingPortionOfFirstLine.LengthInChars;
                     }
                 }
             }
@@ -2773,7 +3230,7 @@ YoriWinMultilineEditInsertTextRange(
             //
 
             if (Index + 1 < Text->LengthInChars &&
-                Text->StartOfString[Index] == '\r' && 
+                Text->StartOfString[Index] == '\r' &&
                 Text->StartOfString[Index + 1] == '\n') {
 
                 Index++;
@@ -2792,14 +3249,27 @@ YoriWinMultilineEditInsertTextRange(
     //  the newly inserted text.  Otherwise, that text is on a different
     //  line so we can completely ignore it.
     //
+    //  We don't need any auto indent string anymore, since that can't
+    //  apply to the first line (and only makes sense if multiple lines
+    //  were present.)
+    //
 
     if (LineCount != 0) {
+        YoriLibFreeStringContents(&TrailingPortionOfFirstLine);
         YoriLibInitEmptyString(&TrailingPortionOfFirstLine);
+        YoriLibInitEmptyString(&AutoIndentLeadingString);
+    } else {
+        //
+        //  Autoindent shouldn't exist unless there are multiple lines.
+        //
+
+        ASSERT(AutoIndentLeadingString.StartOfString == NULL);
     }
 
     Line = &MultilineEdit->LineArray[FirstLine];
     if (FirstCharOffset + CharsFirstLine + TrailingPortionOfFirstLine.LengthInChars > Line->LengthAllocated) {
-        if (!YoriLibReallocateString(Line, FirstCharOffset + CharsFirstLine + TrailingPortionOfFirstLine.LengthInChars + YORI_WIN_MULTILINE_EDIT_LINE_PADDING)) {
+        if (!YoriLibReallocString(Line, FirstCharOffset + CharsFirstLine + TrailingPortionOfFirstLine.LengthInChars + YORI_WIN_MULTILINE_EDIT_LINE_PADDING)) {
+            YoriLibFreeStringContents(&TrailingPortionOfFirstLine);
             return FALSE;
         }
     }
@@ -2819,8 +3289,10 @@ YoriWinMultilineEditInsertTextRange(
     }
     Line->LengthInChars = FirstCharOffset + CharsFirstLine + TrailingPortionOfFirstLine.LengthInChars;
 
+    YoriLibFreeStringContents(&TrailingPortionOfFirstLine);
+
     if (LineCount > 0) {
-        YoriWinMultilineEditExpandDirtyRange(MultilineEdit, FirstLine, (DWORD)-1);
+        YoriWinMultilineEditExpandDirtyRange(MultilineEdit, FirstLine, (YORI_ALLOC_SIZE_T)-1);
         ASSERT(LocalLastCharOffset == CharsLastLine);
     } else {
         YoriWinMultilineEditExpandDirtyRange(MultilineEdit, FirstLine, FirstLine);
@@ -2829,10 +3301,34 @@ YoriWinMultilineEditInsertTextRange(
 
     if (!ProcessingUndo) {
         BOOLEAN RangeBeforeExistingRange;
-        Undo = YoriWinMultilineEditGetUndoRecordForOperation(MultilineEdit, YoriWinMultilineEditUndoInsertText, FirstLine, FirstCharOffset, LocalLastLine, LocalLastCharOffset, &RangeBeforeExistingRange);
+        Undo = YoriWinMultilineEditGetUndoRecordForOperation(MultilineEdit,
+                                                             YoriWinMultilineEditUndoInsertText,
+                                                             FirstLine,
+                                                             FirstCharOffset,
+                                                             LocalLastLine,
+                                                             LocalLastCharOffset,
+                                                             &RangeBeforeExistingRange);
         if (Undo != NULL) {
             Undo->u.InsertText.LastLineToDelete = LocalLastLine;
             Undo->u.InsertText.LastCharOffsetToDelete = LocalLastCharOffset;
+        }
+
+        //
+        //  Truncate the first line if it was entirely autoindent.  This
+        //  generates its own undo record so doesn't need to be performed
+        //  implicitly during undo.
+        //
+
+        if (TruncateFirstLine) {
+            Line = &MultilineEdit->LineArray[FirstLine];
+            YoriWinMultilineEditDeleteTextRange(MultilineEdit,
+                                                TRUE,
+                                                FALSE,
+                                                TRUE,
+                                                FirstLine,
+                                                0,
+                                                FirstLine,
+                                                Line->LengthInChars);
         }
     }
 
@@ -2880,26 +3376,28 @@ BOOLEAN
 YoriWinMultilineEditOverwriteTextRange(
     __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
     __in BOOLEAN ProcessingUndo,
-    __in DWORD FirstLine,
-    __in DWORD FirstCharOffset,
+    __in YORI_ALLOC_SIZE_T FirstLine,
+    __in YORI_ALLOC_SIZE_T FirstCharOffset,
     __in PYORI_STRING Text,
-    __out PDWORD LastLine,
-    __out PDWORD LastCharOffset
+    __out PYORI_ALLOC_SIZE_T LastLine,
+    __out PYORI_ALLOC_SIZE_T LastCharOffset
     )
 {
     PYORI_WIN_CTRL_MULTILINE_EDIT_UNDO Undo = NULL;
-    DWORD LineCount;
-    DWORD LineIndex;
-    DWORD Index;
-    DWORD CharsThisLine;
-    DWORD CharsLastLine;
-    DWORD CharsNeeded;
-    DWORD StartOffsetThisLine;
-    DWORD LocalLastLine;
-    DWORD LocalLastCharOffset;
+    YORI_ALLOC_SIZE_T LineCount;
+    YORI_ALLOC_SIZE_T LineIndex;
+    YORI_ALLOC_SIZE_T Index;
+    YORI_ALLOC_SIZE_T CharsThisLine;
+    YORI_ALLOC_SIZE_T CharsLastLine;
+    YORI_ALLOC_SIZE_T CharsNeeded;
+    YORI_ALLOC_SIZE_T StartOffsetThisLine;
+    YORI_ALLOC_SIZE_T LocalLastLine;
+    YORI_ALLOC_SIZE_T LocalLastCharOffset;
     PYORI_STRING Line;
     BOOLEAN TerminateLine;
     BOOLEAN MoveTrailingTextToNextLine;
+
+    MultilineEdit->AutoIndentApplied = FALSE;
 
     if (!ProcessingUndo) {
         BOOLEAN RangeBeforeExistingRange;
@@ -2910,7 +3408,13 @@ YoriWinMultilineEditOverwriteTextRange(
         //  occur before it, so the end range specified here can be bogus.
         //
 
-        Undo = YoriWinMultilineEditGetUndoRecordForOperation(MultilineEdit, YoriWinMultilineEditUndoOverwriteText, FirstLine, FirstCharOffset, FirstLine, FirstCharOffset, &RangeBeforeExistingRange);
+        Undo = YoriWinMultilineEditGetUndoRecordForOperation(MultilineEdit,
+                                                             YoriWinMultilineEditUndoOverwriteText,
+                                                             FirstLine,
+                                                             FirstCharOffset,
+                                                             FirstLine,
+                                                             FirstCharOffset,
+                                                             &RangeBeforeExistingRange);
         if (Undo != NULL) {
 
             //
@@ -2923,12 +3427,9 @@ YoriWinMultilineEditOverwriteTextRange(
 
             if (Undo->u.OverwriteText.Text.StartOfString == NULL) {
                 Line = &MultilineEdit->LineArray[FirstLine];
-                if (!YoriLibAllocateString(&Undo->u.OverwriteText.Text, Line->LengthInChars)) {
+                if (!YoriLibCopyString(&Undo->u.OverwriteText.Text, Line)) {
                     return FALSE;
                 }
-
-                memcpy(Undo->u.OverwriteText.Text.StartOfString, Line->StartOfString, Line->LengthInChars * sizeof(TCHAR));
-                Undo->u.OverwriteText.Text.LengthInChars = Line->LengthInChars;
 
                 Undo->u.OverwriteText.FirstLineToDelete = FirstLine;
                 Undo->u.OverwriteText.FirstCharOffsetToDelete = 0;
@@ -3077,7 +3578,7 @@ YoriWinMultilineEditOverwriteTextRange(
             //
 
             if (Index + 1 < Text->LengthInChars &&
-                Text->StartOfString[Index] == '\r' && 
+                Text->StartOfString[Index] == '\r' &&
                 Text->StartOfString[Index + 1] == '\n') {
 
                 Index++;
@@ -3094,7 +3595,7 @@ YoriWinMultilineEditOverwriteTextRange(
     //
 
     if (LineCount > 0) {
-        YoriWinMultilineEditExpandDirtyRange(MultilineEdit, FirstLine, (DWORD)-1);
+        YoriWinMultilineEditExpandDirtyRange(MultilineEdit, FirstLine, (YORI_ALLOC_SIZE_T)-1);
         *LastLine = FirstLine + LineCount;
         *LastCharOffset = CharsLastLine;
         ASSERT(LocalLastLine == FirstLine + LineCount);
@@ -3126,47 +3627,50 @@ BOOLEAN
 YoriWinMultilineEditAppendLinesNoDataCopy(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
     __in PYORI_STRING NewLines,
-    __in DWORD NewLineCount
+    __in YORI_ALLOC_SIZE_T NewLineCount
     )
 {
     PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit;
     PYORI_WIN_CTRL Ctrl;
+    DWORD LinesRequired;
+    DWORD LinesDesired;
 
     Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
     MultilineEdit = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_MULTILINE_EDIT, Ctrl);
 
     YoriWinMultilineEditClearUndo(MultilineEdit);
 
-    if (NewLineCount + MultilineEdit->LinesPopulated > MultilineEdit->LinesAllocated) {
-        DWORD NewLinesToAllocate;
-        NewLinesToAllocate = MultilineEdit->LinesAllocated * 2;
+    LinesRequired = MultilineEdit->LinesPopulated;
+    LinesRequired = LinesRequired + NewLineCount;
+    if (MultilineEdit->LinesPopulated == 0) {
+        LinesRequired++;
+    }
 
-        if (NewLinesToAllocate < NewLineCount) {
-            NewLinesToAllocate = NewLineCount;
-            NewLinesToAllocate += 0x1000;
-            NewLinesToAllocate = NewLinesToAllocate & ~(0xfff);
-        } else if (NewLinesToAllocate < 0x1000) {
-            NewLinesToAllocate = 0x1000;
+    if (LinesRequired > MultilineEdit->LinesAllocated) {
+
+        LinesDesired = MultilineEdit->LinesAllocated;
+        LinesDesired = LinesDesired * 2;
+
+        if (LinesDesired < LinesRequired) {
+            LinesDesired = LinesRequired;
+            LinesDesired = LinesDesired + 0x1000;
+            LinesDesired = LinesDesired & ~(0xfff);
+        } else if (LinesDesired < 0x1000) {
+            LinesDesired = 0x1000;
         }
 
-        if (!YoriWinMultilineEditReallocateLineArray(MultilineEdit, NewLinesToAllocate)) {
+        if (!YoriWinMultilineEditReallocateLineArray(MultilineEdit, LinesRequired, LinesDesired)) {
             return FALSE;
         }
     }
 
     memcpy(&MultilineEdit->LineArray[MultilineEdit->LinesPopulated], NewLines, NewLineCount * sizeof(YORI_STRING));
     YoriWinMultilineEditExpandDirtyRange(MultilineEdit, MultilineEdit->LinesPopulated, MultilineEdit->LinesPopulated + NewLineCount);
-    MultilineEdit->LinesPopulated += NewLineCount;
+    MultilineEdit->LinesPopulated = MultilineEdit->LinesPopulated + NewLineCount;
 
     YoriWinMultilineEditPaint(MultilineEdit);
     return TRUE;
 }
-
-//
-//  =========================================
-//  SELECTION FUNCTIONS
-//  =========================================
-//
 
 /**
  If a selection is currently active, delete all text in the selection.
@@ -3175,7 +3679,7 @@ YoriWinMultilineEditAppendLinesNoDataCopy(
 
  @param CtrlHandle Pointer to the multiline edit control containing the
         selection and contents of the buffer.
- 
+
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 BOOLEAN
@@ -3186,10 +3690,10 @@ YoriWinMultilineEditDeleteSelection(
     PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit;
     PYORI_WIN_CTRL Ctrl;
     PYORI_WIN_MULTILINE_EDIT_SELECT Selection;
-    DWORD FirstLine;
-    DWORD FirstCharOffset;
-    DWORD LastLine;
-    DWORD LastCharOffset;
+    YORI_ALLOC_SIZE_T FirstLine;
+    YORI_ALLOC_SIZE_T FirstCharOffset;
+    YORI_ALLOC_SIZE_T LastLine;
+    YORI_ALLOC_SIZE_T LastCharOffset;
 
     Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
     MultilineEdit = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_MULTILINE_EDIT, Ctrl);
@@ -3205,7 +3709,14 @@ YoriWinMultilineEditDeleteSelection(
     LastLine = Selection->LastLine;
     LastCharOffset = Selection->LastCharOffset;
 
-    if (!YoriWinMultilineEditDeleteTextRange(MultilineEdit, FALSE, FirstLine, FirstCharOffset, LastLine, LastCharOffset)) {
+    if (!YoriWinMultilineEditDeleteTextRange(MultilineEdit,
+                                             FALSE,
+                                             FALSE,
+                                             FALSE,
+                                             FirstLine,
+                                             FirstCharOffset,
+                                             LastLine,
+                                             LastCharOffset)) {
         return FALSE;
     }
 
@@ -3228,7 +3739,7 @@ YoriWinMultilineEditDeleteSelection(
  @param SelectedText On successful completion, populated with a newly
         allocated buffer containing the selected text.  The caller is
         expected to free this buffer with @ref YoriLibFreeStringContents .
- 
+
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 __success(return)
@@ -3253,7 +3764,13 @@ YoriWinMultilineEditGetSelectedText(
 
     Selection = &MultilineEdit->Selection;
 
-    return YoriWinMultilineEditGetTextRange(MultilineEdit, Selection->FirstLine, Selection->FirstCharOffset, Selection->LastLine, Selection->LastCharOffset, NewlineString, SelectedText);
+    return YoriWinMultilineEditGetTextRange(MultilineEdit,
+                                            Selection->FirstLine,
+                                            Selection->FirstCharOffset,
+                                            Selection->LastLine,
+                                            Selection->LastCharOffset,
+                                            NewlineString,
+                                            SelectedText);
 }
 
 /**
@@ -3292,7 +3809,7 @@ YoriWinMultilineEditCheckSelectionState(
 
  @param MultilineEdit Pointer to the multiline edit control that describes
         the selection and cursor location.
- 
+
  @param Mouse If TRUE, the selection is being initiated by mouse operations.
         If FALSE, the selection is being initiated by keyboard operations.
  */
@@ -3332,8 +3849,8 @@ YoriWinMultilineEditStartSelectionAtCursor(
     //
 
     if (Selection->Active == YoriWinMultilineEditSelectNotActive) {
-        DWORD EffectiveCursorLine;
-        DWORD EffectiveCursorOffset;
+        YORI_ALLOC_SIZE_T EffectiveCursorLine;
+        YORI_ALLOC_SIZE_T EffectiveCursorOffset;
         EffectiveCursorLine = MultilineEdit->CursorLine;
         EffectiveCursorOffset = MultilineEdit->CursorOffset;
         if (MultilineEdit->LinesPopulated == 0) {
@@ -3380,8 +3897,8 @@ YoriWinMultilineEditStartSelectionAtCursor(
 VOID
 YoriWinMultilineEditSetSelectionLine(
     __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
-    __in PDWORD SelectionLine,
-    __in DWORD NewValue
+    __in PYORI_ALLOC_SIZE_T SelectionLine,
+    __in YORI_ALLOC_SIZE_T NewValue
     )
 {
     if (NewValue < *SelectionLine) {
@@ -3404,10 +3921,10 @@ YoriWinMultilineEditExtendSelectionToCursor(
     __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit
     )
 {
-    DWORD AnchorLine;
-    DWORD AnchorOffset;
-    DWORD EffectiveCursorLine;
-    DWORD EffectiveCursorOffset;
+    YORI_ALLOC_SIZE_T AnchorLine;
+    YORI_ALLOC_SIZE_T AnchorOffset;
+    YORI_ALLOC_SIZE_T EffectiveCursorLine;
+    YORI_ALLOC_SIZE_T EffectiveCursorOffset;
     BOOLEAN MouseSelection = FALSE;
 
     PYORI_WIN_MULTILINE_EDIT_SELECT Selection;
@@ -3589,10 +4106,10 @@ __success(return)
 BOOLEAN
 YoriWinMultilineEditGetSelectionRange(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __out PDWORD StartLine,
-    __out PDWORD StartOffset,
-    __out PDWORD EndLine,
-    __out PDWORD EndOffset
+    __out PYORI_ALLOC_SIZE_T StartLine,
+    __out PYORI_ALLOC_SIZE_T StartOffset,
+    __out PYORI_ALLOC_SIZE_T EndLine,
+    __out PYORI_ALLOC_SIZE_T EndOffset
     )
 {
     PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit;
@@ -3630,10 +4147,10 @@ YoriWinMultilineEditGetSelectionRange(
 VOID
 YoriWinMultilineEditSetSelectionRange(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __in DWORD StartLine,
-    __in DWORD StartOffset,
-    __in DWORD EndLine,
-    __in DWORD EndOffset
+    __in YORI_ALLOC_SIZE_T StartLine,
+    __in YORI_ALLOC_SIZE_T StartOffset,
+    __in YORI_ALLOC_SIZE_T EndLine,
+    __in YORI_ALLOC_SIZE_T EndOffset
     )
 {
     PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit;
@@ -3742,8 +4259,10 @@ YoriWinMultilineEditPasteText(
     )
 {
     YORI_STRING Text;
+    PYORI_STRING Line;
     PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit;
     PYORI_WIN_CTRL Ctrl;
+    YORI_ALLOC_SIZE_T Index;
 
     Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
     MultilineEdit = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_MULTILINE_EDIT, Ctrl);
@@ -3756,10 +4275,29 @@ YoriWinMultilineEditPasteText(
     if (!YoriLibPasteTextWithProcessFallback(&Text)) {
         return FALSE;
     }
+    if (MultilineEdit->AutoIndentApplied &&
+        MultilineEdit->CursorLine == MultilineEdit->AutoIndentAppliedLine) {
+
+        Line = &MultilineEdit->LineArray[MultilineEdit->CursorLine];
+
+        for (Index = 0;
+             Index < Line->LengthInChars &&
+             Index < Text.LengthInChars &&
+             Index < MultilineEdit->AutoIndentSourceLength &&
+             Line->StartOfString[Index] == Text.StartOfString[Index];
+             Index++);
+
+        Text.StartOfString = Text.StartOfString + Index;
+        Text.LengthInChars = Text.LengthInChars - Index;
+    }
+
     if (!YoriWinMultilineEditInsertTextAtCursor(CtrlHandle, &Text)) {
         YoriLibFreeStringContents(&Text);
         return FALSE;
     }
+
+    YoriWinMultilineEditEnsureCursorVisible(MultilineEdit);
+    YoriWinMultilineEditPaint(MultilineEdit);
 
     YoriLibFreeStringContents(&Text);
     return TRUE;
@@ -3789,13 +4327,19 @@ YoriWinMultilineEditInsertTextAtCursor(
 {
     PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit;
     PYORI_WIN_CTRL Ctrl;
-    DWORD LastLine;
-    DWORD LastCharOffset;
+    YORI_ALLOC_SIZE_T LastLine;
+    YORI_ALLOC_SIZE_T LastCharOffset;
 
     Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
     MultilineEdit = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_MULTILINE_EDIT, Ctrl);
 
-    if (!YoriWinMultilineEditInsertTextRange(MultilineEdit, FALSE, MultilineEdit->CursorLine, MultilineEdit->CursorOffset, Text, &LastLine, &LastCharOffset)) {
+    if (!YoriWinMultilineEditInsertTextRange(MultilineEdit,
+                                             FALSE,
+                                             MultilineEdit->CursorLine,
+                                             MultilineEdit->CursorOffset,
+                                             Text,
+                                             &LastLine,
+                                             &LastCharOffset)) {
         return FALSE;
     }
 
@@ -3829,7 +4373,7 @@ YoriWinMultilineEditSetColor(
 
     MultilineEdit->TextAttributes = Attributes;
     MultilineEdit->SelectedAttributes = SelectedAttributes;
-    YoriWinMultilineEditExpandDirtyRange(MultilineEdit, 0, (DWORD)-1);
+    YoriWinMultilineEditExpandDirtyRange(MultilineEdit, 0, (YORI_ALLOC_SIZE_T)-1);
     YoriWinMultilineEditPaintNonClient(MultilineEdit);
     YoriWinMultilineEditPaint(MultilineEdit);
 }
@@ -3848,8 +4392,8 @@ YoriWinMultilineEditSetColor(
 VOID
 YoriWinMultilineEditGetCursorLocation(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __out PDWORD CursorOffset,
-    __out PDWORD CursorLine
+    __out PYORI_ALLOC_SIZE_T CursorOffset,
+    __out PYORI_ALLOC_SIZE_T CursorLine
     )
 {
     PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit;
@@ -3873,13 +4417,13 @@ YoriWinMultilineEditGetCursorLocation(
 VOID
 YoriWinMultilineEditSetCursorLocation(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __in DWORD NewCursorOffset,
-    __in DWORD NewCursorLine
+    __in YORI_ALLOC_SIZE_T NewCursorOffset,
+    __in YORI_ALLOC_SIZE_T NewCursorLine
     )
 {
     PYORI_WIN_CTRL Ctrl;
     PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit;
-    DWORD EffectiveNewCursorLine;
+    YORI_ALLOC_SIZE_T EffectiveNewCursorLine;
 
     Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
     MultilineEdit = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_MULTILINE_EDIT, Ctrl);
@@ -3912,8 +4456,8 @@ YoriWinMultilineEditSetCursorLocation(
 VOID
 YoriWinMultilineEditGetViewportLocation(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __out PDWORD ViewportLeft,
-    __out PDWORD ViewportTop
+    __out PYORI_ALLOC_SIZE_T ViewportLeft,
+    __out PYORI_ALLOC_SIZE_T ViewportTop
     )
 {
     PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit;
@@ -3938,14 +4482,14 @@ YoriWinMultilineEditGetViewportLocation(
 VOID
 YoriWinMultilineEditSetViewportLocation(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __in DWORD NewViewportLeft,
-    __in DWORD NewViewportTop
+    __in YORI_ALLOC_SIZE_T NewViewportLeft,
+    __in YORI_ALLOC_SIZE_T NewViewportTop
     )
 {
     COORD ClientSize;
     PYORI_WIN_CTRL Ctrl;
     PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit;
-    DWORD EffectiveNewViewportTop;
+    YORI_ALLOC_SIZE_T EffectiveNewViewportTop;
 
     Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
     MultilineEdit = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_MULTILINE_EDIT, Ctrl);
@@ -3969,13 +4513,13 @@ YoriWinMultilineEditSetViewportLocation(
     //
 
     if (EffectiveNewViewportTop != MultilineEdit->ViewportTop) {
-        YoriWinMultilineEditExpandDirtyRange(MultilineEdit, EffectiveNewViewportTop, (DWORD)-1);
+        YoriWinMultilineEditExpandDirtyRange(MultilineEdit, EffectiveNewViewportTop, (YORI_ALLOC_SIZE_T)-1);
         MultilineEdit->ViewportTop = EffectiveNewViewportTop;
         YoriWinMultilineEditRepaintScrollBar(MultilineEdit);
     }
 
     if (NewViewportLeft != MultilineEdit->ViewportLeft) {
-        YoriWinMultilineEditExpandDirtyRange(MultilineEdit, EffectiveNewViewportTop, (DWORD)-1);
+        YoriWinMultilineEditExpandDirtyRange(MultilineEdit, EffectiveNewViewportTop, (YORI_ALLOC_SIZE_T)-1);
         MultilineEdit->ViewportLeft = NewViewportLeft;
     }
     YoriWinMultilineEditPaint(MultilineEdit);
@@ -3995,10 +4539,12 @@ YoriWinMultilineEditClear(
 {
     PYORI_WIN_CTRL Ctrl;
     PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit;
-    DWORD Index;
+    YORI_ALLOC_SIZE_T Index;
 
     Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
     MultilineEdit = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_MULTILINE_EDIT, Ctrl);
+
+    YoriWinMultilineEditClearSelection(MultilineEdit);
 
     for (Index = 0; Index < MultilineEdit->LinesPopulated; Index++) {
         YoriLibFreeStringContents(&MultilineEdit->LineArray[Index]);
@@ -4009,12 +4555,88 @@ YoriWinMultilineEditClear(
     MultilineEdit->ViewportTop = 0;
     MultilineEdit->ViewportLeft = 0;
 
-    YoriWinMultilineEditExpandDirtyRange(MultilineEdit, MultilineEdit->ViewportTop, (DWORD)-1);
+    YoriWinMultilineEditExpandDirtyRange(MultilineEdit, MultilineEdit->ViewportTop, (YORI_ALLOC_SIZE_T)-1);
     YoriWinMultilineEditSetCursorLocationInternal(MultilineEdit, 0, 0);
 
     YoriWinMultilineEditPaint(MultilineEdit);
     return TRUE;
 }
+
+/**
+ Indicate if auto indent is enabled, if an auto indent line is currently
+ active, which line it is, and the extent of the indent.
+
+ @param CtrlHandle Pointer to a multiline edit control.
+
+ @param AutoIndentEnabled Optionally points to a boolean that will be written
+        within this function to indicate whether auto indent can be applied or
+        not.
+
+ @param AutoIndentActive Optionally points to a boolean that will be written
+        within this function to indicate whether auto indent is currently
+        active on any line.
+
+ @param AutoIndentActiveLine Optionally points to an integer that will be
+        written within this function to indicate the line index that has
+        auto indent applied.  This is only meaningful if AutoIndentActive is
+        TRUE.
+
+ @param AutoIndentActiveLength Optionally points to an integer that will be
+        written within this function to indicate the length of the auto
+        indent.  This is only meaningful if AutoIndentActive is TRUE.
+
+ @return TRUE to indicate success, FALSE to indicate failure.
+ */
+BOOLEAN
+YoriWinMultilineEditGetAutoIndent(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __out_opt PBOOLEAN AutoIndentEnabled,
+    __out_opt PBOOLEAN AutoIndentActive,
+    __out_opt PYORI_ALLOC_SIZE_T AutoIndentActiveLine,
+    __out_opt PYORI_ALLOC_SIZE_T AutoIndentActiveLength
+    )
+{
+    PYORI_WIN_CTRL Ctrl;
+    PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit;
+
+    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
+    MultilineEdit = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_MULTILINE_EDIT, Ctrl);
+
+    if (AutoIndentEnabled != NULL) {
+        if (MultilineEdit->AutoIndent) {
+            *AutoIndentEnabled = TRUE;
+        } else {
+            *AutoIndentEnabled = FALSE;
+        }
+    }
+
+    if (AutoIndentActive != NULL) {
+        if (MultilineEdit->AutoIndentApplied) {
+            *AutoIndentActive = TRUE;
+        } else {
+            *AutoIndentActive = FALSE;
+        }
+    }
+
+    if (AutoIndentActiveLine != NULL) {
+        if (MultilineEdit->AutoIndentApplied) {
+            *AutoIndentActiveLine = MultilineEdit->AutoIndentAppliedLine;
+        } else {
+            *AutoIndentActiveLine = 0;
+        }
+    }
+
+    if (AutoIndentActiveLength != NULL) {
+        if (MultilineEdit->AutoIndentApplied) {
+            *AutoIndentActiveLength = MultilineEdit->AutoIndentSourceLength;
+        } else {
+            *AutoIndentActiveLength = 0;
+        }
+    }
+
+    return TRUE;
+}
+
 
 /**
  Return the number of lines with data in a multiline edit control.
@@ -4023,7 +4645,7 @@ YoriWinMultilineEditClear(
 
  @return The number of lines with data.
  */
-DWORD
+YORI_ALLOC_SIZE_T
 YoriWinMultilineEditGetLineCount(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle
     )
@@ -4053,7 +4675,7 @@ YoriWinMultilineEditGetLineCount(
 PYORI_STRING
 YoriWinMultilineEditGetLineByIndex(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __in DWORD Index
+    __in YORI_ALLOC_SIZE_T Index
     )
 {
     PYORI_WIN_CTRL Ctrl;
@@ -4155,7 +4777,7 @@ __success(return)
 BOOLEAN
 YoriWinMultilineEditGetTabWidth(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __out PDWORD TabWidth
+    __out PYORI_ALLOC_SIZE_T TabWidth
     )
 {
     PYORI_WIN_CTRL Ctrl;
@@ -4181,7 +4803,7 @@ __success(return)
 BOOLEAN
 YoriWinMultilineEditSetTabWidth(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __in DWORD TabWidth
+    __in YORI_ALLOC_SIZE_T TabWidth
     )
 {
     PYORI_WIN_CTRL Ctrl;
@@ -4224,10 +4846,73 @@ YoriWinMultilineEditSetTraditionalNavigation(
     if (!MultilineEdit->TraditionalEditNavigation) {
         if (MultilineEdit->CursorLine < MultilineEdit->LinesPopulated) {
             if (MultilineEdit->CursorOffset > MultilineEdit->LineArray[MultilineEdit->CursorLine].LengthInChars) {
-                YoriWinMultilineEditSetCursorLocationInternal(MultilineEdit, MultilineEdit->LineArray[MultilineEdit->CursorLine].LengthInChars, MultilineEdit->CursorLine);
+                YoriWinMultilineEditSetCursorLocationInternal(MultilineEdit,
+                                                              MultilineEdit->LineArray[MultilineEdit->CursorLine].LengthInChars,
+                                                              MultilineEdit->CursorLine);
             }
         }
     }
+}
+
+/**
+ Enable or disable auto indent.  If a new line is created when auto indent
+ is enabled, the line is initialized with the leading white space from the
+ previous line.  If auto indent is disabled, a new line is initialized with
+ no leading white space.
+
+ @param CtrlHandle Pointer to the multiline edit control.
+
+ @param AutoIndentEnabled TRUE to enable auto indent behavior; FALSE to
+        disable auto indent behavior.
+ */
+VOID
+YoriWinMultilineEditSetAutoIndent(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in BOOLEAN AutoIndentEnabled
+    )
+{
+    PYORI_WIN_CTRL Ctrl;
+    PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit;
+    YORI_ALLOC_SIZE_T LineIndex;
+
+    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
+    MultilineEdit = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_MULTILINE_EDIT, Ctrl);
+
+    if (!AutoIndentEnabled && MultilineEdit->AutoIndentApplied) {
+        LineIndex = MultilineEdit->AutoIndentAppliedLine;
+        if (YoriWinMultilineEditTrimAutoIndent(MultilineEdit, LineIndex, 0)) {
+            YoriWinMultilineEditSetCursorLocationInternal(MultilineEdit, 0, LineIndex);
+            YoriWinMultilineEditEnsureCursorVisible(MultilineEdit);
+            YoriWinMultilineEditPaint(MultilineEdit);
+        }
+    }
+
+    MultilineEdit->AutoIndent = AutoIndentEnabled;
+}
+
+/**
+ Enable or disable tab expansion.  If a tab key is pressed when tab expansion
+ is enabled, it is substituted in text with the number of spaces from
+ TabWidth.  If tab expansion is disabled, the key inserts a tab character into
+ text.
+
+ @param CtrlHandle Pointer to the multiline edit control.
+
+ @param ExpandTabEnabled TRUE to enable expand tab behavior; FALSE to disable
+        expand tab behavior.
+ */
+VOID
+YoriWinMultilineEditSetExpandTab(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in BOOLEAN ExpandTabEnabled
+    )
+{
+    PYORI_WIN_CTRL Ctrl;
+    PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit;
+
+    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
+    MultilineEdit = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_MULTILINE_EDIT, Ctrl);
+    MultilineEdit->ExpandTab = ExpandTabEnabled;
 }
 
 /**
@@ -4268,7 +4953,7 @@ YoriWinMultilineEditGetModifyState(
 BOOLEAN
 YoriWinMultilineEditSetCursorMoveNotifyCallback(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __in PYORI_WIN_NOTIFY_CURSOR_MOVE NotifyCallback
+    __in PYORI_WIN_NOTIFY_MULTILINE_EDIT_CURSOR_MOVE NotifyCallback
     )
 {
     PYORI_WIN_CTRL Ctrl;
@@ -4307,10 +4992,10 @@ YoriWinMultilineEditBackspace(
     )
 {
     PYORI_STRING Line;
-    DWORD FirstLine;
-    DWORD FirstCharOffset;
-    DWORD LastLine;
-    DWORD LastCharOffset;
+    YORI_ALLOC_SIZE_T FirstLine;
+    YORI_ALLOC_SIZE_T FirstCharOffset;
+    YORI_ALLOC_SIZE_T LastLine;
+    YORI_ALLOC_SIZE_T LastCharOffset;
 
     if (MultilineEdit->CursorLine >= MultilineEdit->LinesPopulated) {
         return FALSE;
@@ -4327,12 +5012,29 @@ YoriWinMultilineEditBackspace(
     LastLine = MultilineEdit->CursorLine;
     LastCharOffset = MultilineEdit->CursorOffset;
 
-    //
-    //  If we're at the beginning of the line, we may need to merge lines.
-    //  If it's the first line, we're finished.
-    //
+    if (MultilineEdit->AutoIndentApplied) {
+        YORI_STRING NewIndent;
+        YORI_ALLOC_SIZE_T NewIndentSourceLine;
 
-    if (LastCharOffset == 0) {
+        ASSERT(LastCharOffset > 0);
+        YoriWinMultilineEditFindPreviousIndentLine(MultilineEdit, &NewIndentSourceLine, &NewIndent);
+
+        FirstLine = LastLine;
+        FirstCharOffset = NewIndent.LengthInChars;
+
+        if (NewIndent.LengthInChars == 0) {
+            MultilineEdit->AutoIndentApplied = FALSE;
+        } else {
+            MultilineEdit->AutoIndentSourceLength = NewIndent.LengthInChars;
+        }
+
+    } else if (LastCharOffset == 0) {
+
+        //
+        //  If we're at the beginning of the line, we may need to merge lines.
+        //  If it's the first line, we're finished.
+        //
+
         if (MultilineEdit->CursorLine == 0) {
             return FALSE;
         }
@@ -4344,7 +5046,14 @@ YoriWinMultilineEditBackspace(
         FirstCharOffset = LastCharOffset - 1;
     }
 
-    if (!YoriWinMultilineEditDeleteTextRange(MultilineEdit, FALSE, FirstLine, FirstCharOffset, LastLine, LastCharOffset)) {
+    if (!YoriWinMultilineEditDeleteTextRange(MultilineEdit,
+                                             TRUE,
+                                             FALSE,
+                                             FALSE,
+                                             FirstLine,
+                                             FirstCharOffset,
+                                             LastLine,
+                                             LastCharOffset)) {
         return FALSE;
     }
 
@@ -4366,10 +5075,10 @@ YoriWinMultilineEditDelete(
     )
 {
     PYORI_STRING Line;
-    DWORD FirstLine;
-    DWORD FirstCharOffset;
-    DWORD LastLine;
-    DWORD LastCharOffset;
+    YORI_ALLOC_SIZE_T FirstLine;
+    YORI_ALLOC_SIZE_T FirstCharOffset;
+    YORI_ALLOC_SIZE_T LastLine;
+    YORI_ALLOC_SIZE_T LastCharOffset;
 
     if (MultilineEdit->CursorLine >= MultilineEdit->LinesPopulated) {
         return FALSE;
@@ -4392,7 +5101,14 @@ YoriWinMultilineEditDelete(
         LastCharOffset = FirstCharOffset + 1;
     }
 
-    if (!YoriWinMultilineEditDeleteTextRange(MultilineEdit, FALSE, FirstLine, FirstCharOffset, LastLine, LastCharOffset)) {
+    if (!YoriWinMultilineEditDeleteTextRange(MultilineEdit,
+                                             FALSE,
+                                             FALSE,
+                                             FALSE,
+                                             FirstLine,
+                                             FirstCharOffset,
+                                             LastLine,
+                                             LastCharOffset)) {
         return FALSE;
     }
 
@@ -4418,7 +5134,14 @@ YoriWinMultilineEditDeleteLine(
         return FALSE;
     }
 
-    if (!YoriWinMultilineEditDeleteTextRange(MultilineEdit, FALSE, MultilineEdit->CursorLine, 0, MultilineEdit->CursorLine + 1, 0)) {
+    if (!YoriWinMultilineEditDeleteTextRange(MultilineEdit,
+                                             FALSE,
+                                             FALSE,
+                                             FALSE,
+                                             MultilineEdit->CursorLine,
+                                             0,
+                                             MultilineEdit->CursorLine + 1,
+                                             0)) {
         return FALSE;
     }
 
@@ -4442,9 +5165,9 @@ YoriWinMultilineEditPageUp(
     )
 {
     COORD ClientSize;
-    DWORD ViewportHeight;
-    DWORD NewCursorLine;
-    DWORD NewCursorOffset;
+    YORI_ALLOC_SIZE_T ViewportHeight;
+    YORI_ALLOC_SIZE_T NewCursorLine;
+    YORI_ALLOC_SIZE_T NewCursorOffset;
 
     YoriWinGetControlClientSize(&MultilineEdit->Ctrl, &ClientSize);
     ViewportHeight = ClientSize.Y;
@@ -4462,10 +5185,18 @@ YoriWinMultilineEditPageUp(
             MultilineEdit->ViewportTop = 0;
         }
 
-        YoriWinMultilineEditExpandDirtyRange(MultilineEdit, MultilineEdit->ViewportTop, (DWORD)-1);
+        if (NewCursorLine != MultilineEdit->CursorLine) {
+            YoriWinMultilineEditTrimAutoIndent(MultilineEdit, MultilineEdit->CursorLine, 0);
+        }
+
+        YoriWinMultilineEditExpandDirtyRange(MultilineEdit, MultilineEdit->ViewportTop, (YORI_ALLOC_SIZE_T)-1);
 
         YoriWinMultilineEditPopulateDesiredDisplayOffset(MultilineEdit);
-        YoriWinMultilineEditFindCursorCharFromDisplayChar(MultilineEdit, NewCursorLine, MultilineEdit->DesiredDisplayCursorOffset, &NewCursorOffset);
+        YoriWinMultilineEditFindCursorCharFromDisplayChar(MultilineEdit,
+                                                          NewCursorLine,
+                                                          MultilineEdit->DesiredDisplayCursorOffset,
+                                                          &NewCursorOffset,
+                                                          NULL);
         YoriWinMultilineEditSetCursorLocationInternal(MultilineEdit, NewCursorOffset, NewCursorLine);
         YoriWinMultilineEditRepaintScrollBar(MultilineEdit);
         return TRUE;
@@ -4491,16 +5222,16 @@ YoriWinMultilineEditPageDown(
     )
 {
     COORD ClientSize;
-    DWORD ViewportHeight;
-    DWORD NewCursorLine;
-    DWORD NewCursorOffset;
+    YORI_ALLOC_SIZE_T ViewportHeight;
+    YORI_ALLOC_SIZE_T NewCursorLine;
+    YORI_ALLOC_SIZE_T NewCursorOffset;
 
     YoriWinGetControlClientSize(&MultilineEdit->Ctrl, &ClientSize);
     ViewportHeight = ClientSize.Y;
 
     if (MultilineEdit->ViewportTop + ViewportHeight < MultilineEdit->LinesPopulated) {
         MultilineEdit->ViewportTop = MultilineEdit->ViewportTop + ViewportHeight;
-        YoriWinMultilineEditExpandDirtyRange(MultilineEdit, MultilineEdit->ViewportTop, (DWORD)-1);
+        YoriWinMultilineEditExpandDirtyRange(MultilineEdit, MultilineEdit->ViewportTop, (YORI_ALLOC_SIZE_T)-1);
         NewCursorLine = MultilineEdit->CursorLine;
         if (MultilineEdit->CursorLine + ViewportHeight < MultilineEdit->LinesPopulated) {
             NewCursorLine = MultilineEdit->CursorLine + ViewportHeight;
@@ -4508,8 +5239,16 @@ YoriWinMultilineEditPageDown(
             NewCursorLine = MultilineEdit->LinesPopulated - 1;
         }
 
+        if (NewCursorLine != MultilineEdit->CursorLine) {
+            YoriWinMultilineEditTrimAutoIndent(MultilineEdit, MultilineEdit->CursorLine, 0);
+        }
+
         YoriWinMultilineEditPopulateDesiredDisplayOffset(MultilineEdit);
-        YoriWinMultilineEditFindCursorCharFromDisplayChar(MultilineEdit, NewCursorLine, MultilineEdit->DesiredDisplayCursorOffset, &NewCursorOffset);
+        YoriWinMultilineEditFindCursorCharFromDisplayChar(MultilineEdit,
+                                                          NewCursorLine,
+                                                          MultilineEdit->DesiredDisplayCursorOffset,
+                                                          &NewCursorOffset,
+                                                          NULL);
         YoriWinMultilineEditSetCursorLocationInternal(MultilineEdit, NewCursorOffset, NewCursorLine);
         YoriWinMultilineEditRepaintScrollBar(MultilineEdit);
         return TRUE;
@@ -4531,13 +5270,13 @@ YoriWinMultilineEditPageDown(
 VOID
 YoriWinMultilineEditNotifyMouseWheel(
     __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
-    __in DWORD LinesToMove,
+    __in YORI_ALLOC_SIZE_T LinesToMove,
     __in BOOLEAN MoveUp
     )
 {
     COORD ClientSize;
-    DWORD LineCountToDisplay;
-    DWORD NewViewportTop;
+    YORI_ALLOC_SIZE_T LineCountToDisplay;
+    YORI_ALLOC_SIZE_T NewViewportTop;
 
     YoriWinGetControlClientSize(&MultilineEdit->Ctrl, &ClientSize);
     LineCountToDisplay = ClientSize.Y;
@@ -4564,6 +5303,107 @@ YoriWinMultilineEditNotifyMouseWheel(
 }
 
 /**
+ Handle a double-click within a multi line edit control.  This is supposed to
+ select a "word" which is delimited by a user controllable set of characters.
+
+ @param MultilineEdit Pointer to the multiline edit control.
+
+ @param ViewportX The horizontal position in the control relative to its
+        client area.
+
+ @param ViewportY The vertial position in the control relative to its
+        client area.
+ */
+VOID
+YoriWinMultilineEditNotifyDoubleClick(
+    __in PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit,
+    __in YORI_ALLOC_SIZE_T ViewportX,
+    __in YORI_ALLOC_SIZE_T ViewportY
+    )
+{
+    YORI_ALLOC_SIZE_T NewCursorLine;
+    YORI_ALLOC_SIZE_T NewCursorChar;
+    PYORI_STRING Line;
+    YORI_STRING BreakChars;
+
+    //
+    //  Translate the viewport location into a buffer location.
+    //
+
+    if (YoriWinMultilineEditTranslateViewportCoordinatesToCursorCoordinates(MultilineEdit, ViewportX, ViewportY, &NewCursorLine, &NewCursorChar)) {
+        YORI_ALLOC_SIZE_T BeginRangeOffset;
+        YORI_ALLOC_SIZE_T EndRangeOffset;
+
+        //
+        //  If it's beyond the number of lines populated, there's nothing to
+        //  select.
+        //
+
+        if (NewCursorLine >= MultilineEdit->LinesPopulated) {
+            return;
+        }
+
+        if (NewCursorLine != MultilineEdit->CursorLine) {
+            YoriWinMultilineEditTrimAutoIndent(MultilineEdit, MultilineEdit->CursorLine, 0);
+        }
+
+        //
+        //  If it's beyond the end of the line, there's nothing to select.
+        //
+
+        Line = &MultilineEdit->LineArray[NewCursorLine];
+        if (NewCursorChar >= Line->LengthInChars) {
+            return;
+        }
+
+        //
+        //  Determine which characters delimit words.
+        //
+
+        if (!YoriLibGetSelectionDoubleClickBreakChars(&BreakChars)) {
+            return;
+        }
+
+        //
+        //  Search left looking for a delimiter or the start of the string.
+        //
+
+        BeginRangeOffset = NewCursorChar;
+        if (YoriLibFindLeftMostCharacter(&BreakChars, Line->StartOfString[BeginRangeOffset]) == NULL) {
+            while (BeginRangeOffset > 0 &&
+                   YoriLibFindLeftMostCharacter(&BreakChars, Line->StartOfString[BeginRangeOffset - 1]) == NULL) {
+                BeginRangeOffset--;
+            }
+        }
+
+        //
+        //  Search right looking for a delimiter or the end of the string.
+        //
+
+        EndRangeOffset = NewCursorChar;
+        while (EndRangeOffset < Line->LengthInChars &&
+               YoriLibFindLeftMostCharacter(&BreakChars, Line->StartOfString[EndRangeOffset]) == NULL) {
+            EndRangeOffset++;
+        }
+
+        YoriLibFreeStringContents(&BreakChars);
+
+        //
+        //  If any range was found (ie., the user didn't click on a word
+        //  delimiter) select the range.
+        //
+
+        if (EndRangeOffset > BeginRangeOffset) {
+            YoriWinMultilineEditSetSelectionRange(&MultilineEdit->Ctrl,
+                                                  NewCursorLine,
+                                                  BeginRangeOffset,
+                                                  NewCursorLine,
+                                                  EndRangeOffset);
+        }
+    }
+}
+
+/**
  Adjust the viewport and selection to reflect the mouse being dragged,
  potentially outside the control's client area while the button is held down,
  thereby extending the selection.
@@ -4579,12 +5419,12 @@ YoriWinMultilineEditScrollForMouseSelect(
     )
 {
     COORD ClientSize;
-    DWORD LineCountToDisplay;
-    DWORD NewCursorLine;
-    DWORD NewCursorOffset;
-    DWORD NewViewportTop;
-    DWORD NewViewportLeft;
-    DWORD DisplayOffset;
+    YORI_ALLOC_SIZE_T LineCountToDisplay;
+    YORI_ALLOC_SIZE_T NewCursorLine;
+    YORI_ALLOC_SIZE_T NewCursorOffset;
+    YORI_ALLOC_SIZE_T NewViewportTop;
+    YORI_ALLOC_SIZE_T NewViewportLeft;
+    YORI_ALLOC_SIZE_T DisplayOffset;
     BOOLEAN SetTimer;
 
     SetTimer = FALSE;
@@ -4662,7 +5502,9 @@ YoriWinMultilineEditScrollForMouseSelect(
         if (MultilineEdit->Timer == NULL) {
             PYORI_WIN_WINDOW TopLevelWindow;
             TopLevelWindow = YoriWinGetTopLevelWindow(&MultilineEdit->Ctrl);
-            MultilineEdit->Timer = YoriWinMgrAllocateRecurringTimer(YoriWinGetWindowManagerHandle(TopLevelWindow), &MultilineEdit->Ctrl, 100);
+            MultilineEdit->Timer = YoriWinMgrAllocateRecurringTimer(YoriWinGetWindowManagerHandle(TopLevelWindow),
+                                                                    &MultilineEdit->Ctrl,
+                                                                    100);
         }
     } else {
         if (MultilineEdit->Timer != NULL) {
@@ -4671,7 +5513,11 @@ YoriWinMultilineEditScrollForMouseSelect(
         }
     }
 
-    YoriWinMultilineEditFindCursorCharFromDisplayChar(MultilineEdit, NewCursorLine, DisplayOffset, &NewCursorOffset);
+    YoriWinMultilineEditFindCursorCharFromDisplayChar(MultilineEdit,
+                                                      NewCursorLine,
+                                                      DisplayOffset,
+                                                      &NewCursorOffset,
+                                                      NULL);
 
     //
     //  When using modern navigation, the cursor can't move to the right of
@@ -4685,6 +5531,10 @@ YoriWinMultilineEditScrollForMouseSelect(
                 NewCursorOffset = MultilineEdit->LineArray[NewCursorLine].LengthInChars;
             }
         }
+    }
+
+    if (NewCursorLine != MultilineEdit->CursorLine) {
+        YoriWinMultilineEditTrimAutoIndent(MultilineEdit, MultilineEdit->CursorLine, 0);
     }
 
     YoriWinMultilineEditClearDesiredDisplayOffset(MultilineEdit);
@@ -4715,8 +5565,8 @@ YoriWinMultilineEditAddChar(
     __in TCHAR Char
     )
 {
-    DWORD NewCursorLine;
-    DWORD NewCursorOffset;
+    YORI_ALLOC_SIZE_T NewCursorLine;
+    YORI_ALLOC_SIZE_T NewCursorOffset;
     YORI_STRING String;
 
     if (YoriWinMultilineEditSelectionActive(MultilineEdit)) {
@@ -4726,19 +5576,52 @@ YoriWinMultilineEditAddChar(
     YoriWinMultilineEditClearDesiredDisplayOffset(MultilineEdit);
 
     YoriLibInitEmptyString(&String);
-    String.StartOfString = &Char;
-    String.LengthInChars = 1;
+
+    if (Char == '\t' && MultilineEdit->ExpandTab) {
+        YORI_ALLOC_SIZE_T CharIndex;
+
+        if (MultilineEdit->TabWidth == 0) {
+            return TRUE;
+        }
+
+        if (!YoriLibAllocateString(&String, MultilineEdit->TabWidth)) {
+            return FALSE;
+        }
+
+        for (CharIndex = 0; CharIndex < MultilineEdit->TabWidth; CharIndex++) {
+            String.StartOfString[CharIndex] = ' ';
+        }
+        String.LengthInChars = MultilineEdit->TabWidth;
+    } else {
+        String.StartOfString = &Char;
+        String.LengthInChars = 1;
+    }
 
     if (!MultilineEdit->InsertMode) {
-        if (!YoriWinMultilineEditOverwriteTextRange(MultilineEdit, FALSE, MultilineEdit->CursorLine, MultilineEdit->CursorOffset, &String, &NewCursorLine, &NewCursorOffset)) {
+        if (!YoriWinMultilineEditOverwriteTextRange(MultilineEdit,
+                                                    FALSE,
+                                                    MultilineEdit->CursorLine,
+                                                    MultilineEdit->CursorOffset,
+                                                    &String,
+                                                    &NewCursorLine,
+                                                    &NewCursorOffset)) {
+            YoriLibFreeStringContents(&String);
             return FALSE;
         }
     } else {
-        if (!YoriWinMultilineEditInsertTextRange(MultilineEdit, FALSE, MultilineEdit->CursorLine, MultilineEdit->CursorOffset, &String, &NewCursorLine, &NewCursorOffset)) {
+        if (!YoriWinMultilineEditInsertTextRange(MultilineEdit,
+                                                 FALSE,
+                                                 MultilineEdit->CursorLine,
+                                                 MultilineEdit->CursorOffset,
+                                                 &String,
+                                                 &NewCursorLine,
+                                                 &NewCursorOffset)) {
+            YoriLibFreeStringContents(&String);
             return FALSE;
         }
     }
 
+    YoriLibFreeStringContents(&String);
     YoriWinMultilineEditSetCursorLocationInternal(MultilineEdit, NewCursorOffset, NewCursorLine);
 
     return TRUE;
@@ -4766,8 +5649,8 @@ YoriWinMultilineEditProcessPossiblyEnhancedKey(
     )
 {
     BOOLEAN Recognized;
-    DWORD NewCursorLine;
-    DWORD NewCursorOffset;
+    YORI_ALLOC_SIZE_T NewCursorLine;
+    YORI_ALLOC_SIZE_T NewCursorOffset;
     Recognized = FALSE;
 
     if (Event->KeyDown.VirtualKeyCode == VK_LEFT) {
@@ -4783,8 +5666,10 @@ YoriWinMultilineEditProcessPossiblyEnhancedKey(
                 ASSERT(!MultilineEdit->TraditionalEditNavigation);
                 NewCursorLine = NewCursorLine - 1;
                 NewCursorOffset = MultilineEdit->LineArray[NewCursorLine].LengthInChars;
+                YoriWinMultilineEditTrimAutoIndent(MultilineEdit, MultilineEdit->CursorLine, 0);
             } else {
                 NewCursorOffset = MultilineEdit->CursorOffset - 1;
+                YoriWinMultilineEditTrimAutoIndent(MultilineEdit, MultilineEdit->CursorLine, NewCursorOffset);
             }
             YoriWinMultilineEditSetCursorLocationInternal(MultilineEdit, NewCursorOffset, NewCursorLine);
             if (Event->KeyDown.CtrlMask & SHIFT_PRESSED) {
@@ -4797,7 +5682,8 @@ YoriWinMultilineEditProcessPossiblyEnhancedKey(
         Recognized = TRUE;
     } else if (Event->KeyDown.VirtualKeyCode == VK_RIGHT) {
         if (MultilineEdit->TraditionalEditNavigation ||
-            (MultilineEdit->CursorLine < MultilineEdit->LinesPopulated && MultilineEdit->CursorOffset < MultilineEdit->LineArray[MultilineEdit->CursorLine].LengthInChars) ||
+            (MultilineEdit->CursorLine < MultilineEdit->LinesPopulated &&
+             MultilineEdit->CursorOffset < MultilineEdit->LineArray[MultilineEdit->CursorLine].LengthInChars) ||
             MultilineEdit->CursorLine + 1 < MultilineEdit->LinesPopulated) {
 
             if (Event->KeyDown.CtrlMask & SHIFT_PRESSED) {
@@ -4808,9 +5694,12 @@ YoriWinMultilineEditProcessPossiblyEnhancedKey(
             NewCursorLine = MultilineEdit->CursorLine;
             NewCursorOffset = MultilineEdit->CursorOffset + 1;
             if (!MultilineEdit->TraditionalEditNavigation) {
-                if ((NewCursorLine < MultilineEdit->LinesPopulated && NewCursorOffset > MultilineEdit->LineArray[NewCursorLine].LengthInChars)) {
+                if ((NewCursorLine < MultilineEdit->LinesPopulated &&
+                     NewCursorOffset > MultilineEdit->LineArray[NewCursorLine].LengthInChars)) {
+
                     NewCursorLine = NewCursorLine + 1;
                     NewCursorOffset = 0;
+                    YoriWinMultilineEditTrimAutoIndent(MultilineEdit, MultilineEdit->CursorLine, 0);
                 }
             }
             YoriWinMultilineEditSetCursorLocationInternal(MultilineEdit, NewCursorOffset, NewCursorLine);
@@ -4830,6 +5719,7 @@ YoriWinMultilineEditProcessPossiblyEnhancedKey(
         }
         if (MultilineEdit->CursorOffset != 0) {
             NewCursorOffset = 0;
+            YoriWinMultilineEditTrimAutoIndent(MultilineEdit, MultilineEdit->CursorLine, 0);
             YoriWinMultilineEditSetCursorLocationInternal(MultilineEdit, NewCursorOffset, MultilineEdit->CursorLine);
             if (Event->KeyDown.CtrlMask & SHIFT_PRESSED) {
                 YoriWinMultilineEditExtendSelectionToCursor(MultilineEdit);
@@ -4840,7 +5730,7 @@ YoriWinMultilineEditProcessPossiblyEnhancedKey(
         }
         Recognized = TRUE;
     } else if (Event->KeyDown.VirtualKeyCode == VK_END) {
-        DWORD FinalChar = 0;
+        YORI_ALLOC_SIZE_T FinalChar = 0;
         if (Event->KeyDown.CtrlMask & SHIFT_PRESSED) {
             YoriWinMultilineEditStartSelectionAtCursor(MultilineEdit, FALSE);
         } else if (YoriWinMultilineEditSelectionActive(&MultilineEdit->Ctrl)) {
@@ -4872,9 +5762,14 @@ YoriWinMultilineEditProcessPossiblyEnhancedKey(
             } else if (YoriWinMultilineEditSelectionActive(&MultilineEdit->Ctrl)) {
                 YoriWinMultilineEditClearSelection(MultilineEdit);
             }
+            YoriWinMultilineEditTrimAutoIndent(MultilineEdit, MultilineEdit->CursorLine, 0);
             NewCursorLine = MultilineEdit->CursorLine - 1;
             YoriWinMultilineEditPopulateDesiredDisplayOffset(MultilineEdit);
-            YoriWinMultilineEditFindCursorCharFromDisplayChar(MultilineEdit, NewCursorLine, MultilineEdit->DesiredDisplayCursorOffset, &NewCursorOffset);
+            YoriWinMultilineEditFindCursorCharFromDisplayChar(MultilineEdit,
+                                                              NewCursorLine,
+                                                              MultilineEdit->DesiredDisplayCursorOffset,
+                                                              &NewCursorOffset,
+                                                              NULL);
             YoriWinMultilineEditSetCursorLocationInternal(MultilineEdit, NewCursorOffset, NewCursorLine);
             if (Event->KeyDown.CtrlMask & SHIFT_PRESSED) {
                 YoriWinMultilineEditExtendSelectionToCursor(MultilineEdit);
@@ -4890,9 +5785,14 @@ YoriWinMultilineEditProcessPossiblyEnhancedKey(
             } else if (YoriWinMultilineEditSelectionActive(&MultilineEdit->Ctrl)) {
                 YoriWinMultilineEditClearSelection(MultilineEdit);
             }
+            YoriWinMultilineEditTrimAutoIndent(MultilineEdit, MultilineEdit->CursorLine, 0);
             NewCursorLine = MultilineEdit->CursorLine + 1;
             YoriWinMultilineEditPopulateDesiredDisplayOffset(MultilineEdit);
-            YoriWinMultilineEditFindCursorCharFromDisplayChar(MultilineEdit, NewCursorLine, MultilineEdit->DesiredDisplayCursorOffset, &NewCursorOffset);
+            YoriWinMultilineEditFindCursorCharFromDisplayChar(MultilineEdit,
+                                                              NewCursorLine,
+                                                              MultilineEdit->DesiredDisplayCursorOffset,
+                                                              &NewCursorOffset,
+                                                              NULL);
             YoriWinMultilineEditSetCursorLocationInternal(MultilineEdit, NewCursorOffset, NewCursorLine);
             if (Event->KeyDown.CtrlMask & SHIFT_PRESSED) {
                 YoriWinMultilineEditExtendSelectionToCursor(MultilineEdit);
@@ -4980,8 +5880,8 @@ YoriWinMultilineEditProcessPossiblyEnhancedCtrlKey(
     )
 {
     BOOLEAN Recognized;
-    DWORD ProbeLine;
-    DWORD ProbeOffset;
+    YORI_ALLOC_SIZE_T ProbeLine;
+    YORI_ALLOC_SIZE_T ProbeOffset;
     Recognized = FALSE;
 
     if (Event->KeyDown.VirtualKeyCode == VK_HOME) {
@@ -5000,7 +5900,7 @@ YoriWinMultilineEditProcessPossiblyEnhancedCtrlKey(
         }
         Recognized = TRUE;
     } else if (Event->KeyDown.VirtualKeyCode == VK_END) {
-        DWORD FinalChar = 0;
+        YORI_ALLOC_SIZE_T FinalChar = 0;
         if (Event->KeyDown.CtrlMask & SHIFT_PRESSED) {
             YoriWinMultilineEditStartSelectionAtCursor(MultilineEdit, FALSE);
         } else if (YoriWinMultilineEditSelectionActive(&MultilineEdit->Ctrl)) {
@@ -5008,8 +5908,12 @@ YoriWinMultilineEditProcessPossiblyEnhancedCtrlKey(
         }
         if (MultilineEdit->LinesPopulated > 0) {
             FinalChar = MultilineEdit->LineArray[MultilineEdit->LinesPopulated - 1].LengthInChars;
-            if (MultilineEdit->CursorLine != MultilineEdit->LinesPopulated - 1 || MultilineEdit->CursorOffset != FinalChar) {
-                YoriWinMultilineEditSetCursorLocationInternal(MultilineEdit, FinalChar, MultilineEdit->LinesPopulated - 1);
+            if (MultilineEdit->CursorLine != MultilineEdit->LinesPopulated - 1 ||
+                MultilineEdit->CursorOffset != FinalChar) {
+
+                YoriWinMultilineEditSetCursorLocationInternal(MultilineEdit,
+                                                              FinalChar,
+                                                              MultilineEdit->LinesPopulated - 1);
                 if (Event->KeyDown.CtrlMask & SHIFT_PRESSED) {
                     YoriWinMultilineEditExtendSelectionToCursor(MultilineEdit);
                 }
@@ -5028,7 +5932,7 @@ YoriWinMultilineEditProcessPossiblyEnhancedCtrlKey(
         ProbeOffset = MultilineEdit->CursorOffset;
         if (ProbeLine < MultilineEdit->LinesPopulated) {
             while (TRUE) {
-                DWORD Index;
+                YORI_ALLOC_SIZE_T Index;
                 YORI_STRING WhitespaceChars = YORILIB_CONSTANT_STRING(_T(" -\t"));
                 PYORI_STRING Line;
 
@@ -5037,7 +5941,9 @@ YoriWinMultilineEditProcessPossiblyEnhancedCtrlKey(
                 if (Index > Line->LengthInChars) {
                     Index = Line->LengthInChars;
                 }
-                while(Index > 0 && YoriLibFindLeftMostCharacter(&WhitespaceChars, Line->StartOfString[Index - 1])) {
+                while(Index > 0 &&
+                      YoriLibFindLeftMostCharacter(&WhitespaceChars, Line->StartOfString[Index - 1])) {
+
                     Index--;
                 }
                 if (Index == 0 && ProbeLine > 0) {
@@ -5045,7 +5951,8 @@ YoriWinMultilineEditProcessPossiblyEnhancedCtrlKey(
                     ProbeOffset = MultilineEdit->LineArray[ProbeLine].LengthInChars;
                     continue;
                 }
-                while(Index > 0 && (YoriLibFindLeftMostCharacter(&WhitespaceChars, Line->StartOfString[Index - 1]) == NULL)) {
+                while(Index > 0 &&
+                      (YoriLibFindLeftMostCharacter(&WhitespaceChars, Line->StartOfString[Index - 1]) == NULL)) {
                     Index--;
                 }
                 MultilineEdit->CursorLine = ProbeLine;
@@ -5074,7 +5981,7 @@ YoriWinMultilineEditProcessPossiblyEnhancedCtrlKey(
             MultilineEdit->CursorOffset = 0;
         } else {
             while (ProbeLine < MultilineEdit->LinesPopulated) {
-                DWORD Index;
+                YORI_ALLOC_SIZE_T Index;
                 YORI_STRING WhitespaceChars = YORILIB_CONSTANT_STRING(_T(" -\t"));
                 PYORI_STRING Line;
 
@@ -5084,11 +5991,15 @@ YoriWinMultilineEditProcessPossiblyEnhancedCtrlKey(
                     Index = Line->LengthInChars;
                 }
                 if (SkipCurrentWord) {
-                    while(Index < Line->LengthInChars && YoriLibFindLeftMostCharacter(&WhitespaceChars, Line->StartOfString[Index]) == NULL) {
+                    while(Index < Line->LengthInChars &&
+                          YoriLibFindLeftMostCharacter(&WhitespaceChars, Line->StartOfString[Index]) == NULL) {
+
                         Index++;
                     }
                 }
-                while(Index < Line->LengthInChars && YoriLibFindLeftMostCharacter(&WhitespaceChars, Line->StartOfString[Index])) {
+                while(Index < Line->LengthInChars &&
+                      YoriLibFindLeftMostCharacter(&WhitespaceChars, Line->StartOfString[Index])) {
+
                     Index++;
                 }
                 if (Index == Line->LengthInChars && ProbeLine + 1 < MultilineEdit->LinesPopulated) {
@@ -5175,6 +6086,7 @@ YoriWinMultilineEditEventHandler(
 
                 if (!YoriWinMultilineEditProcessPossiblyEnhancedKey(MultilineEdit, Event)) {
                     if (Event->KeyDown.Char != '\0' &&
+                        Event->KeyDown.Char != '\x1b' &&
                         Event->KeyDown.Char != '\n') {
 
                         if (!MultilineEdit->ReadOnly) {
@@ -5191,7 +6103,11 @@ YoriWinMultilineEditEventHandler(
                 if (!YoriWinMultilineEditProcessPossiblyEnhancedCtrlKey(MultilineEdit, Event)) {
                     if (Event->KeyDown.VirtualKeyCode == 'A') {
                         if (MultilineEdit->LinesPopulated > 0) {
-                            YoriWinMultilineEditSetSelectionRange(Ctrl, 0, 0, MultilineEdit->LinesPopulated - 1, MultilineEdit->LineArray[MultilineEdit->LinesPopulated - 1].LengthInChars);
+                            YoriWinMultilineEditSetSelectionRange(Ctrl,
+                                                                  0,
+                                                                  0,
+                                                                  MultilineEdit->LinesPopulated - 1,
+                                                                  MultilineEdit->LineArray[MultilineEdit->LinesPopulated - 1].LengthInChars);
                         }
                         return TRUE;
                     } else if (Event->KeyDown.VirtualKeyCode == 'C') {
@@ -5235,7 +6151,10 @@ YoriWinMultilineEditEventHandler(
                 }
             } else if (Event->KeyDown.CtrlMask == LEFT_ALT_PRESSED ||
                        Event->KeyDown.CtrlMask == (LEFT_ALT_PRESSED | ENHANCED_KEY)) {
-                YoriLibBuildNumericKey(&MultilineEdit->NumericKeyValue, &MultilineEdit->NumericKeyType, Event->KeyDown.VirtualKeyCode, Event->KeyDown.VirtualScanCode);
+                YoriLibBuildNumericKey(&MultilineEdit->NumericKeyValue,
+                                       &MultilineEdit->NumericKeyType,
+                                       Event->KeyDown.VirtualKeyCode,
+                                       Event->KeyDown.VirtualScanCode);
 
             } else if (Event->KeyDown.CtrlMask == ENHANCED_KEY ||
                        Event->KeyDown.CtrlMask == (ENHANCED_KEY | SHIFT_PRESSED)) {
@@ -5270,7 +6189,7 @@ YoriWinMultilineEditEventHandler(
                 MultilineEdit->NumericKeyValue = 0;
                 MultilineEdit->NumericKeyType = YoriLibNumericKeyAscii;
 
-                YoriWinMultilineEditAddChar(MultilineEdit, Event->KeyDown.Char);
+                YoriWinMultilineEditAddChar(MultilineEdit, Char);
                 YoriWinMultilineEditEnsureCursorVisible(MultilineEdit);
                 YoriWinMultilineEditPaint(MultilineEdit);
             }
@@ -5279,12 +6198,12 @@ YoriWinMultilineEditEventHandler(
 
         case YoriWinEventMouseWheelDownInClient:
         case YoriWinEventMouseWheelDownInNonClient:
-            YoriWinMultilineEditNotifyMouseWheel(MultilineEdit, Event->MouseWheel.LinesToMove, FALSE);
+            YoriWinMultilineEditNotifyMouseWheel(MultilineEdit, (YORI_ALLOC_SIZE_T)Event->MouseWheel.LinesToMove, FALSE);
             break;
 
         case YoriWinEventMouseWheelUpInClient:
         case YoriWinEventMouseWheelUpInNonClient:
-            YoriWinMultilineEditNotifyMouseWheel(MultilineEdit, Event->MouseWheel.LinesToMove, TRUE);
+            YoriWinMultilineEditNotifyMouseWheel(MultilineEdit, (YORI_ALLOC_SIZE_T)Event->MouseWheel.LinesToMove, TRUE);
             break;
 
         case YoriWinEventMouseUpInNonClient:
@@ -5314,12 +6233,26 @@ YoriWinMultilineEditEventHandler(
                 }
             }
             break;
+        case YoriWinEventMouseDoubleClickInClient:
+            YoriWinMultilineEditNotifyDoubleClick(MultilineEdit,
+                                                  (YORI_ALLOC_SIZE_T)Event->MouseDown.Location.X,
+                                                  (YORI_ALLOC_SIZE_T)Event->MouseDown.Location.Y);
+            break;
         case YoriWinEventMouseDownInClient:
             {
-                DWORD NewCursorLine;
-                DWORD NewCursorChar;
+                YORI_ALLOC_SIZE_T NewCursorLine;
+                YORI_ALLOC_SIZE_T NewCursorChar;
 
-                if (YoriWinMultilineEditTranslateViewportCoordinatesToCursorCoordinates(MultilineEdit, Event->MouseDown.Location.X, Event->MouseDown.Location.Y, &NewCursorLine, &NewCursorChar)) {
+                if (YoriWinMultilineEditTranslateViewportCoordinatesToCursorCoordinates(MultilineEdit,
+                                                                                        Event->MouseDown.Location.X,
+                                                                                        Event->MouseDown.Location.Y,
+                                                                                        &NewCursorLine,
+                                                                                        &NewCursorChar)) {
+                    if (MultilineEdit->CursorLine != NewCursorLine) {
+                        YoriWinMultilineEditTrimAutoIndent(MultilineEdit, MultilineEdit->CursorLine, 0);
+                    } else if (NewCursorChar < MultilineEdit->CursorOffset) {
+                        YoriWinMultilineEditTrimAutoIndent(MultilineEdit, MultilineEdit->CursorLine, NewCursorChar);
+                    }
 
                     YoriWinMultilineEditSetCursorLocationInternal(MultilineEdit, NewCursorChar, NewCursorLine);
                     YoriWinMultilineEditClearSelection(MultilineEdit);
@@ -5410,7 +6343,7 @@ YoriWinMultilineEditNotifyScrollChange(
     COORD ClientSize;
     WORD ElementCountToDisplay;
     PYORI_WIN_CTRL ScrollCtrl;
-    DWORD NewViewportTop;
+    YORI_ALLOC_SIZE_T NewViewportTop;
 
     ScrollCtrl = (PYORI_WIN_CTRL)ScrollCtrlHandle;
     MultilineEdit = CONTAINING_RECORD(ScrollCtrl->Parent, YORI_WIN_CTRL_MULTILINE_EDIT, Ctrl);
@@ -5430,21 +6363,25 @@ YoriWinMultilineEditNotifyScrollChange(
         }
     } else {
         if (ScrollValue < MultilineEdit->LinesPopulated) {
-            NewViewportTop = (DWORD)ScrollValue;
+            NewViewportTop = (YORI_ALLOC_SIZE_T)ScrollValue;
         }
     }
 
     if (NewViewportTop != MultilineEdit->ViewportTop) {
         MultilineEdit->ViewportTop = NewViewportTop;
-        YoriWinMultilineEditExpandDirtyRange(MultilineEdit, NewViewportTop, (DWORD)-1);
+        YoriWinMultilineEditExpandDirtyRange(MultilineEdit, NewViewportTop, (YORI_ALLOC_SIZE_T)-1);
     } else {
         return;
     }
 
     if (MultilineEdit->CursorLine < MultilineEdit->ViewportTop) {
-        YoriWinMultilineEditSetCursorLocationInternal(MultilineEdit, MultilineEdit->CursorOffset, MultilineEdit->ViewportTop);
+        YoriWinMultilineEditSetCursorLocationInternal(MultilineEdit,
+                                                      MultilineEdit->CursorOffset,
+                                                      MultilineEdit->ViewportTop);
     } else if (MultilineEdit->CursorLine >= MultilineEdit->ViewportTop + ClientSize.Y) {
-        YoriWinMultilineEditSetCursorLocationInternal(MultilineEdit, MultilineEdit->CursorOffset, MultilineEdit->ViewportTop + ClientSize.Y - 1);
+        YoriWinMultilineEditSetCursorLocationInternal(MultilineEdit,
+                                                      MultilineEdit->CursorOffset,
+                                                      MultilineEdit->ViewportTop + ClientSize.Y - 1);
     }
 
     YoriWinMultilineEditPaint(MultilineEdit);
@@ -5487,9 +6424,35 @@ YoriWinMultilineEditReposition(
         YoriWinScrollBarReposition(MultilineEdit->VScrollCtrl, &ScrollBarRect);
     }
 
-    YoriWinMultilineEditExpandDirtyRange(MultilineEdit, 0, (DWORD)-1);
+    YoriWinMultilineEditExpandDirtyRange(MultilineEdit, 0, (YORI_ALLOC_SIZE_T)-1);
     YoriWinMultilineEditPaintNonClient(MultilineEdit);
     YoriWinMultilineEditPaint(MultilineEdit);
+
+    return TRUE;
+}
+
+/**
+ Change the read only state of an existing multiline edit control.
+
+ @param CtrlHandle Pointer to the multiline edit control.
+
+ @param NewReadOnlyState TRUE to indicate the multiline edit control should be
+        read only, FALSE if it should be writable.
+
+ @return TRUE to indicate success, FALSE to indicate failure.
+ */
+BOOLEAN
+YoriWinMultilineEditSetReadOnly(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in BOOLEAN NewReadOnlyState
+    )
+{
+    PYORI_WIN_CTRL Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
+    PYORI_WIN_CTRL_MULTILINE_EDIT MultilineEdit;
+
+    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
+    MultilineEdit = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_MULTILINE_EDIT, Ctrl);
+    MultilineEdit->ReadOnly = NewReadOnlyState;
 
     return TRUE;
 }
@@ -5538,20 +6501,17 @@ YoriWinMultilineEditCreate(
     YoriLibInitializeListHead(&MultilineEdit->Redo);
 
     MultilineEdit->Ctrl.NotifyEventFn = YoriWinMultilineEditEventHandler;
-    if (!YoriWinCreateControl(Parent, Size, TRUE, &MultilineEdit->Ctrl)) {
+    if (!YoriWinCreateControl(Parent, Size, TRUE, TRUE, &MultilineEdit->Ctrl)) {
         YoriLibDereference(MultilineEdit);
         return NULL;
     }
 
     if (Caption != NULL && Caption->LengthInChars > 0) {
-        if (!YoriLibAllocateString(&MultilineEdit->Caption, Caption->LengthInChars)) {
+        if (!YoriLibCopyString(&MultilineEdit->Caption, Caption)) {
             YoriWinDestroyControl(&MultilineEdit->Ctrl);
             YoriLibDereference(MultilineEdit);
             return NULL;
         }
-
-        memcpy(MultilineEdit->Caption.StartOfString, Caption->StartOfString, Caption->LengthInChars * sizeof(TCHAR));
-        MultilineEdit->Caption.LengthInChars = Caption->LengthInChars;
     }
 
     if (Style & YORI_WIN_MULTILINE_EDIT_STYLE_VSCROLLBAR) {
@@ -5560,15 +6520,15 @@ YoriWinMultilineEditCreate(
         ScrollBarRect.Right = ScrollBarRect.Left;
         ScrollBarRect.Top = 1;
         ScrollBarRect.Bottom = (SHORT)(MultilineEdit->Ctrl.FullRect.Bottom - MultilineEdit->Ctrl.FullRect.Top - 1);
-        MultilineEdit->VScrollCtrl = YoriWinScrollBarCreate(&MultilineEdit->Ctrl, &ScrollBarRect, 0, YoriWinMultilineEditNotifyScrollChange);
+        MultilineEdit->VScrollCtrl = YoriWinScrollBarCreate(&MultilineEdit->Ctrl,
+                                                            &ScrollBarRect,
+                                                            0,
+                                                            YoriWinMultilineEditNotifyScrollChange);
     }
 
     if (Style & YORI_WIN_MULTILINE_EDIT_STYLE_READ_ONLY) {
         MultilineEdit->ReadOnly = TRUE;
     }
-
-    // MSFIX: Text alignment
-    // MSFIX: Optional border styles
 
     MultilineEdit->Ctrl.ClientRect.Top++;
     MultilineEdit->Ctrl.ClientRect.Left++;
@@ -5585,7 +6545,7 @@ YoriWinMultilineEditCreate(
     MultilineEdit->TabWidth = 4;
     YoriWinMultilineEditClearDesiredDisplayOffset(MultilineEdit);
 
-    YoriWinMultilineEditExpandDirtyRange(MultilineEdit, 0, (DWORD)-1);
+    YoriWinMultilineEditExpandDirtyRange(MultilineEdit, 0, (YORI_ALLOC_SIZE_T)-1);
     YoriWinMultilineEditPaintNonClient(MultilineEdit);
     YoriWinMultilineEditPaint(MultilineEdit);
 

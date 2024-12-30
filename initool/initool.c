@@ -82,11 +82,15 @@ IniToolDeleteFromIniFile(
 {
     YORI_STRING RealFileName;
 
+    if (DllKernel32.pWritePrivateProfileStringW == NULL) {
+        return FALSE;
+    }
+
     if (!YoriLibUserStringToSingleFilePath(UserFileName, FALSE, &RealFileName)) {
         return FALSE;
     }
 
-    if (!WritePrivateProfileString(Section->StartOfString, (Key != NULL)?Key->StartOfString:NULL, NULL, RealFileName.StartOfString)) {
+    if (!DllKernel32.pWritePrivateProfileStringW(Section->StartOfString, (Key != NULL)?Key->StartOfString:NULL, NULL, RealFileName.StartOfString)) {
         YoriLibFreeStringContents(&RealFileName);
         return FALSE;
     }
@@ -114,16 +118,24 @@ IniToolListSectionFromIniFile(
     YORI_STRING Value;
     LPTSTR ThisVar;
 
+    if (DllKernel32.pGetPrivateProfileSectionW == NULL) {
+        return FALSE;
+    }
+
     if (!YoriLibUserStringToSingleFilePath(UserFileName, FALSE, &RealFileName)) {
         return FALSE;
     }
 
-    if (!YoriLibAllocateString(&Value, 64 * 1024)) {
+    if (!YoriLibAllocateString(&Value, 32 * 1024)) {
         YoriLibFreeStringContents(&RealFileName);
         return FALSE;
     }
 
-    Value.LengthInChars = GetPrivateProfileSection(Section->StartOfString, Value.StartOfString, Value.LengthAllocated, RealFileName.StartOfString);
+    Value.LengthInChars = (YORI_ALLOC_SIZE_T)
+        DllKernel32.pGetPrivateProfileSectionW(Section->StartOfString,
+                                               Value.StartOfString,
+                                               Value.LengthAllocated,
+                                               RealFileName.StartOfString);
     ThisVar = Value.StartOfString;
     while (*ThisVar != '\0') {
         YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("%s\n"), ThisVar);
@@ -161,12 +173,15 @@ IniToolListSectionsFromIniFile(
         return FALSE;
     }
 
-    if (!YoriLibAllocateString(&Value, 64 * 1024)) {
+    if (!YoriLibAllocateString(&Value, 32 * 1024)) {
         YoriLibFreeStringContents(&RealFileName);
         return FALSE;
     }
 
-    Value.LengthInChars = DllKernel32.pGetPrivateProfileSectionNamesW(Value.StartOfString, Value.LengthAllocated, RealFileName.StartOfString);
+    Value.LengthInChars = (YORI_ALLOC_SIZE_T)
+        DllKernel32.pGetPrivateProfileSectionNamesW(Value.StartOfString,
+                                                    Value.LengthAllocated,
+                                                    RealFileName.StartOfString);
     ThisVar = Value.StartOfString;
     while (*ThisVar != '\0') {
         YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("%s\n"), ThisVar);
@@ -201,16 +216,26 @@ IniToolReadFromIniFile(
     YORI_STRING RealFileName;
     YORI_STRING Value;
 
+    if (DllKernel32.pGetPrivateProfileStringW == NULL) {
+        return FALSE;
+    }
+
     if (!YoriLibUserStringToSingleFilePath(UserFileName, FALSE, &RealFileName)) {
         return FALSE;
     }
 
-    if (!YoriLibAllocateString(&Value, 16 * 1024)) {
+    if (!YoriLibAllocateString(&Value, 32 * 1024)) {
         YoriLibFreeStringContents(&RealFileName);
         return FALSE;
     }
 
-    Value.LengthInChars = GetPrivateProfileString(Section->StartOfString, Key->StartOfString, _T(""), Value.StartOfString, Value.LengthAllocated, RealFileName.StartOfString);
+    Value.LengthInChars = (YORI_ALLOC_SIZE_T)
+        DllKernel32.pGetPrivateProfileStringW(Section->StartOfString,
+                                              Key->StartOfString,
+                                              _T(""),
+                                              Value.StartOfString,
+                                              Value.LengthAllocated,
+                                              RealFileName.StartOfString);
     YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("%y"), &Value);
 
     YoriLibFreeStringContents(&RealFileName);
@@ -241,11 +266,15 @@ IniToolWriteToIniFile(
 {
     YORI_STRING RealFileName;
 
+    if (DllKernel32.pWritePrivateProfileStringW == NULL) {
+        return FALSE;
+    }
+
     if (!YoriLibUserStringToSingleFilePath(UserFileName, FALSE, &RealFileName)) {
         return FALSE;
     }
 
-    if (!WritePrivateProfileString(Section->StartOfString, Key->StartOfString, Value->StartOfString, RealFileName.StartOfString)) {
+    if (!DllKernel32.pWritePrivateProfileStringW(Section->StartOfString, Key->StartOfString, Value->StartOfString, RealFileName.StartOfString)) {
         YoriLibFreeStringContents(&RealFileName);
         return FALSE;
     }
@@ -290,13 +319,13 @@ typedef enum _INITOOL_OPERATION {
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     YORI_STRING Arg;
     INITOOL_OPERATION Op;
 
@@ -309,28 +338,28 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 IniToolHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2018"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("d")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("d")) == 0) {
                 Op = IniToolOpDeleteValue;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("l")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("l")) == 0) {
                 Op = IniToolOpListSection;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("r")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("r")) == 0) {
                 Op = IniToolOpReadValue;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("s")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("s")) == 0) {
                 Op = IniToolOpListSections;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("w")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("w")) == 0) {
                 Op = IniToolOpWriteValue;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 ArgumentUnderstood = TRUE;
                 StartArg = i + 1;
                 break;

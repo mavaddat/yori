@@ -3,7 +3,7 @@
  *
  * Yori shell text editor
  *
- * Copyright (c) 2020-2021 Malcolm J. Smith
+ * Copyright (c) 2020-2024 Malcolm J. Smith
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -38,17 +38,18 @@ CHAR strEditHelpText[] =
         "\n"
         "Displays editor.\n"
         "\n"
-        "EDIT [-license] [-a] [-e encoding] [-m]\n"
+        "EDIT [-license] [-a] [-b] [-e encoding] [-r] [filename]\n"
         "\n"
         "   -a             Use ASCII characters for drawing\n"
+        "   -b             Use black and white display\n"
         "   -e <encoding>  Specifies the character encoding to use\n"
-        "   -m             Use modern keyboard navigation instead of Edit compatible\n";
+        "   -r             Open file as read only\n";
 
 /**
  The copyright year string to display with license text.
  */
 const
-TCHAR strCopyrightYear[] = _T("2020-2021");
+TCHAR strEditCopyrightYear[] = _T("2020-2024");
 
 /**
  Display usage text to the user.
@@ -157,6 +158,23 @@ typedef struct _EDIT_CONTEXT {
     DWORD OptionsTraditionalMenuIndex;
 
     /**
+     The index of the auto indent item in the options menu.
+     */
+    DWORD OptionsAutoIndentMenuIndex;
+
+    /**
+     The index of the expand tab item in the options menu.
+     */
+    DWORD OptionsExpandTabMenuIndex;
+
+    /**
+     The number of space characters to display for each tab character.  This
+     is temporarily initialized to -1 to indicate the edit control should
+     use a default value.
+     */
+    YORI_ALLOC_SIZE_T TabWidth;
+
+    /**
      TRUE if a BOM should be written to the output stream, FALSE if not.
      */
     BOOLEAN WriteBom;
@@ -168,6 +186,19 @@ typedef struct _EDIT_CONTEXT {
     BOOLEAN SearchMatchCase;
 
     /**
+     TRUE to enable auto indent, where a new line after a line containing
+     white space starts with the same leading white space.  FALSE if a new
+     line should start at the beginning of the line.
+     */
+    BOOLEAN AutoIndent;
+
+    /**
+     TRUE to enable expand tab, where a tab key press is substituted with
+     space characters.  FALSE if a tab key press should be a tab character.
+     */
+    BOOLEAN ExpandTab;
+
+    /**
      TRUE to enable traditional MS-DOS edit navigation, where the cursor can
      move infinitely right on any line.  FALSE to use more modern Windows
      style multiline semantics, where left at the start of the line moves to
@@ -176,9 +207,21 @@ typedef struct _EDIT_CONTEXT {
     BOOLEAN TraditionalNavigation;
 
     /**
+     If TRUE, the display should be black and white with no color.  FALSE
+     is default, using a blue background.
+     */
+    BOOLEAN UseMonoDisplay;
+
+    /**
      TRUE to use only 7 bit ASCII characters for visual display.
      */
     BOOLEAN UseAsciiDrawing;
+
+    /**
+     TRUE if the current file is opened read only, FALSE if it is opened for
+     editing.
+     */
+    BOOLEAN ReadOnly;
 
 } EDIT_CONTEXT, *PEDIT_CONTEXT;
 
@@ -202,6 +245,84 @@ EditFreeEditContext(
 }
 
 /**
+ Attempt to load user settings from the registry.  Unless the user has saved
+ settings, there will be nothing to load.
+
+ @param EditContext Pointer to the edit context to populate with default
+        settings.
+
+ @return TRUE to indicate success, FALSE to indicate failure.
+ */
+BOOLEAN
+EditLoadDefaults(
+    __in PEDIT_CONTEXT EditContext
+    )
+{
+    HKEY hKey;
+    DWORD Err;
+    DWORD Value;
+    DWORD ValueSize;
+    DWORD Type;
+    YoriLibLoadAdvApi32Functions();
+
+    if (DllAdvApi32.pRegCloseKey == NULL ||
+        DllAdvApi32.pRegOpenKeyExW == NULL ||
+        DllAdvApi32.pRegQueryValueExW == NULL) {
+
+        // MSFIX: Error
+        return FALSE;
+    }
+
+    Err = DllAdvApi32.pRegOpenKeyExW(HKEY_CURRENT_USER,
+                                     _T("SOFTWARE\\malsmith.net\\Yedit"),
+                                     0,
+                                     KEY_QUERY_VALUE,
+                                     &hKey);
+    if (Err != ERROR_SUCCESS) {
+        return TRUE;
+    }
+
+    ValueSize = sizeof(Value);
+    Err = DllAdvApi32.pRegQueryValueExW(hKey, _T("TabWidth"), NULL, &Type, (LPBYTE)&Value, &ValueSize);
+    if (Err == ERROR_SUCCESS && Type == REG_DWORD && ValueSize == sizeof(DWORD)) {
+        EditContext->TabWidth = (YORI_ALLOC_SIZE_T)Value;
+    }
+
+    ValueSize = sizeof(Value);
+    Err = DllAdvApi32.pRegQueryValueExW(hKey, _T("AutoIndent"), NULL, &Type, (LPBYTE)&Value, &ValueSize);
+    if (Err == ERROR_SUCCESS && Type == REG_DWORD && ValueSize == sizeof(DWORD)) {
+        if (Value != 0) {
+            EditContext->AutoIndent = TRUE;
+        } else {
+            EditContext->AutoIndent = FALSE;
+        }
+    }
+
+    ValueSize = sizeof(Value);
+    Err = DllAdvApi32.pRegQueryValueExW(hKey, _T("ExpandTab"), NULL, &Type, (LPBYTE)&Value, &ValueSize);
+    if (Err == ERROR_SUCCESS && Type == REG_DWORD && ValueSize == sizeof(DWORD)) {
+        if (Value != 0) {
+            EditContext->ExpandTab = TRUE;
+        } else {
+            EditContext->ExpandTab = FALSE;
+        }
+    }
+
+    ValueSize = sizeof(Value);
+    Err = DllAdvApi32.pRegQueryValueExW(hKey, _T("TraditionalNavigation"), NULL, &Type, (LPBYTE)&Value, &ValueSize);
+    if (Err == ERROR_SUCCESS && Type == REG_DWORD && ValueSize == sizeof(DWORD)) {
+        if (Value != 0) {
+            EditContext->TraditionalNavigation = TRUE;
+        } else {
+            EditContext->TraditionalNavigation = FALSE;
+        }
+    }
+
+    DllAdvApi32.pRegCloseKey(hKey);
+    return TRUE;
+}
+
+/**
  Set the caption on the edit control to match the file name component of the
  currently opened file.
  */
@@ -218,7 +339,7 @@ EditUpdateOpenedFileCaption(
     FinalSlash = YoriLibFindRightMostCharacter(&EditContext->OpenFileName, '\\');
     if (FinalSlash != NULL) {
         NewCaption.StartOfString = FinalSlash + 1;
-        NewCaption.LengthInChars = (DWORD)(EditContext->OpenFileName.LengthInChars - (FinalSlash - EditContext->OpenFileName.StartOfString + 1));
+        NewCaption.LengthInChars = (EditContext->OpenFileName.LengthInChars - (YORI_ALLOC_SIZE_T)(FinalSlash - EditContext->OpenFileName.StartOfString + 1));
     } else {
         NewCaption.StartOfString = EditContext->OpenFileName.StartOfString;
         NewCaption.LengthInChars = EditContext->OpenFileName.LengthInChars;
@@ -246,15 +367,16 @@ EditPopulateFromStream(
     PVOID LineContext = NULL;
     YORI_STRING LineString;
     PTCHAR NewLine;
-    DWORD BytesRequired;
-    DWORD BytesAfterAlignment;
+    YORI_ALLOC_SIZE_T BytesRequired;
+    YORI_ALLOC_SIZE_T BytesAfterAlignment;
     PUCHAR Buffer = NULL;
-    DWORD BytesRemainingInBuffer = 0;
-    DWORD BufferOffset = 0;
-    DWORD Alignment;
+    YORI_ALLOC_SIZE_T BytesRemainingInBuffer = 0;
+    YORI_ALLOC_SIZE_T BufferOffset = 0;
+    YORI_ALLOC_SIZE_T Alignment;
     BOOLEAN Result;
-    DWORD LinesAllocated;
-    DWORD LinesPopulated;
+    YORI_ALLOC_SIZE_T LinesAllocated;
+    YORI_ALLOC_SIZE_T LinesPopulated;
+    DWORD BytesDesired;
     PYORI_STRING LineArray;
     YORI_LIB_LINE_ENDING FirstLineEnding;
     YORI_LIB_LINE_ENDING LineEnding;
@@ -300,10 +422,11 @@ EditPopulateFromStream(
             if (Buffer != NULL) {
                 YoriLibDereference(Buffer);
             }
-            BytesRemainingInBuffer = 64 * 1024;
-            if (BytesAfterAlignment > BytesRemainingInBuffer) {
-                BytesRemainingInBuffer = BytesAfterAlignment;
+            BytesDesired = 64 * 1024;
+            if (BytesAfterAlignment > BytesDesired) {
+                BytesDesired = BytesAfterAlignment;
             }
+            BytesRemainingInBuffer = YoriLibMaximumAllocationInRange(BytesAfterAlignment, BytesDesired);
             BufferOffset = 0;
 
             Buffer = YoriLibReferencedMalloc(BytesRemainingInBuffer);
@@ -319,14 +442,28 @@ EditPopulateFromStream(
 
         if (LinesPopulated == LinesAllocated) {
             PYORI_STRING NewLineArray;
-            DWORD NewLineCount;
+            YORI_ALLOC_SIZE_T BytesToAllocate;
+            DWORD RequiredBytes;
+            DWORD DesiredBytes;
 
-            NewLineCount = LinesAllocated * 2;
-            if (NewLineCount < 0x1000) {
-                NewLineCount = 0x1000;
+            RequiredBytes = LinesAllocated;
+            RequiredBytes = RequiredBytes + 1;
+            RequiredBytes = RequiredBytes * sizeof(YORI_STRING);
+
+            DesiredBytes = LinesAllocated;
+            DesiredBytes = DesiredBytes * 2;
+            if (DesiredBytes < 0x1000) {
+                DesiredBytes = 0x1000;
+            }
+            DesiredBytes = DesiredBytes * sizeof(YORI_STRING);
+
+            BytesToAllocate = YoriLibMaximumAllocationInRange(RequiredBytes, DesiredBytes);
+            if (BytesToAllocate == 0) {
+                Result = FALSE;
+                break;
             }
 
-            NewLineArray = YoriLibReferencedMalloc(NewLineCount * sizeof(YORI_STRING));
+            NewLineArray = YoriLibReferencedMalloc(BytesToAllocate);
             if (NewLineArray == NULL) {
                 Result = FALSE;
                 break;
@@ -340,7 +477,7 @@ EditPopulateFromStream(
                 YoriLibDereference(LineArray);
             }
             LineArray = NewLineArray;
-            LinesAllocated = NewLineCount;
+            LinesAllocated = BytesToAllocate / sizeof(YORI_STRING);
         }
 
         //
@@ -364,8 +501,8 @@ EditPopulateFromStream(
         //  Align to 8 bytes for the next line.
         //
 
-        BufferOffset += BytesAfterAlignment;
-        BytesRemainingInBuffer -= BytesAfterAlignment;
+        BufferOffset = BufferOffset + BytesAfterAlignment;
+        BytesRemainingInBuffer = BytesRemainingInBuffer - BytesAfterAlignment;
     }
 
     if (Buffer != NULL) {
@@ -404,6 +541,86 @@ EditPopulateFromStream(
     }
 
     return Result;
+}
+
+/**
+ Check if a file has the read only bit set.  If it does, we won't be able to
+ overwrite it.  Prompt the user to remove the read only bit, and if it can
+ be removed successfully, allow the save to continue.
+
+ @param Parent Pointer to the control describing the main window.
+
+ @param FileName The file that may be overwritten.
+
+ @return TRUE to indicate that the file is still write protected and cannot
+         be overwritten.  FALSE to indicate that the file doesn't exist or
+         is not write protected, so save can continue.
+ */
+BOOLEAN
+EditIsFileWriteProtected(
+    __in PYORI_WIN_CTRL_HANDLE Parent,
+    __in PYORI_STRING FileName
+    )
+{
+    DWORD Attributes;
+    DWORD ButtonPressed;
+    YORI_STRING UnescapedPath;
+    YORI_STRING Text;
+    YORI_STRING Title;
+    YORI_STRING ButtonText[2];
+    BOOLEAN WriteProtected;
+
+    WriteProtected = FALSE;
+    ASSERT(YoriLibIsStringNullTerminated(FileName));
+    Attributes = GetFileAttributes(FileName->StartOfString);
+    if (Attributes != (DWORD)-1 &&
+        (Attributes & FILE_ATTRIBUTE_READONLY) != 0) {
+
+        WriteProtected = TRUE;
+        YoriLibConstantString(&Title, _T("Overwrite read only file"));
+
+        YoriLibInitEmptyString(&UnescapedPath);
+        if (!YoriLibUnescapePath(FileName, &UnescapedPath)) {
+            UnescapedPath.StartOfString = FileName->StartOfString;
+            UnescapedPath.LengthInChars = FileName->LengthInChars;
+        }
+
+        YoriLibInitEmptyString(&Text);
+        YoriLibYPrintf(&Text,
+                       _T("%y is read only.  Overwrite?"),
+                       &UnescapedPath);
+
+        YoriLibFreeStringContents(&UnescapedPath);
+        YoriLibConstantString(&ButtonText[0], _T("&Overwrite"));
+        YoriLibConstantString(&ButtonText[1], _T("Do&n't save"));
+        ButtonPressed = YoriDlgMessageBox(YoriWinGetWindowManagerHandle(Parent),
+                                          &Title,
+                                          &Text,
+                                          2,
+                                          ButtonText,
+                                          0,
+                                          0);
+        YoriLibFreeStringContents(&Text);
+
+        if (ButtonPressed == 1) {
+            Attributes = Attributes & ~(FILE_ATTRIBUTE_READONLY);
+            if (SetFileAttributes(FileName->StartOfString, Attributes)) {
+                WriteProtected = FALSE;
+            } else {
+                YoriLibConstantString(&Text, _T("Could not remove read only attribute."));
+                YoriLibConstantString(&ButtonText[0], _T("&Ok"));
+                YoriDlgMessageBox(YoriWinGetWindowManagerHandle(Parent),
+                                  &Title,
+                                  &Text,
+                                  1,
+                                  ButtonText,
+                                  0,
+                                  0);
+            }
+        }
+    }
+
+    return WriteProtected;
 }
 
 /**
@@ -489,10 +706,12 @@ EditSaveFile(
     __in PYORI_STRING FileName
     )
 {
-    DWORD LineIndex;
-    DWORD LineCount;
+    BOOLEAN AutoIndentActive;
+    YORI_ALLOC_SIZE_T AutoIndentLine;
+    YORI_ALLOC_SIZE_T LineIndex;
+    YORI_ALLOC_SIZE_T LineCount;
     DWORD SavedEncoding;
-    DWORD Index;
+    YORI_ALLOC_SIZE_T Index;
     DWORD Attributes;
     PYORI_STRING Line;
     YORI_STRING ParentDirectory;
@@ -538,6 +757,8 @@ EditSaveFile(
         return FALSE;
     }
 
+    YoriWinMultilineEditGetAutoIndent(EditContext->MultilineEdit, NULL, &AutoIndentActive, &AutoIndentLine, NULL);
+
     //
     //  Write all of the lines to the temporary file and abort on failure.
     //
@@ -580,8 +801,14 @@ EditSaveFile(
     YoriLibSetMultibyteOutputEncoding(EditContext->Encoding);
     for (LineIndex = 0; LineIndex < LineCount; LineIndex++) {
         Line = YoriWinMultilineEditGetLineByIndex(EditContext->MultilineEdit, LineIndex);
-        if (Line->LengthInChars > 0) {
-            if (!YoriLibOutputTextToMultibyteDevice(TempHandle, Line)) {
+        //
+        //  We only need to write lines with contents.  If the line is only
+        //  auto indent, then pretend it's empty since the user hasn't
+        //  written anything there.
+        //
+
+        if (Line->LengthInChars > 0 && (!AutoIndentActive || LineIndex != AutoIndentLine)) {
+            if (!YoriLibOutputTextToMbyteDev(TempHandle, Line)) {
                 CloseHandle(TempHandle);
                 DeleteFile(TempFileName.StartOfString);
                 YoriLibFreeStringContents(&TempFileName);
@@ -589,7 +816,7 @@ EditSaveFile(
                 return FALSE;
             }
         }
-        if (!YoriLibOutputTextToMultibyteDevice(TempHandle, &EditContext->Newline)) {
+        if (!YoriLibOutputTextToMbyteDev(TempHandle, &EditContext->Newline)) {
             CloseHandle(TempHandle);
             DeleteFile(TempFileName.StartOfString);
             YoriLibFreeStringContents(&TempFileName);
@@ -775,13 +1002,13 @@ EditNewButtonClicked(
 
  @return The number of elements populated into the array.
  */
-DWORD
+WORD
 EditPopulateEncodingArray(
     __out_ecount(6) PYORI_DLG_FILE_CUSTOM_VALUE EncodingValues,
     __in BOOLEAN EncodingsForOpen
     )
 {
-    DWORD EncodingIndex;
+    WORD EncodingIndex;
 
     EncodingIndex = 0;
     if (EncodingsForOpen) {
@@ -847,7 +1074,7 @@ EditEncodingFromArrayIndex(
                     Encoding = CP_UTF8;
                     break;
             }
-            if (Encoding != -1) {
+            if (Encoding != (DWORD)-1) {
                 return Encoding;
             }
             Index = Index - 2;
@@ -875,7 +1102,7 @@ EditEncodingFromArrayIndex(
                     Encoding = CP_UTF8;
                     break;
             }
-            if (Encoding != -1) {
+            if (Encoding != (DWORD)-1) {
                 return Encoding;
             }
             Index = Index - 2;
@@ -915,14 +1142,14 @@ EditEncodingFromArrayIndex(
  @return The index into the array of Save As encodings.  If an unrecognized
          value is found, zero is used to select the default encoding.
  */
-DWORD
+WORD
 EditArrayIndexFromEncoding(
     __in DWORD Encoding,
     __in BOOLEAN HasBom
     )
 {
-    DWORD Index = 0;
-    DWORD Offset = 0;
+    WORD Index = 0;
+    WORD Offset = 0;
 
     if (YoriLibIsUtf8Supported()) {
         if (Encoding == CP_UTF8) {
@@ -938,16 +1165,16 @@ EditArrayIndexFromEncoding(
 
     switch(Encoding) {
         case CP_ACP:
-            Index = 0 + Offset;
+            Index = (WORD)(0 + Offset);
             break;
         case CP_OEMCP:
-            Index = 1 + Offset;
+            Index = (WORD)(1 + Offset);
             break;
         case CP_UTF16:
             if (HasBom) {
-                Index = 3 + Offset;
+                Index = (WORD)(3 + Offset);
             } else {
-                Index = 2 + Offset;
+                Index = (WORD)(2 + Offset);
             }
             break;
     }
@@ -969,10 +1196,11 @@ EditOpenButtonClicked(
     YORI_STRING Text;
     YORI_STRING FullName;
     PEDIT_CONTEXT EditContext;
+    YORI_DLG_FILE_CUSTOM_VALUE ReadOnlyValues[2];
     YORI_DLG_FILE_CUSTOM_VALUE EncodingValues[6];
-    YORI_DLG_FILE_CUSTOM_OPTION CustomOptionArray[1];
+    YORI_DLG_FILE_CUSTOM_OPTION CustomOptionArray[2];
     DWORD Encoding;
-    DWORD EncodingCount;
+    YORI_ALLOC_SIZE_T EncodingCount;
     BOOLEAN HasBom;
 
     PYORI_WIN_CTRL_HANDLE Parent;
@@ -981,10 +1209,22 @@ EditOpenButtonClicked(
 
     EncodingCount = EditPopulateEncodingArray(EncodingValues, TRUE);
 
-    YoriLibConstantString(&CustomOptionArray[0].Description, _T("&Encoding:"));
-    CustomOptionArray[0].ValueCount = EncodingCount;
-    CustomOptionArray[0].Values = EncodingValues;
-    CustomOptionArray[0].SelectedValue = 0;
+    YoriLibConstantString(&ReadOnlyValues[0].ValueText, _T("Open for editing"));
+    YoriLibConstantString(&ReadOnlyValues[1].ValueText, _T("Open read only"));
+
+    YoriLibConstantString(&CustomOptionArray[0].Description, _T("&Read Only:"));
+    CustomOptionArray[0].ValueCount = 2;
+    CustomOptionArray[0].Values = ReadOnlyValues;
+    if (EditContext->ReadOnly) {
+        CustomOptionArray[0].SelectedValue = 1;
+    } else {
+        CustomOptionArray[0].SelectedValue = 0;
+    }
+
+    YoriLibConstantString(&CustomOptionArray[1].Description, _T("&Encoding:"));
+    CustomOptionArray[1].ValueCount = EncodingCount;
+    CustomOptionArray[1].Values = EncodingValues;
+    CustomOptionArray[1].SelectedValue = 0;
 
     YoriLibConstantString(&Title, _T("Open"));
     YoriLibInitEmptyString(&Text);
@@ -999,6 +1239,12 @@ EditOpenButtonClicked(
         YoriLibFreeStringContents(&Text);
         return;
     }
+
+    if (!EditPromptForSaveIfModified(Ctrl, EditContext)) {
+        YoriLibFreeStringContents(&Text);
+        return;
+    }
+
     YoriLibInitEmptyString(&FullName);
 
     if (!YoriLibUserStringToSingleFilePath(&Text, TRUE, &FullName)) {
@@ -1006,8 +1252,8 @@ EditOpenButtonClicked(
         return;
     }
 
-    Encoding = EditEncodingFromArrayIndex(CustomOptionArray[0].SelectedValue, TRUE, &HasBom);
-    if (Encoding != -1) {
+    Encoding = EditEncodingFromArrayIndex(CustomOptionArray[1].SelectedValue, TRUE, &HasBom);
+    if (Encoding != (DWORD)-1) {
         EditContext->Encoding = Encoding;
     }
 
@@ -1035,6 +1281,14 @@ EditOpenButtonClicked(
     memcpy(&EditContext->OpenFileName, &FullName, sizeof(YORI_STRING));
     EditUpdateOpenedFileCaption(EditContext);
     YoriWinMultilineEditSetModifyState(EditContext->MultilineEdit, FALSE);
+
+    if (CustomOptionArray[0].SelectedValue != 0) {
+        EditContext->ReadOnly = TRUE;
+    } else {
+        EditContext->ReadOnly = FALSE;
+    }
+
+    YoriWinMultilineEditSetReadOnly(EditContext->MultilineEdit, EditContext->ReadOnly);
 }
 
 VOID
@@ -1063,6 +1317,10 @@ EditSaveButtonClicked(
 
     if (EditContext->OpenFileName.StartOfString == NULL) {
         EditSaveAsButtonClicked(Ctrl);
+        return;
+    }
+
+    if (EditIsFileWriteProtected(Parent, &EditContext->OpenFileName)) {
         return;
     }
 
@@ -1103,7 +1361,7 @@ EditSaveAsButtonClicked(
     YORI_DLG_FILE_CUSTOM_VALUE LineEndingValues[3];
     YORI_DLG_FILE_CUSTOM_OPTION CustomOptionArray[2];
     DWORD Encoding;
-    DWORD EncodingCount;
+    YORI_ALLOC_SIZE_T EncodingCount;
     BOOLEAN HasBom;
 
     PYORI_WIN_CTRL_HANDLE Parent;
@@ -1126,9 +1384,9 @@ EditSaveAsButtonClicked(
     CustomOptionArray[1].Values = LineEndingValues;
     CustomOptionArray[1].SelectedValue = 0;
 
-    if (YoriLibCompareStringWithLiteral(&EditContext->Newline, _T("\n")) == 0) {
+    if (YoriLibCompareStringLit(&EditContext->Newline, _T("\n")) == 0) {
         CustomOptionArray[1].SelectedValue = 1;
-    } else if (YoriLibCompareStringWithLiteral(&EditContext->Newline, _T("\r")) == 0) {
+    } else if (YoriLibCompareStringLit(&EditContext->Newline, _T("\r")) == 0) {
         CustomOptionArray[1].SelectedValue = 2;
     }
 
@@ -1160,7 +1418,7 @@ EditSaveAsButtonClicked(
     //
 
     ASSERT(Encoding != CP_UTF8_OR_16);
-    if (Encoding != -1) {
+    if (Encoding != (DWORD)-1) {
         EditContext->Encoding = Encoding;
         EditContext->WriteBom = HasBom;
     }
@@ -1175,6 +1433,10 @@ EditSaveAsButtonClicked(
         case 2:
             YoriLibConstantString(&EditContext->Newline, _T("\r"));
             break;
+    }
+
+    if (EditIsFileWriteProtected(Parent, &FullName)) {
+        return;
     }
 
     YoriLibFreeStringContents(&Text);
@@ -1429,15 +1691,15 @@ __success(return)
 BOOLEAN
 EditFindNextMatchingString(
     __in PEDIT_CONTEXT EditContext,
-    __in DWORD StartLine,
-    __in DWORD StartOffset,
-    __out PDWORD NextMatchLine,
-    __out PDWORD NextMatchOffset
+    __in YORI_ALLOC_SIZE_T StartLine,
+    __in YORI_ALLOC_SIZE_T StartOffset,
+    __out PYORI_ALLOC_SIZE_T NextMatchLine,
+    __out PYORI_ALLOC_SIZE_T NextMatchOffset
     )
 {
-    DWORD LineCount;
-    DWORD LineIndex;
-    DWORD Offset;
+    YORI_ALLOC_SIZE_T LineCount;
+    YORI_ALLOC_SIZE_T LineIndex;
+    YORI_ALLOC_SIZE_T Offset;
     YORI_STRING Substring;
     PYORI_STRING Line;
     PYORI_STRING Match;
@@ -1465,9 +1727,9 @@ EditFindNextMatchingString(
         Substring.StartOfString = Line->StartOfString + StartOffset;
         Substring.LengthInChars = Line->LengthInChars - StartOffset;
         if (EditContext->SearchMatchCase) {
-            Match = YoriLibFindFirstMatchingSubstring(&Substring, 1, &EditContext->SearchString, &Offset);
+            Match = YoriLibFindFirstMatchSubstr(&Substring, 1, &EditContext->SearchString, &Offset);
         } else {
-            Match = YoriLibFindFirstMatchingSubstringInsensitive(&Substring, 1, &EditContext->SearchString, &Offset);
+            Match = YoriLibFindFirstMatchSubstrIns(&Substring, 1, &EditContext->SearchString, &Offset);
         }
 
         if (Match != NULL) {
@@ -1484,9 +1746,9 @@ EditFindNextMatchingString(
     for (LineIndex = StartLine + 1; LineIndex < LineCount; LineIndex++) {
         Line = YoriWinMultilineEditGetLineByIndex(EditContext->MultilineEdit, LineIndex);
         if (EditContext->SearchMatchCase) {
-            Match = YoriLibFindFirstMatchingSubstring(Line, 1, &EditContext->SearchString, &Offset);
+            Match = YoriLibFindFirstMatchSubstr(Line, 1, &EditContext->SearchString, &Offset);
         } else {
-            Match = YoriLibFindFirstMatchingSubstringInsensitive(Line, 1, &EditContext->SearchString, &Offset);
+            Match = YoriLibFindFirstMatchSubstrIns(Line, 1, &EditContext->SearchString, &Offset);
         }
         if (Match != NULL) {
             *NextMatchLine = LineIndex;
@@ -1522,15 +1784,15 @@ __success(return)
 BOOLEAN
 EditFindPreviousMatchingString(
     __in PEDIT_CONTEXT EditContext,
-    __in DWORD StartLine,
-    __in DWORD StartOffset,
-    __out PDWORD NextMatchLine,
-    __out PDWORD NextMatchOffset
+    __in YORI_ALLOC_SIZE_T StartLine,
+    __in YORI_ALLOC_SIZE_T StartOffset,
+    __out PYORI_ALLOC_SIZE_T NextMatchLine,
+    __out PYORI_ALLOC_SIZE_T NextMatchOffset
     )
 {
-    DWORD LineCount;
-    DWORD LineIndex;
-    DWORD Offset;
+    YORI_ALLOC_SIZE_T LineCount;
+    YORI_ALLOC_SIZE_T LineIndex;
+    YORI_ALLOC_SIZE_T Offset;
     YORI_STRING Substring;
     PYORI_STRING Line;
     PYORI_STRING Match;
@@ -1561,9 +1823,9 @@ EditFindPreviousMatchingString(
         }
     }
     if (EditContext->SearchMatchCase) {
-        Match = YoriLibFindLastMatchingSubstring(&Substring, 1, &EditContext->SearchString, &Offset);
+        Match = YoriLibFindLastMatchSubstr(&Substring, 1, &EditContext->SearchString, &Offset);
     } else {
-        Match = YoriLibFindLastMatchingSubstringInsensitive(&Substring, 1, &EditContext->SearchString, &Offset);
+        Match = YoriLibFindLastMatchSubstrIns(&Substring, 1, &EditContext->SearchString, &Offset);
     }
 
     if (Match != NULL) {
@@ -1579,9 +1841,9 @@ EditFindPreviousMatchingString(
     for (LineIndex = StartLine; LineIndex > 0; LineIndex--) {
         Line = YoriWinMultilineEditGetLineByIndex(EditContext->MultilineEdit, LineIndex - 1);
         if (EditContext->SearchMatchCase) {
-            Match = YoriLibFindLastMatchingSubstring(Line, 1, &EditContext->SearchString, &Offset);
+            Match = YoriLibFindLastMatchSubstr(Line, 1, &EditContext->SearchString, &Offset);
         } else {
-            Match = YoriLibFindLastMatchingSubstringInsensitive(Line, 1, &EditContext->SearchString, &Offset);
+            Match = YoriLibFindLastMatchSubstrIns(Line, 1, &EditContext->SearchString, &Offset);
         }
         if (Match != NULL) {
             *NextMatchLine = LineIndex - 1;
@@ -1606,13 +1868,13 @@ EditFindNextFromCurrentPosition(
     __in PEDIT_CONTEXT EditContext
     )
 {
-    DWORD CursorOffset;
-    DWORD CursorLine;
-    DWORD NextMatchLine;
-    DWORD NextMatchOffset;
+    YORI_ALLOC_SIZE_T CursorOffset;
+    YORI_ALLOC_SIZE_T CursorLine;
+    YORI_ALLOC_SIZE_T NextMatchLine;
+    YORI_ALLOC_SIZE_T NextMatchOffset;
 
-    DWORD SelectionEndLine;
-    DWORD SelectionEndOffset;
+    YORI_ALLOC_SIZE_T SelectionEndLine;
+    YORI_ALLOC_SIZE_T SelectionEndOffset;
 
     //
     //  If a selection is active, start from the second character in the
@@ -1762,15 +2024,15 @@ EditFindPreviousButtonClicked(
     __in PYORI_WIN_CTRL_HANDLE Ctrl
     )
 {
-    DWORD CursorOffset;
-    DWORD CursorLine;
-    DWORD NextMatchLine;
-    DWORD NextMatchOffset;
+    YORI_ALLOC_SIZE_T CursorOffset;
+    YORI_ALLOC_SIZE_T CursorLine;
+    YORI_ALLOC_SIZE_T NextMatchLine;
+    YORI_ALLOC_SIZE_T NextMatchOffset;
     PYORI_WIN_CTRL_HANDLE Parent;
     PEDIT_CONTEXT EditContext;
 
-    DWORD SelectionEndLine;
-    DWORD SelectionEndOffset;
+    YORI_ALLOC_SIZE_T SelectionEndLine;
+    YORI_ALLOC_SIZE_T SelectionEndOffset;
 
     Parent = YoriWinGetControlParent(Ctrl);
     EditContext = YoriWinGetControlContext(Parent);
@@ -1842,10 +2104,10 @@ EditChangeButtonClicked(
     BOOLEAN MatchFound;
     PYORI_WIN_CTRL_HANDLE Parent;
     PEDIT_CONTEXT EditContext;
-    DWORD StartLine;
-    DWORD StartOffset;
-    DWORD NextMatchLine;
-    DWORD NextMatchOffset;
+    YORI_ALLOC_SIZE_T StartLine;
+    YORI_ALLOC_SIZE_T StartOffset;
+    YORI_ALLOC_SIZE_T NextMatchLine;
+    YORI_ALLOC_SIZE_T NextMatchOffset;
     WORD DialogTop;
 
     Parent = YoriWinGetControlParent(Ctrl);
@@ -1896,10 +2158,10 @@ EditChangeButtonClicked(
 
                 COORD WinMgrSize;
                 COORD ClientSize;
-                DWORD CursorLine;
-                DWORD CursorOffset;
-                DWORD ViewportLeft;
-                DWORD ViewportTop;
+                YORI_ALLOC_SIZE_T CursorLine;
+                YORI_ALLOC_SIZE_T CursorOffset;
+                YORI_ALLOC_SIZE_T ViewportLeft;
+                YORI_ALLOC_SIZE_T ViewportTop;
                 WORD DialogHeight;
                 WORD RemainingEditHeight;
 
@@ -1918,7 +2180,7 @@ EditChangeButtonClicked(
 
                 if (CursorLine > (DWORD)(ViewportTop + RemainingEditHeight - 1)) {
                     ViewportTop = CursorLine - (RemainingEditHeight / 2);
-                    if (CursorOffset + EditContext->SearchString.LengthInChars < (DWORD)ClientSize.X) {
+                    if (CursorOffset + EditContext->SearchString.LengthInChars < (YORI_ALLOC_SIZE_T)ClientSize.X) {
                         ViewportLeft = 0;
                     }
 
@@ -2017,8 +2279,8 @@ EditGoToLineButtonClicked(
     YORI_STRING Text;
     PYORI_WIN_CTRL_HANDLE Parent;
     PEDIT_CONTEXT EditContext;
-    LONGLONG llNewLine;
-    DWORD CharsConsumed;
+    YORI_MAX_SIGNED_T llNewLine;
+    YORI_ALLOC_SIZE_T CharsConsumed;
 
     Parent = YoriWinGetControlParent(Ctrl);
     EditContext = YoriWinGetControlContext(Parent);
@@ -2028,6 +2290,7 @@ EditGoToLineButtonClicked(
 
     YoriDlgInput(YoriWinGetWindowManagerHandle(Parent),
                  &Title,
+                 TRUE,
                  &Text);
 
     if (Text.LengthInChars == 0) {
@@ -2038,8 +2301,8 @@ EditGoToLineButtonClicked(
     if (YoriLibStringToNumber(&Text, FALSE, &llNewLine, &CharsConsumed) &&
         CharsConsumed > 0) {
 
-        DWORD NewLine;
-        NewLine = (DWORD)llNewLine;
+        YORI_ALLOC_SIZE_T NewLine;
+        NewLine = (YORI_ALLOC_SIZE_T)llNewLine;
         if (NewLine > 0) {
             NewLine--;
         }
@@ -2062,19 +2325,16 @@ EditDisplayOptionsButtonClicked(
 {
     PYORI_WIN_CTRL_HANDLE Parent;
     PEDIT_CONTEXT EditContext;
-    DWORD NewTabWidth;
+    YORI_ALLOC_SIZE_T NewTabWidth;
 
     Parent = YoriWinGetControlParent(Ctrl);
     EditContext = YoriWinGetControlContext(Parent);
 
-    if (!YoriWinMultilineEditGetTabWidth(EditContext->MultilineEdit, &NewTabWidth)) {
+    if (!EditOpts(YoriWinGetWindowManagerHandle(Parent), EditContext->TabWidth, &NewTabWidth)) {
         return;
     }
 
-    if (!EditOpts(YoriWinGetWindowManagerHandle(Parent), NewTabWidth, &NewTabWidth)) {
-        return;
-    }
-
+    EditContext->TabWidth = NewTabWidth;
     YoriWinMultilineEditSetTabWidth(EditContext->MultilineEdit, NewTabWidth);
 }
 
@@ -2111,6 +2371,195 @@ EditTraditionalNavigationOptionsButtonClicked(
     YoriWinMultilineEditSetTraditionalNavigation(EditContext->MultilineEdit, EditContext->TraditionalNavigation);
 }
 
+/**
+ A callback invoked when the auto indent options menu item is invoked.
+
+ @param Ctrl Pointer to the menu bar control.
+ */
+VOID
+EditAutoIndentOptionsButtonClicked(
+    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    )
+{
+    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORI_WIN_CTRL_HANDLE OptionsMenu;
+    PYORI_WIN_CTRL_HANDLE AutoIndentMenuItem;
+
+    PEDIT_CONTEXT EditContext;
+    Parent = YoriWinGetControlParent(Ctrl);
+    EditContext = YoriWinGetControlContext(Parent);
+
+    OptionsMenu = YoriWinMenuBarGetSubmenuHandle(Ctrl, NULL, EditContext->OptionsMenuIndex);
+    AutoIndentMenuItem = YoriWinMenuBarGetSubmenuHandle(Ctrl, OptionsMenu, EditContext->OptionsAutoIndentMenuIndex);
+
+
+    if (EditContext->AutoIndent) {
+        EditContext->AutoIndent = FALSE;
+        YoriWinMenuBarUncheckMenuItem(AutoIndentMenuItem);
+    } else {
+        EditContext->AutoIndent = TRUE;
+        YoriWinMenuBarCheckMenuItem(AutoIndentMenuItem);
+    }
+    YoriWinMultilineEditSetAutoIndent(EditContext->MultilineEdit, EditContext->AutoIndent);
+}
+
+/**
+ A callback invoked when the expand tab options menu item is invoked.
+
+ @param Ctrl Pointer to the menu bar control.
+ */
+VOID
+EditExpandTabOptionsButtonClicked(
+    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    )
+{
+    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORI_WIN_CTRL_HANDLE OptionsMenu;
+    PYORI_WIN_CTRL_HANDLE ExpandTabMenuItem;
+
+    PEDIT_CONTEXT EditContext;
+    Parent = YoriWinGetControlParent(Ctrl);
+    EditContext = YoriWinGetControlContext(Parent);
+
+    OptionsMenu = YoriWinMenuBarGetSubmenuHandle(Ctrl, NULL, EditContext->OptionsMenuIndex);
+    ExpandTabMenuItem = YoriWinMenuBarGetSubmenuHandle(Ctrl, OptionsMenu, EditContext->OptionsExpandTabMenuIndex);
+
+
+    if (EditContext->ExpandTab) {
+        EditContext->ExpandTab = FALSE;
+        YoriWinMenuBarUncheckMenuItem(ExpandTabMenuItem);
+    } else {
+        EditContext->ExpandTab = TRUE;
+        YoriWinMenuBarCheckMenuItem(ExpandTabMenuItem);
+    }
+    YoriWinMultilineEditSetExpandTab(EditContext->MultilineEdit, EditContext->ExpandTab);
+}
+
+/**
+ A callback invoked when the save default settings options menu item is
+ invoked.
+
+ @param Ctrl Pointer to the menu bar control.
+ */
+VOID
+EditSaveDefaultSettingsOptionsButtonClicked(
+    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    )
+{
+    PYORI_WIN_CTRL_HANDLE Parent;
+    HKEY hKey;
+    DWORD Err;
+    DWORD Disposition;
+    DWORD Value;
+    PEDIT_CONTEXT EditContext;
+    YORI_STRING Title;
+    YORI_STRING Text;
+    YORI_STRING ButtonText[1];
+
+    Parent = YoriWinGetControlParent(Ctrl);
+    EditContext = YoriWinGetControlContext(Parent);
+
+    YoriLibLoadAdvApi32Functions();
+
+    if (DllAdvApi32.pRegCloseKey == NULL ||
+        DllAdvApi32.pRegCreateKeyExW == NULL ||
+        DllAdvApi32.pRegSetValueExW == NULL) {
+
+        YoriLibConstantString(&Title, _T("Error"));
+        YoriLibConstantString(&Text, _T("The operating system does not support registry updates."));
+        YoriLibConstantString(&ButtonText[0], _T("&Ok"));
+
+        YoriDlgMessageBox(YoriWinGetWindowManagerHandle(Parent),
+                          &Title,
+                          &Text,
+                          1,
+                          ButtonText,
+                          0,
+                          0);
+        return;
+    }
+
+    Err = DllAdvApi32.pRegCreateKeyExW(HKEY_CURRENT_USER,
+                                       _T("SOFTWARE\\malsmith.net\\Yedit"),
+                                       0,
+                                       NULL,
+                                       0,
+                                       KEY_SET_VALUE,
+                                       NULL,
+                                       &hKey,
+                                       &Disposition);
+    if (Err != ERROR_SUCCESS) {
+        YoriLibConstantString(&Title, _T("Error"));
+        YoriLibConstantString(&Text, _T("Could not open registry key."));
+        YoriLibConstantString(&ButtonText[0], _T("&Ok"));
+
+        YoriDlgMessageBox(YoriWinGetWindowManagerHandle(Parent),
+                          &Title,
+                          &Text,
+                          1,
+                          ButtonText,
+                          0,
+                          0);
+        return;
+    }
+
+    Value = EditContext->TabWidth;
+    Err = DllAdvApi32.pRegSetValueExW(hKey, _T("TabWidth"), 0, REG_DWORD, (LPBYTE)&Value, sizeof(Value));
+    if (Err != ERROR_SUCCESS) {
+        goto Exit;
+    }
+
+    Value = 0;
+    if (EditContext->AutoIndent) {
+        Value = 1;
+    }
+
+    Err = DllAdvApi32.pRegSetValueExW(hKey, _T("AutoIndent"), 0, REG_DWORD, (LPBYTE)&Value, sizeof(Value));
+    if (Err != ERROR_SUCCESS) {
+        goto Exit;
+    }
+
+    Value = 0;
+    if (EditContext->ExpandTab) {
+        Value = 1;
+    }
+
+    Err = DllAdvApi32.pRegSetValueExW(hKey, _T("ExpandTab"), 0, REG_DWORD, (LPBYTE)&Value, sizeof(Value));
+    if (Err != ERROR_SUCCESS) {
+        goto Exit;
+    }
+
+    Value = 0;
+    if (EditContext->TraditionalNavigation) {
+        Value = 1;
+    }
+
+    Err = DllAdvApi32.pRegSetValueExW(hKey, _T("TraditionalNavigation"), 0, REG_DWORD, (LPBYTE)&Value, sizeof(Value));
+    if (Err != ERROR_SUCCESS) {
+        goto Exit;
+    }
+
+Exit:
+
+    DllAdvApi32.pRegCloseKey(hKey);
+}
+
+/**
+ A callback invoked when the save defaults options menu item is invoked.
+
+ @param Ctrl Pointer to the menu bar control.
+ */
+VOID
+EditSaveDefaultsOptionsButtonClicked(
+    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    )
+{
+    PYORI_WIN_CTRL_HANDLE Parent;
+    PEDIT_CONTEXT EditContext;
+
+    Parent = YoriWinGetControlParent(Ctrl);
+    EditContext = YoriWinGetControlContext(Parent);
+}
 
 /**
  A callback invoked when the about menu item is invoked.
@@ -2127,7 +2576,7 @@ EditAboutButtonClicked(
     YORI_STRING LeftText;
     YORI_STRING CenteredText;
     YORI_STRING ButtonTexts[2];
-    DWORD Index;
+    YORI_ALLOC_SIZE_T Index;
     DWORD ButtonClicked;
 
     PYORI_WIN_CTRL_HANDLE Parent;
@@ -2138,7 +2587,7 @@ EditAboutButtonClicked(
     YoriLibYPrintf(&Text,
                    _T("Edit %i.%02i\n")
 #if YORI_BUILD_ID
-                   _T("  Build %i\n")
+                   _T("Build %i\n")
 #endif
                    _T("%hs"),
 
@@ -2185,19 +2634,19 @@ EditAboutButtonClicked(
     YoriLibConstantString(&ButtonTexts[0], _T("&Ok"));
     YoriLibConstantString(&ButtonTexts[1], _T("&View License..."));
 
-    ButtonClicked = EditAboutDialog(YoriWinGetWindowManagerHandle(Parent),
-                                    &Title,
-                                    &CenteredText,
-                                    &LeftText,
-                                    2,
-                                    ButtonTexts,
-                                    0,
-                                    0);
+    ButtonClicked = YoriDlgAbout(YoriWinGetWindowManagerHandle(Parent),
+                                 &Title,
+                                 &CenteredText,
+                                 &LeftText,
+                                 2,
+                                 ButtonTexts,
+                                 0,
+                                 0);
 
     YoriLibFreeStringContents(&Text);
 
     if (ButtonClicked == 2) {
-        if (YoriLibMitLicenseText(strCopyrightYear, &Text)) {
+        if (YoriLibMitLicenseText(strEditCopyrightYear, &Text)) {
 
             YoriLibInitEmptyString(&CenteredText);
             YoriLibConstantString(&Title, _T("License"));
@@ -2217,14 +2666,14 @@ EditAboutButtonClicked(
                 }
             }
 
-            EditAboutDialog(YoriWinGetWindowManagerHandle(Parent),
-                            &Title,
-                            &CenteredText,
-                            &Text,
-                            1,
-                            ButtonTexts,
-                            0,
-                            0);
+            YoriDlgAbout(YoriWinGetWindowManagerHandle(Parent),
+                         &Title,
+                         &CenteredText,
+                         &Text,
+                         1,
+                         ButtonTexts,
+                         0,
+                         0);
             YoriLibFreeStringContents(&Text);
         }
     }
@@ -2290,7 +2739,7 @@ EditPopulateMenuBar(
     YORI_WIN_MENU_ENTRY FileMenuEntries[6];
     YORI_WIN_MENU_ENTRY EditMenuEntries[7];
     YORI_WIN_MENU_ENTRY SearchMenuEntries[6];
-    YORI_WIN_MENU_ENTRY OptionsMenuEntries[2];
+    YORI_WIN_MENU_ENTRY OptionsMenuEntries[6];
     YORI_WIN_MENU_ENTRY HelpMenuEntries[1];
     YORI_WIN_MENU_ENTRY MenuEntries[5];
     YORI_WIN_MENU MenuBarItems;
@@ -2407,6 +2856,29 @@ EditPopulateMenuBar(
     OptionsMenuEntries[MenuIndex].NotifyCallback = EditTraditionalNavigationOptionsButtonClicked;
     EditContext->OptionsTraditionalMenuIndex = MenuIndex;
 
+    MenuIndex++;
+    if (EditContext->AutoIndent) {
+        OptionsMenuEntries[MenuIndex].Flags = YORI_WIN_MENU_ENTRY_CHECKED;
+    }
+    YoriLibConstantString(&OptionsMenuEntries[MenuIndex].Caption, _T("&Auto indent"));
+    OptionsMenuEntries[MenuIndex].NotifyCallback = EditAutoIndentOptionsButtonClicked;
+    EditContext->OptionsAutoIndentMenuIndex = MenuIndex;
+
+    MenuIndex++;
+    if (EditContext->ExpandTab) {
+        OptionsMenuEntries[MenuIndex].Flags = YORI_WIN_MENU_ENTRY_CHECKED;
+    }
+    YoriLibConstantString(&OptionsMenuEntries[MenuIndex].Caption, _T("&Expand tab"));
+    OptionsMenuEntries[MenuIndex].NotifyCallback = EditExpandTabOptionsButtonClicked;
+    EditContext->OptionsExpandTabMenuIndex = MenuIndex;
+
+    MenuIndex++;
+    OptionsMenuEntries[MenuIndex].Flags = YORI_WIN_MENU_ENTRY_SEPERATOR;
+
+    MenuIndex++;
+    YoriLibConstantString(&OptionsMenuEntries[MenuIndex].Caption, _T("&Save default settings"));
+    OptionsMenuEntries[MenuIndex].NotifyCallback = EditSaveDefaultSettingsOptionsButtonClicked;
+
     ZeroMemory(&HelpMenuEntries, sizeof(HelpMenuEntries));
     MenuIndex = 0;
     YoriLibConstantString(&HelpMenuEntries[MenuIndex].Caption, _T("&About..."));
@@ -2469,7 +2941,15 @@ EditPopulateMenuBar(
 /**
  A callback that is invoked when the window manager is being resized.  This
  typically means the user resized the window.  Since the purpose of edit is
- to fully occupy the window space, this implies the 
+ to fully occupy the window space, this implies the main window needs to be
+ repositioned and/or resized, and the controls within it need to be
+ repositioned and/or resized to full the window.
+
+ @param WindowHandle Handle to the main window.
+
+ @param OldPosition The old dimensions of the window manager.
+
+ @param NewPosition The new dimensions of the window manager.
  */
 VOID
 EditResizeWindowManager(
@@ -2555,8 +3035,14 @@ EditCreateMainWindow(
     PYORI_WIN_CTRL_HANDLE StatusBar;
     DWORD_PTR Result;
     YORI_STRING Caption;
+    YORI_WIN_COLOR_TABLE_ID ColorTableId;
 
-    if (!YoriWinOpenWindowManager(TRUE, &WinMgr)) {
+    ColorTableId = YoriWinColorTableDefault;
+    if (EditContext->UseMonoDisplay) {
+        ColorTableId = YoriWinColorTableMono;
+    }
+
+    if (!YoriWinOpenWindowManager(TRUE, ColorTableId, &WinMgr)) {
         return FALSE;
     }
 
@@ -2601,7 +3087,14 @@ EditCreateMainWindow(
         return FALSE;
     }
 
+    if (EditContext->TabWidth != (DWORD)-1) {
+        YoriWinMultilineEditSetTabWidth(MultilineEdit, EditContext->TabWidth);
+    } else {
+        YoriWinMultilineEditGetTabWidth(MultilineEdit, &EditContext->TabWidth);
+    }
+    YoriWinMultilineEditSetAutoIndent(MultilineEdit, EditContext->AutoIndent);
     YoriWinMultilineEditSetTraditionalNavigation(MultilineEdit, EditContext->TraditionalNavigation);
+    YoriWinMultilineEditSetExpandTab(MultilineEdit, EditContext->ExpandTab);
 
     Rect.Top = (SHORT)(Rect.Bottom + 1);
     Rect.Bottom = Rect.Top;
@@ -2625,9 +3118,15 @@ EditCreateMainWindow(
     EditContext->StatusBar = StatusBar;
 
     if (YoriLibDoesSystemSupportBackgroundColors()) {
-        YoriWinMultilineEditSetColor(MultilineEdit,
-                                     BACKGROUND_BLUE | FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,
-                                     BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE);
+        if (EditContext->UseMonoDisplay) {
+            YoriWinMultilineEditSetColor(MultilineEdit,
+                                         FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,
+                                         BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE);
+        } else {
+            YoriWinMultilineEditSetColor(MultilineEdit,
+                                         BACKGROUND_BLUE | FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,
+                                         BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE);
+        }
     }
     YoriWinMultilineEditSetCursorMoveNotifyCallback(MultilineEdit, EditNotifyCursorMove);
 
@@ -2636,6 +3135,7 @@ EditCreateMainWindow(
     if (EditContext->OpenFileName.StartOfString != NULL) {
         EditLoadFile(EditContext, &EditContext->OpenFileName);
         EditUpdateOpenedFileCaption(EditContext);
+        YoriWinMultilineEditSetReadOnly(EditContext->MultilineEdit, EditContext->ReadOnly);
     }
 
     YoriWinSetControlContext(Parent, EditContext);
@@ -2663,14 +3163,14 @@ EditEncodingFromString(
     __in PYORI_STRING String
     )
 {
-    if (YoriLibCompareStringWithLiteralInsensitive(String, _T("utf8")) == 0 &&
+    if (YoriLibCompareStringLitIns(String, _T("utf8")) == 0 &&
         YoriLibIsUtf8Supported()) {
         return CP_UTF8;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("ascii")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("ascii")) == 0) {
         return CP_OEMCP;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("ansi")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("ansi")) == 0) {
         return CP_ACP;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("utf16")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("utf16")) == 0) {
         return CP_UTF16;
     }
     return (DWORD)-1;
@@ -2700,13 +3200,13 @@ EditEncodingFromString(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     DWORD Result;
     YORI_STRING Arg;
 
@@ -2717,7 +3217,12 @@ ENTRYPOINT(
         GlobalEditContext.Encoding = CP_ACP;
     }
 
+    GlobalEditContext.TabWidth = (DWORD)-1;
     GlobalEditContext.TraditionalNavigation = TRUE;
+    GlobalEditContext.AutoIndent = TRUE;
+    GlobalEditContext.ExpandTab = FALSE;
+
+    EditLoadDefaults(&GlobalEditContext);
 
     for (i = 1; i < ArgC; i++) {
 
@@ -2726,16 +3231,19 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 EditHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
-                YoriLibDisplayMitLicense(strCopyrightYear);
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
+                YoriLibDisplayMitLicense(strEditCopyrightYear);
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("a")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("a")) == 0) {
                 GlobalEditContext.UseAsciiDrawing = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("e")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("b")) == 0) {
+                GlobalEditContext.UseMonoDisplay = TRUE;
+                ArgumentUnderstood = TRUE;
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("e")) == 0) {
                 if (ArgC > i + 1) {
                     DWORD NewEncoding;
                     NewEncoding = EditEncodingFromString(&ArgV[i + 1]);
@@ -2745,8 +3253,8 @@ ENTRYPOINT(
                         i++;
                     }
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("m")) == 0) {
-                GlobalEditContext.TraditionalNavigation = FALSE;
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("r")) == 0) {
+                GlobalEditContext.ReadOnly = TRUE;
                 ArgumentUnderstood = TRUE;
             }
         } else {
@@ -2759,8 +3267,6 @@ ENTRYPOINT(
             YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("Argument not understood, ignored: %y\n"), &ArgV[i]);
         }
     }
-
-    YoriLibLoadAdvApi32Functions();
 
     if (StartArg > 0 && StartArg < ArgC) {
         if (!YoriLibUserStringToSingleFilePath(&ArgV[StartArg], TRUE, &GlobalEditContext.OpenFileName)) {

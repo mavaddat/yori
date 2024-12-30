@@ -81,7 +81,7 @@ YoriLibInitializeCompressContext(
     //  the threadpool to prevent bottlenecking the copy.
     //
 
-    CompressContext->MaxThreads = SystemInfo.dwNumberOfProcessors;
+    CompressContext->MaxThreads = (YORI_ALLOC_SIZE_T)SystemInfo.dwNumberOfProcessors;
     if (CompressContext->MaxThreads < 1) {
         CompressContext->MaxThreads = 1;
     }
@@ -129,7 +129,7 @@ YoriLibFreeCompressContext(
     if (CompressContext->ThreadsAllocated > 0) {
         DWORD Index;
         SetEvent(CompressContext->WorkerShutdownEvent);
-        WaitForMultipleObjects(CompressContext->ThreadsAllocated, CompressContext->Threads, TRUE, INFINITE);
+        WaitForMultipleObjectsEx(CompressContext->ThreadsAllocated, CompressContext->Threads, TRUE, INFINITE, FALSE);
         for (Index = 0; Index < CompressContext->ThreadsAllocated; Index++) {
             CloseHandle(CompressContext->Threads[Index]);
             CompressContext->Threads[Index] = NULL;
@@ -434,7 +434,7 @@ YoriLibCompressWorker(
         //  Wait for an indication of more work or shutdown.
         //
 
-        FoundEvent = WaitForMultipleObjects(2, &CompressContext->WorkerWaitEvent, FALSE, INFINITE);
+        FoundEvent = WaitForMultipleObjectsEx(2, &CompressContext->WorkerWaitEvent, FALSE, INFINITE, FALSE);
 
         //
         //  Process any queued work.

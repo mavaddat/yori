@@ -3,7 +3,7 @@
  *
  * Yori shell display disk free on volumes
  *
- * Copyright (c) 2017-2019 Malcolm J. Smith
+ * Copyright (c) 2017-2023 Malcolm J. Smith
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -71,11 +71,6 @@ typedef struct _DF_CONTEXT {
     BOOL DisplayGraph;
 
     /**
-     The width of the console, in characters.
-     */
-    DWORD ConsoleWidth;
-
-    /**
      Number of volumes reported.
      */
     DWORD VolumesDisplayed;
@@ -93,14 +88,7 @@ typedef struct _DF_CONTEXT {
     /**
      The buffer for the above string.
      */
-    TCHAR FileSizeColorStringBuffer[YORI_MAX_INTERNAL_VT_ESCAPE_CHARS];
-
-    /**
-     A buffer to generate the graph line into.  This is allocated when the
-     app starts and contains ConsoleWidth chars plus space for two VT100
-     escape sequences to initiate and terminate the color of the graph.
-     */
-    YORI_STRING LineBuffer;
+    TCHAR FileSizeColorStringBuffer[YORI_MAX_VT_ESCAPE_CHARS];
 
     /**
      Color information to display against matching directories.
@@ -137,7 +125,7 @@ DfReportSingleVolume(
     BOOL Result = FALSE;
     WIN32_FIND_DATA FindData;
     YORI_STRING VtAttribute;
-    TCHAR VtAttributeBuffer[YORI_MAX_INTERNAL_VT_ESCAPE_CHARS];
+    TCHAR VtAttributeBuffer[YORI_MAX_VT_ESCAPE_CHARS];
 
     TCHAR MountPointName[MAX_PATH];
     LPTSTR NameToReport;
@@ -224,52 +212,7 @@ DfReportSingleVolume(
         }
 
         if (DfContext->DisplayGraph) {
-            YORI_STRING Subset;
-            WORD Background;
-            DWORD TotalBarSize;
-            DWORD BarsSet;
-            DWORD Index;
-            UCHAR Ctrl;
-
-            DfContext->LineBuffer.StartOfString[0] = ' ';
-            DfContext->LineBuffer.StartOfString[1] = '[';
-
-            YoriLibInitEmptyString(&Subset);
-            Subset.StartOfString = &DfContext->LineBuffer.StartOfString[2];
-            Subset.LengthAllocated = DfContext->LineBuffer.LengthAllocated - 2;
-
-            Ctrl = YORILIB_ATTRCTRL_WINDOW_BG;
-            Background = (USHORT)(YoriLibVtGetDefaultColor() & 0xF0);
-
-            if (PercentageUsed <= 700) {
-                YoriLibVtStringForTextAttribute(&Subset, Ctrl, (USHORT)(Background | FOREGROUND_GREEN | FOREGROUND_INTENSITY));
-            } else if (PercentageUsed <= 850) {
-                YoriLibVtStringForTextAttribute(&Subset, Ctrl, (USHORT)(Background | FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY));
-            } else {
-                YoriLibVtStringForTextAttribute(&Subset, Ctrl, (USHORT)(Background | FOREGROUND_RED | FOREGROUND_INTENSITY));
-            }
-
-            DfContext->LineBuffer.LengthInChars = 2 + Subset.LengthInChars;
-
-            TotalBarSize = DfContext->ConsoleWidth - 4;
-            BarsSet = TotalBarSize * PercentageUsed / 1000;
-
-            for (Index = 0; Index < BarsSet; Index++) {
-                DfContext->LineBuffer.StartOfString[Index + DfContext->LineBuffer.LengthInChars] = '#';
-            }
-            for (; Index < TotalBarSize; Index++) {
-                DfContext->LineBuffer.StartOfString[Index + DfContext->LineBuffer.LengthInChars] = ' ';
-            }
-            DfContext->LineBuffer.LengthInChars += TotalBarSize;
-
-            Subset.StartOfString = &DfContext->LineBuffer.StartOfString[DfContext->LineBuffer.LengthInChars];
-            Subset.LengthAllocated = DfContext->LineBuffer.LengthAllocated - DfContext->LineBuffer.LengthInChars;
-
-            Subset.LengthInChars = YoriLibSPrintf(Subset.StartOfString, _T("%c[0m]\n"), 27);
-            DfContext->LineBuffer.LengthInChars += Subset.LengthInChars;
-
-            YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("%y"), &DfContext->LineBuffer);
-
+            YoriLibDisplayBarGraph(GetStdHandle(STD_OUTPUT_HANDLE), PercentageUsed, 700, 850);
         }
         Result = TRUE;
         DfContext->VolumesDisplayed++;
@@ -302,13 +245,13 @@ DfReportSingleVolume(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
     BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     YORI_STRING Arg;
     HANDLE FindHandle;
     TCHAR VolName[512];
@@ -316,8 +259,6 @@ ENTRYPOINT(
     YORI_STRING Combined;
 
     ZeroMemory(&DfContext, sizeof(DfContext));
-
-    YoriLibGetWindowDimensions(GetStdHandle(STD_OUTPUT_HANDLE), &DfContext.ConsoleWidth, NULL);
     DfContext.DisplayGraph = TRUE;
 
     for (i = 1; i < ArgC; i++) {
@@ -327,17 +268,17 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 DfHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
-                YoriLibDisplayMitLicense(_T("2017-2019"));
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
+                YoriLibDisplayMitLicense(_T("2017-2023"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("m")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("m")) == 0) {
                 DfContext.MinimalDisplay = TRUE;
                 DfContext.DisplayGraph = FALSE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 StartArg = i;
                 ArgumentUnderstood = TRUE;
                 break;
@@ -370,16 +311,9 @@ ENTRYPOINT(
     }
 
     DfContext.FileSizeColorString.StartOfString = DfContext.FileSizeColorStringBuffer;
-    DfContext.FileSizeColorString.LengthAllocated = YORI_MAX_INTERNAL_VT_ESCAPE_CHARS;
+    DfContext.FileSizeColorString.LengthAllocated = YORI_MAX_VT_ESCAPE_CHARS;
 
     YoriLibVtStringForTextAttribute(&DfContext.FileSizeColorString, DfContext.FileSizeColor.Ctrl, DfContext.FileSizeColor.Win32Attr);
-
-    if (DfContext.DisplayGraph) {
-        if (!YoriLibAllocateString(&DfContext.LineBuffer, DfContext.ConsoleWidth + 2 * YORI_MAX_INTERNAL_VT_ESCAPE_CHARS)) {
-            YoriLibFileFiltFreeFilter(&DfContext.ColorRules);
-            return EXIT_FAILURE;
-        }
-    }
 
     //
     //  Just return errors.  Don't display a dialog to indicate no disk is in
@@ -405,7 +339,6 @@ ENTRYPOINT(
     }
 
     YoriLibFileFiltFreeFilter(&DfContext.ColorRules);
-    YoriLibFreeStringContents(&DfContext.LineBuffer);
 
     return EXIT_SUCCESS;
 }

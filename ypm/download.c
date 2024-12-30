@@ -122,39 +122,31 @@ YpmDownloadStableHelp(VOID)
  */
 DWORD
 YpmDownload(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     YORI_STRING Arg;
     PYORI_STRING SourcePath = NULL;
     PYORI_STRING FilePath = NULL;
 
-    if (ArgC < 3) {
-        YpmDownloadHelp();
-        return EXIT_FAILURE;
-    }
-
-    SourcePath = &ArgV[1];
-    FilePath = &ArgV[2];
-
-    for (i = 3; i < ArgC; i++) {
+    for (i = 1; i < ArgC; i++) {
 
         ArgumentUnderstood = FALSE;
         ASSERT(YoriLibIsStringNullTerminated(&ArgV[i]));
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 YpmDownloadHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2021"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 ArgumentUnderstood = TRUE;
                 StartArg = i + 1;
                 break;
@@ -169,6 +161,14 @@ YpmDownload(
             YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("Argument not understood, ignored: %y\n"), &ArgV[i]);
         }
     }
+
+    if (StartArg == 0 || StartArg + 1 >= ArgC) {
+        YpmDownloadHelp();
+        return EXIT_FAILURE;
+    }
+
+    SourcePath = &ArgV[StartArg];
+    FilePath = &ArgV[StartArg + 1];
 
     YoriPkgDownloadRemotePackages(SourcePath, FilePath);
 
@@ -186,40 +186,33 @@ YpmDownload(
  */
 DWORD
 YpmDownloadDaily(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     YORI_STRING Arg;
     YORI_STRING SourcePath;
     PYORI_STRING FilePath = NULL;
 
-    if (ArgC < 2) {
-        YpmDownloadDailyHelp();
-        return EXIT_FAILURE;
-    }
-
-    FilePath = &ArgV[1];
     YoriLibConstantString(&SourcePath, _T("http://www.malsmith.net/download/?obj=yori/latest-daily/"));
 
-
-    for (i = 2; i < ArgC; i++) {
+    for (i = 1; i < ArgC; i++) {
 
         ArgumentUnderstood = FALSE;
         ASSERT(YoriLibIsStringNullTerminated(&ArgV[i]));
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 YpmDownloadDailyHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2021"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 ArgumentUnderstood = TRUE;
                 StartArg = i + 1;
                 break;
@@ -234,6 +227,13 @@ YpmDownloadDaily(
             YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("Argument not understood, ignored: %y\n"), &ArgV[i]);
         }
     }
+
+    if (StartArg == 0 || StartArg >= ArgC) {
+        YpmDownloadDailyHelp();
+        return EXIT_FAILURE;
+    }
+
+    FilePath = &ArgV[StartArg];
 
     YoriPkgDownloadRemotePackages(&SourcePath, FilePath);
 
@@ -251,39 +251,33 @@ YpmDownloadDaily(
  */
 DWORD
 YpmDownloadStable(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     YORI_STRING Arg;
     YORI_STRING SourcePath;
     PYORI_STRING FilePath = NULL;
 
-    if (ArgC < 2) {
-        YpmDownloadStableHelp();
-        return EXIT_FAILURE;
-    }
-
-    FilePath = &ArgV[1];
     YoriLibConstantString(&SourcePath, _T("http://www.malsmith.net/download/?obj=yori/latest-stable/"));
 
-    for (i = 2; i < ArgC; i++) {
+    for (i = 1; i < ArgC; i++) {
 
         ArgumentUnderstood = FALSE;
         ASSERT(YoriLibIsStringNullTerminated(&ArgV[i]));
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 YpmDownloadStableHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2021"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 ArgumentUnderstood = TRUE;
                 StartArg = i + 1;
                 break;
@@ -298,6 +292,13 @@ YpmDownloadStable(
             YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("Argument not understood, ignored: %y\n"), &ArgV[i]);
         }
     }
+
+    if (StartArg == 0 || StartArg >= ArgC) {
+        YpmDownloadStableHelp();
+        return EXIT_FAILURE;
+    }
+
+    FilePath = &ArgV[StartArg];
 
     YoriPkgDownloadRemotePackages(&SourcePath, FilePath);
 

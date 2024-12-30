@@ -86,16 +86,18 @@ ReadLineHelp(VOID)
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 1;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 1;
     DWORD CurrentMode;
+    DWORD BytesRead;
     YORI_STRING InputString;
     YORI_STRING Arg;
+    HANDLE InputHandle;
 
     for (i = 1; i < ArgC; i++) {
 
@@ -104,10 +106,10 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 ReadLineHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2018"));
                 return EXIT_SUCCESS;
             }
@@ -122,22 +124,24 @@ ENTRYPOINT(
         }
     }
 
-    if (!GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), &CurrentMode)) {
+    InputHandle = GetStdHandle(STD_INPUT_HANDLE);
+    if (!GetConsoleMode(InputHandle, &CurrentMode)) {
         YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("readline: cannot read from input device\n"));
         return EXIT_FAILURE;
     }
 
     CurrentMode |= ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT;
 
-    SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), CurrentMode);
+    YoriLibSetInputConsoleMode(InputHandle, CurrentMode);
 
     if (!YoriLibAllocateString(&InputString, 4096)) {
         return EXIT_FAILURE;
     }
 
-    if (!ReadConsole(GetStdHandle(STD_INPUT_HANDLE), InputString.StartOfString, InputString.LengthAllocated, &InputString.LengthInChars, NULL)) {
+    if (!ReadConsole(InputHandle, InputString.StartOfString, InputString.LengthAllocated, &BytesRead, NULL)) {
         return EXIT_FAILURE;
     }
+    InputString.LengthInChars = (YORI_ALLOC_SIZE_T)BytesRead;
 
     YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("%y"), &InputString);
 

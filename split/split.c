@@ -71,17 +71,17 @@ typedef struct _SPLIT_CONTEXT {
     /**
      If LinesMode is FALSE, specifies the number of bytes per part.
      */
-    LONGLONG BytesPerPart;
+    YORI_MAX_SIGNED_T BytesPerPart;
 
     /**
      If LinesMode is TRUE, specifies the number of lines per part.
      */
-    LONGLONG LinesPerPart;
+    YORI_MAX_SIGNED_T LinesPerPart;
 
     /**
      Indicates the next part to open.
      */
-    LONGLONG CurrentPartNumber;
+    YORI_MAX_SIGNED_T CurrentPartNumber;
 
     /**
      A string containing the prefix of newly created split fragments. The
@@ -164,7 +164,7 @@ SplitProcessStream(
     if (SplitContext->LinesMode) {
         PVOID LineContext = NULL;
         YORI_STRING LineString;
-        LONGLONG LineNumber;
+        YORI_MAX_SIGNED_T LineNumber;
 
         LineNumber = 0;
         YoriLibInitEmptyString(&LineString);
@@ -200,13 +200,13 @@ SplitProcessStream(
         PVOID Buffer;
         ULONG BytesRead;
 
-        Buffer = YoriLibMalloc((DWORD)SplitContext->BytesPerPart);
+        Buffer = YoriLibMalloc((YORI_ALLOC_SIZE_T)SplitContext->BytesPerPart);
         if (Buffer == NULL) {
             return FALSE;
         }
 
         while (TRUE) {
-            if (!ReadFile(hSource, Buffer, (DWORD)SplitContext->BytesPerPart, &BytesRead, NULL)) {
+            if (!ReadFile(hSource, Buffer, (YORI_ALLOC_SIZE_T)SplitContext->BytesPerPart, &BytesRead, NULL)) {
                 break;
             }
 
@@ -262,8 +262,8 @@ SplitJoin(
     HANDLE TargetHandle;
     PUCHAR Buffer;
     DWORD BytesRead;
-    DWORD BytesAllocated;
-    LONGLONG CurrentFragment;
+    YORI_ALLOC_SIZE_T BytesAllocated;
+    YORI_MAX_SIGNED_T CurrentFragment;
     LPTSTR FragmentFileName;
     YORI_STRING NumberString;
     DWORD LastError;
@@ -271,8 +271,7 @@ SplitJoin(
 
     ASSERT(YoriLibIsStringNullTerminated(OutputFile));
 
-    BytesAllocated = 256 * 1024;
-
+    BytesAllocated = YoriLibMaximumAllocationInRange(60 * 1024, 256 * 1024);
     Buffer = YoriLibMalloc(BytesAllocated);
     if (Buffer == NULL) {
         return FALSE;
@@ -407,17 +406,17 @@ SplitJoin(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     DWORD Result;
     SPLIT_CONTEXT SplitContext;
     YORI_STRING Arg;
-    BOOL JoinMode = FALSE;
+    BOOLEAN JoinMode = FALSE;
 
     ZeroMemory(&SplitContext, sizeof(SplitContext));
 
@@ -428,32 +427,32 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 SplitHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2018-2019"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("b")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("b")) == 0) {
                 if (ArgC > i + 1) {
-                    DWORD CharsConsumed;
+                    YORI_ALLOC_SIZE_T CharsConsumed;
                     ArgumentUnderstood = TRUE;
                     SplitContext.LinesMode = FALSE;
                     YoriLibStringToNumber(&ArgV[i + 1], TRUE, &SplitContext.BytesPerPart, &CharsConsumed);
                     i++;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("j")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("j")) == 0) {
                 JoinMode = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("l")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("l")) == 0) {
                 if (ArgC > i + 1) {
-                    DWORD CharsConsumed;
+                    YORI_ALLOC_SIZE_T CharsConsumed;
                     ArgumentUnderstood = TRUE;
                     SplitContext.LinesMode = TRUE;
                     YoriLibStringToNumber(&ArgV[i + 1], TRUE, &SplitContext.LinesPerPart, &CharsConsumed);
                     i++;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("p")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("p")) == 0) {
                 if (ArgC > i + 1) {
                     ArgumentUnderstood = TRUE;
                     YoriLibFreeStringContents(&SplitContext.Prefix);
@@ -462,7 +461,7 @@ ENTRYPOINT(
                     }
                     i++;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 StartArg = i + 1;
                 ArgumentUnderstood = TRUE;
                 break;
@@ -516,7 +515,7 @@ ENTRYPOINT(
                 Result = EXIT_FAILURE;
             }
         } else {
-            if (SplitContext.BytesPerPart == 0 || SplitContext.BytesPerPart >= (DWORD)-1) {
+            if (SplitContext.BytesPerPart == 0 || SplitContext.BytesPerPart >= YORI_MAX_ALLOC_SIZE) {
                 YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("split: invalid bytes per part\n"));
                 Result = EXIT_FAILURE;
             }

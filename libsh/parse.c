@@ -61,11 +61,11 @@ __success(return)
 BOOLEAN
 YoriLibShIsArgumentSeperator(
     __in PYORI_STRING String,
-    __out_opt PDWORD CharsToConsumeOut,
+    __out_opt PYORI_ALLOC_SIZE_T CharsToConsumeOut,
     __out_opt PBOOLEAN TerminateArgOut
     )
 {
-    DWORD CharsToConsume = 0;
+    YORI_ALLOC_SIZE_T CharsToConsume = 0;
     BOOLEAN Terminate = FALSE;
 
     if (String->LengthInChars >= 1) {
@@ -158,23 +158,32 @@ __success(return)
 BOOLEAN
 YoriLibShAllocateArgCount(
     __out PYORI_LIBSH_CMD_CONTEXT CmdContext,
-    __in DWORD ArgCount,
-    __in DWORD ExtraByteCount,
+    __in YORI_ALLOC_SIZE_T ArgCount,
+    __in YORI_ALLOC_SIZE_T ExtraByteCount,
     __out_opt PVOID *ExtraData
     )
 {
-    CmdContext->MemoryToFree = YoriLibReferencedMalloc((ArgCount * (sizeof(YORI_STRING) + sizeof(YORI_LIBSH_ARG_CONTEXT))) +
+    PVOID MemoryToFree;
+    MemoryToFree = YoriLibReferencedMalloc((ArgCount * (sizeof(YORI_STRING) + sizeof(YORI_LIBSH_ARG_CONTEXT))) +
                                                        ExtraByteCount);
-    if (CmdContext->MemoryToFree == NULL) {
+    if (MemoryToFree == NULL) {
         return FALSE;
     }
 
-    ZeroMemory(CmdContext->MemoryToFree, ArgCount * (sizeof(YORI_STRING) + sizeof(YORI_LIBSH_ARG_CONTEXT)));
+    ZeroMemory(MemoryToFree, ArgCount * (sizeof(YORI_STRING) + sizeof(YORI_LIBSH_ARG_CONTEXT)));
 
     CmdContext->ArgC = ArgCount;
-    CmdContext->ArgV = CmdContext->MemoryToFree;
+    CmdContext->ArgV = MemoryToFree;
+    CmdContext->MemoryToFreeArgV = MemoryToFree;
 
+    YoriLibReference(MemoryToFree);
     CmdContext->ArgContexts = (PYORI_LIBSH_ARG_CONTEXT)YoriLibAddToPointer(CmdContext->ArgV, ArgCount * sizeof(YORI_STRING));
+    CmdContext->MemoryToFreeArgContexts = MemoryToFree;
+
+    //
+    //  MSFIX: No explicit reference on ExtraData - is it needed?
+    //
+
     if (ExtraData != NULL) {
         if (ExtraByteCount != 0) {
             *ExtraData = YoriLibAddToPointer(CmdContext->ArgContexts, ArgCount * sizeof(YORI_LIBSH_ARG_CONTEXT));
@@ -282,20 +291,20 @@ YoriLibShCountCharsAtBackslash(
     __in BOOLEAN QuoteOpen,
     __in BOOLEAN LookingForFirstQuote,
     __in BOOLEAN QuoteImplicitlyAddedAtEnd,
-    __out PDWORD CharsToConsume,
-    __out PDWORD CharsToOutput
+    __out PYORI_ALLOC_SIZE_T CharsToConsume,
+    __out PYORI_ALLOC_SIZE_T CharsToOutput
     )
 {
     YORI_STRING Remaining;
-    DWORD ConsecutiveBackslashes;
-    DWORD LocalCharsToConsume;
-    DWORD LocalCharsToOutput;
-    DWORD CharsToIgnore;
+    YORI_ALLOC_SIZE_T ConsecutiveBackslashes;
+    YORI_ALLOC_SIZE_T LocalCharsToConsume;
+    YORI_ALLOC_SIZE_T LocalCharsToOutput;
+    YORI_ALLOC_SIZE_T CharsToIgnore;
     BOOLEAN TrailingQuote;
     BOOLEAN TerminateArg;
     BOOLEAN TerminateNextArg;
 
-    ConsecutiveBackslashes = YoriLibCountStringContainingChars(Char, _T("\\"));
+    ConsecutiveBackslashes = YoriLibCntStringWithChars(Char, _T("\\"));
 
     YoriLibInitEmptyString(&Remaining);
     Remaining.StartOfString = &Char->StartOfString[ConsecutiveBackslashes];
@@ -341,6 +350,245 @@ YoriLibShCountCharsAtBackslash(
     *CharsToOutput = LocalCharsToOutput;
 }
 
+/**
+ Move to the next argument when processing the initial scan.  This routine
+ performs processing on the completed argument and updates variables to
+ prepare for the next argument.
+
+ @param CmdContext Pointer to the command context.  This routine may update
+        the current argument offset if the argument needs to be modified.
+
+ @param CurrentArgFound TRUE if the CmdContext has been populated with the
+        current argument.  FALSE if it has not, meaning the argument being
+        completed cannot need to update the CmdContext.
+
+ @param ArgCountPtr Points to the current number of arguments, which is
+        incremented in this routine.
+
+ @param ArgOffsetPtr Points to the offset within the current argument, which
+        is reset within this routine.
+
+ @param PreviousCharWasQuote On input, points to a boolean indicating whether
+        the final character in the argument was a quote.  For this routine,
+        that could not be determined from the buffer itself, but this value
+        also indicates that the quote was not escaped and was parsed as a
+        shell character.  On output, updated to indicate the new argument
+        does not terminate with a quote.
+
+ @param QuoteTerminated Points to a value that will be updated to indicate
+        the new argument does not have a terminated quote sequence.
+
+ @param FirstQuoteEndOffsetPtr On input, points to a value indicating the
+        character offset of the quote that would terminate any opening quote
+        in the argument.  If the argument ends with a quote, this quote is
+        retained, and the trailing quote is removed; if the argument does not
+        end in a quote, this quote is removed.  On output, updated to indicate
+        no first quote terminator has been found.
+ */
+VOID
+YoriLibParseMoveToNextArgumentInitialScan(
+    __inout PYORI_LIBSH_CMD_CONTEXT CmdContext,
+    __in BOOLEAN CurrentArgFound,
+    __inout PYORI_ALLOC_SIZE_T ArgCountPtr,
+    __inout PYORI_ALLOC_SIZE_T ArgOffsetPtr,
+    __inout PBOOLEAN PreviousCharWasQuote,
+    __out PBOOLEAN QuoteTerminated,
+    __inout PYORI_ALLOC_SIZE_T FirstQuoteEndOffsetPtr
+    )
+{
+    YORI_ALLOC_SIZE_T ArgCount;
+
+    ArgCount = *ArgCountPtr;
+
+    //
+    //  If FirstQuoteEndOffsetPtr is in range, and
+    //   - The final char in the arg was a quote, truncate the arg
+    //   - The final char was not a quote, move string contents
+    //     over FirstQuoteEndOffsetPtr
+    //
+    //  In this function, the second case needs to adjust
+    //  CmdContext->CurrentArgOffset .
+    //
+
+    if ((*FirstQuoteEndOffsetPtr) != YORI_MAX_ALLOC_SIZE) {
+        YORI_ALLOC_SIZE_T FirstQuoteEndOffset;
+        FirstQuoteEndOffset = *FirstQuoteEndOffsetPtr;
+        ASSERT(FirstQuoteEndOffset < (*ArgOffsetPtr));
+
+        if (!(*PreviousCharWasQuote) &&
+            CurrentArgFound &&
+            ArgCount == CmdContext->CurrentArg) {
+
+            if (FirstQuoteEndOffset < CmdContext->CurrentArgOffset) {
+                CmdContext->CurrentArgOffset--;
+            }
+        }
+    }
+
+    (*ArgCountPtr)++;
+    *ArgOffsetPtr = 0;
+    *QuoteTerminated = FALSE;
+    *FirstQuoteEndOffsetPtr = YORI_MAX_ALLOC_SIZE;
+    *PreviousCharWasQuote = FALSE;
+}
+
+/**
+ When building the argument array, this routine terminates a completed
+ argument.  A new argument may or may not follow, but this routine does not
+ prepare for a new argument, it merely terminates the previous argument.
+
+ @param OutputStringPtr On input, points to a pointer to the character buffer
+        that is behind all arguments.  This is updated to contain a NULL
+        terminator and advanced within this routine.
+
+ @param Arg Pointer to the argument being completed.  This will have its
+        length values applied here, as well as a NULL terminator.
+
+ @param PreviousCharWasQuote TRUE if the final character in the argument was
+        a quote.  This value also indicates that the quote was not escaped
+        and was parsed as a shell character.
+
+ @param FirstQuoteEndOffset Indicates the character offset of the quote that
+        would terminate any opening quote in the argument, or -1 if one does
+        not exist.  If the argument ends with a quote, this quote is retained,
+        and the trailing quote is removed; if the argument does not end in a
+        quote, this quote is removed.
+ */
+VOID
+YoriLibParseTerminateCurrentArgument(
+    __in LPTSTR* OutputStringPtr,
+    __in PYORI_STRING Arg,
+    __in BOOLEAN PreviousCharWasQuote,
+    __in YORI_ALLOC_SIZE_T FirstQuoteEndOffset
+    )
+{
+    LPTSTR OutputString;
+    YORI_ALLOC_SIZE_T ArgLength;
+
+    OutputString = *OutputStringPtr;
+    ArgLength = (YORI_ALLOC_SIZE_T)(OutputString - Arg->StartOfString);
+
+    //
+    //  If FirstQuoteEndOffsetPtr is in range, and
+    //   - The final char in the arg was a quote, truncate the arg
+    //   - The final char was not a quote, move string contents
+    //     over FirstQuoteEndOffsetPtr
+    //
+    //  Note this processing occurs before processing the NULL terminator.
+    //  Argument parsing is guaranteed to have space for the NULL, so we
+    //  may currently have a quote where the NULL is supposed to be, and
+    //  need to move it first (ie., one additional character may have been
+    //  written that needs to be removed here.)
+    //
+
+    if (FirstQuoteEndOffset != YORI_MAX_ALLOC_SIZE) {
+        ASSERT(FirstQuoteEndOffset < ArgLength);
+        ASSERT(Arg->StartOfString[FirstQuoteEndOffset] == '"');
+        if (PreviousCharWasQuote) {
+
+            //
+            //  The explicit variable tracks not just whether a quote is there
+            //  but also that it was not subject to an escape.  Nonetheless if
+            //  the explicit variable says a quote is there, it should be
+            //  there.
+            //
+
+            ASSERT(ArgLength > 0 && Arg->StartOfString[ArgLength - 1] == '"');
+            ASSERT(&Arg->StartOfString[ArgLength] == (*OutputStringPtr));
+        } else {
+
+            //
+            //  If the string ended with a quote, we should be in the
+            //  branch above.  If it doesn't, there has to be at least
+            //  one char following the quote.
+            //
+
+            ASSERT(ArgLength - FirstQuoteEndOffset > 1);
+            memmove(&Arg->StartOfString[FirstQuoteEndOffset], 
+                    &Arg->StartOfString[FirstQuoteEndOffset + 1],
+                    (ArgLength - FirstQuoteEndOffset - 1) * sizeof(TCHAR));
+        }
+        ArgLength--;
+        (*OutputStringPtr)--;
+    }
+
+    OutputString = *OutputStringPtr;
+    *OutputString = '\0';
+    Arg->LengthInChars = ArgLength;
+    Arg->LengthAllocated = Arg->LengthInChars + 1;
+    (*OutputStringPtr)++;
+}
+
+/**
+ Move to the next argument when populating arguments.
+
+ @param CmdContext Pointer to the command context.  This routine will
+        initialize the next argument in this context.
+
+ @param ArgCountPtr Points to the current number of arguments, which is
+        incremented in this routine.
+
+ @param RemainingString Points to the remaining characters to parse into
+        future arguments.
+
+ @param OutputString Points to a buffer to populate with characters as part
+        of argument processing.  The new argument is initialized to point to
+        this buffer.
+
+ @param PreviousCharWasQuote Points to a value indicating whether the current
+        argument ends in a quote.  Updated within this routine to say the
+        new argument does not (yet.)
+
+ @param LookingForFirstQuote Points to a value indicating whether the argument
+        starts with a quote.  Updated to be TRUE or FALSE based on the first
+        character in RemainingString within this routine.
+
+ @param FirstQuoteEndOffset Points to a value indicating the character offset
+        of the quote that would terminate any opening quote in the argument.
+        Updated within this routine to indicate no first quote terminator has
+        been found.
+ */
+VOID
+YoriLibParseMoveToNextArgumentPopulate(
+    __in PYORI_LIBSH_CMD_CONTEXT CmdContext,
+    __inout PYORI_ALLOC_SIZE_T ArgCountPtr,
+    __in PYORI_STRING RemainingString,
+    __in LPTSTR OutputString,
+    __out PBOOLEAN PreviousCharWasQuote,
+    __out PBOOLEAN LookingForFirstQuote,
+    __out PYORI_ALLOC_SIZE_T FirstQuoteEndOffset
+    )
+{
+    PYORI_STRING Arg;
+    YORI_ALLOC_SIZE_T ArgCount;
+
+    (*ArgCountPtr)++;
+    ArgCount = (*ArgCountPtr);
+
+    //
+    //  This routine should only be called if there are more characters to
+    //  place into an argument.
+    //
+
+    ASSERT(RemainingString->LengthInChars > 0);
+
+    Arg = &CmdContext->ArgV[ArgCount];
+    YoriLibInitEmptyString(Arg);
+    Arg->StartOfString = OutputString;
+    if (RemainingString->StartOfString[0] == '"') {
+        CmdContext->ArgContexts[ArgCount].Quoted = TRUE;
+        *LookingForFirstQuote = TRUE;
+    } else {
+        CmdContext->ArgContexts[ArgCount].Quoted = FALSE;
+        *LookingForFirstQuote = FALSE;
+    }
+    CmdContext->ArgContexts[ArgCount].QuoteTerminated = FALSE;
+    YoriLibReference(CmdContext->ArgV);
+    Arg->MemoryToFree = CmdContext->ArgV;
+    *FirstQuoteEndOffset = YORI_MAX_ALLOC_SIZE;
+    *PreviousCharWasQuote = FALSE;
+}
+
 
 /**
  Parse a single command string into a series of arguments.  This routine takes
@@ -348,6 +596,22 @@ YoriLibShCountCharsAtBackslash(
  as performing environment variable expansion.  The resulting string has no
  knowledge of redirects, pipes, or multi program execution - it is just a
  series of arguments.
+
+ The complexity of this routine stems from handling quotes:
+
+ Text"More Text"Text
+ ...expands to a single argument, preserving quotes.
+
+ "C:\Program Files"\\foo
+ ...expands to a single argument, with quotes at beginning and end (the
+    quote in the middle is conceptually moved.)  This is indicated by the
+    presence of an initial quote, finding a terminating quote, and not having
+    a quote at the end of the argument.
+
+ "."=="."
+ ...expands to a single argument, preserving quotes.  This is due to the quote
+    found at the end of the argument, even though the initial quote is
+    terminated earlier.
 
  @param CmdLine The string to parse into arguments.
 
@@ -364,25 +628,54 @@ __success(return)
 BOOLEAN
 YoriLibShParseCmdlineToCmdContext(
     __in PYORI_STRING CmdLine,
-    __in DWORD CurrentOffset,
+    __in YORI_ALLOC_SIZE_T CurrentOffset,
     __out PYORI_LIBSH_CMD_CONTEXT CmdContext
     )
 {
-    DWORD ArgCount = 0;
-    DWORD ArgOffset = 0;
-    DWORD RequiredCharCount = 0;
-    DWORD CharsToConsume = 0;
+    YORI_ALLOC_SIZE_T ArgCount = 0;
+    YORI_ALLOC_SIZE_T ArgOffset = 0;
+    YORI_ALLOC_SIZE_T RequiredCharCount = 0;
+    YORI_ALLOC_SIZE_T CharsToConsume = 0;
     BOOLEAN TerminateArg;
     BOOLEAN TerminateNextArg = FALSE;
     BOOLEAN QuoteOpen = FALSE;
     YORI_STRING Char;
     LPTSTR OutputString;
     BOOLEAN CurrentArgFound = FALSE;
-    BOOLEAN LookingForFirstQuote = FALSE;
+    BOOLEAN PreviousCharWasQuote = FALSE;
     BOOLEAN IsMultiCommandOperatorArgument = FALSE;
+
+    //
+    //  Indicates the argument started with a quote, so the next quote
+    //  terminates the initial quote.  This initial quote pair gets
+    //  special treatment, to support "C:\Program Files"\foo type things.
+    //
+
+    BOOLEAN LookingForFirstQuote = FALSE;
+
+    //
+    //  Indicates that the argument contained an ending quote, as opposed
+    //  to an opening quote followed by end of string.
+    //
+
     BOOLEAN QuoteTerminated = FALSE;
 
+    //
+    //  Indicates the character offset within the argument that points to
+    //  the quote that terminates the initial quote.  This is because we
+    //  won't know until completing argument parsing whether it should be
+    //  retained or not, so it is retained and this offset may be used to
+    //  remove it afterwards.
+    //
+
+    YORI_ALLOC_SIZE_T FirstQuoteEndOffset;
+
+    CmdContext->ArgC = 0;
+    CmdContext->ArgV = NULL;
+    CmdContext->ArgContexts = NULL;
     CmdContext->TrailingChars = FALSE;
+    CmdContext->MemoryToFreeArgV = NULL;
+    CmdContext->MemoryToFreeArgContexts = NULL;
 
     YoriLibInitEmptyString(&Char);
     Char.StartOfString = CmdLine->StartOfString;
@@ -399,59 +692,35 @@ YoriLibShParseCmdlineToCmdContext(
     } else {
         LookingForFirstQuote = FALSE;
     }
+    FirstQuoteEndOffset = YORI_MAX_ALLOC_SIZE;
 
     while (Char.LengthInChars > 0) {
 
         //
         //  If it's an escape char, consume two characters as literal until
-        //  we hit the end of the string.
+        //  we hit the end of the string.  If the end of the string ends the
+        //  argument and the argument is quoted, drop the escape so as to not
+        //  escape the end quote.
         //
 
         if (YoriLibIsEscapeChar(Char.StartOfString[0])) {
+
             Char.StartOfString++;
             Char.LengthInChars--;
-            RequiredCharCount++;
-            ArgOffset++;
 
-            if (Char.LengthInChars > 0) {
-                Char.StartOfString++;
-                Char.LengthInChars--;
+            if (Char.LengthInChars > 0 || !QuoteTerminated) {
+
+                PreviousCharWasQuote = FALSE;
                 RequiredCharCount++;
                 ArgOffset++;
+
+                if (Char.LengthInChars > 0) {
+                    Char.StartOfString++;
+                    Char.LengthInChars--;
+                    RequiredCharCount++;
+                    ArgOffset++;
+                }
             }
-
-            if (Char.LengthInChars == 0) {
-                ArgCount++;
-                ArgOffset = 0;
-                QuoteTerminated = FALSE;
-            }
-
-            continue;
-        }
-
-        if (Char.StartOfString[0] == '\\') {
-
-            DWORD CharsToOutput;
-
-            //
-            //  Pessimistically claim that there's always an implied quote at
-            //  the end of the argument.  This will return the number of chars
-            //  needed to escape all of the quotes in that case, which is
-            //  a pessimistic size estimate, but it means avoiding extra
-            //  tracking when sizing the buffer.
-            //
-
-            YoriLibShCountCharsAtBackslash(&Char,
-                                           QuoteOpen,
-                                           LookingForFirstQuote,
-                                           QuoteTerminated,
-                                           &CharsToConsume,
-                                           &CharsToOutput);
-
-            RequiredCharCount += CharsToOutput;
-            ArgOffset += CharsToOutput;
-            Char.StartOfString += CharsToConsume;
-            Char.LengthInChars -= CharsToConsume;
 
             if (!CurrentArgFound &&
                 (Char.StartOfString - CmdLine->StartOfString >= (LONG)CurrentOffset)) {
@@ -462,46 +731,67 @@ YoriLibShParseCmdlineToCmdContext(
             }
 
             if (Char.LengthInChars == 0) {
-                ArgCount++;
-                ArgOffset = 0;
-                QuoteTerminated = FALSE;
+                YoriLibParseMoveToNextArgumentInitialScan(CmdContext, CurrentArgFound, &ArgCount, &ArgOffset, &PreviousCharWasQuote, &QuoteTerminated, &FirstQuoteEndOffset);
+            }
+
+            continue;
+        }
+
+        if (Char.StartOfString[0] == '\\') {
+
+            YORI_ALLOC_SIZE_T CharsToOutput;
+
+            PreviousCharWasQuote = FALSE;
+
+            YoriLibShCountCharsAtBackslash(&Char,
+                                           QuoteOpen,
+                                           LookingForFirstQuote,
+                                           QuoteTerminated,
+                                           &CharsToConsume,
+                                           &CharsToOutput);
+
+            RequiredCharCount = RequiredCharCount + CharsToOutput;
+            ArgOffset = ArgOffset + CharsToOutput;
+            Char.StartOfString += CharsToConsume;
+            Char.LengthInChars = Char.LengthInChars - CharsToConsume;
+
+            if (!CurrentArgFound &&
+                (Char.StartOfString - CmdLine->StartOfString >= (LONG)CurrentOffset)) {
+
+                CurrentArgFound = TRUE;
+                CmdContext->CurrentArg = ArgCount;
+                CmdContext->CurrentArgOffset = ArgOffset;
+            }
+
+            if (Char.LengthInChars == 0) {
+                YoriLibParseMoveToNextArgumentInitialScan(CmdContext, CurrentArgFound, &ArgCount, &ArgOffset, &PreviousCharWasQuote, &QuoteTerminated, &FirstQuoteEndOffset);
             }
 
             continue;
 
-        } else {
+        } else if (Char.StartOfString[0] == '"') {
 
             //
-            //  If the argument started with a quote and we found the end to that
-            //  quote, don't copy it into the output string.
+            //  If the argument started with a quote and we found the end
+            //  to that quote, copy it into the output string, and make a
+            //  note of where it is to facilitate later removal.  It will
+            //  be removed if the argument doesn't end in a quote, which
+            //  we don't know at this point.
             //
 
-            if (Char.StartOfString[0] == '"' && QuoteOpen && LookingForFirstQuote) {
+            if (QuoteOpen && LookingForFirstQuote) {
                 QuoteOpen = FALSE;
                 LookingForFirstQuote = FALSE;
                 ASSERT(!QuoteTerminated);
                 QuoteTerminated = TRUE;
-                Char.StartOfString++;
-                Char.LengthInChars--;
-                if (Char.LengthInChars == 0) {
-                    if (!CurrentArgFound) {
-                        CurrentArgFound = TRUE;
-                        CmdContext->CurrentArg = ArgCount;
-                        CmdContext->CurrentArgOffset = ArgOffset;
-                    }
-                    ArgCount++;
-                    ArgOffset = 0;
-                    QuoteTerminated = FALSE;
-                }
-                continue;
-            }
+                FirstQuoteEndOffset = ArgOffset;
+            } else {
 
-            //
-            //  If we see a quote, either we're opening a section that belongs in
-            //  one argument or we're ending that section.
-            //
+                //
+                //  If we see a quote, either we're opening a section that
+                //  belongs in one argument or we're ending that section.
+                //
 
-            if (Char.StartOfString[0] == '"') {
                 QuoteOpen = (BOOLEAN)(!QuoteOpen);
                 if (LookingForFirstQuote) {
                     Char.StartOfString++;
@@ -512,9 +802,7 @@ YoriLibShParseCmdlineToCmdContext(
                             CmdContext->CurrentArg = ArgCount;
                             CmdContext->CurrentArgOffset = ArgOffset;
                         }
-                        ArgCount++;
-                        ArgOffset = 0;
-                        QuoteTerminated = FALSE;
+                        YoriLibParseMoveToNextArgumentInitialScan(CmdContext, CurrentArgFound, &ArgCount, &ArgOffset, &PreviousCharWasQuote, &QuoteTerminated, &FirstQuoteEndOffset);
                     }
                     continue;
                 }
@@ -560,9 +848,7 @@ YoriLibShParseCmdlineToCmdContext(
                 CmdContext->CurrentArgOffset = ArgOffset;
             }
 
-            ArgCount++;
-            ArgOffset = 0;
-            QuoteTerminated = FALSE;
+            YoriLibParseMoveToNextArgumentInitialScan(CmdContext, CurrentArgFound, &ArgCount, &ArgOffset, &PreviousCharWasQuote, &QuoteTerminated, &FirstQuoteEndOffset);
 
             //
             //  Note this is intentionally not trying to set CurrentArg.
@@ -586,10 +872,10 @@ YoriLibShParseCmdlineToCmdContext(
                 YoriLibShIsArgumentSeperator(&Char, &CharsToConsume, &TerminateNextArg);
             }
 
-            RequiredCharCount += CharsToConsume;
-            ArgOffset += CharsToConsume;
+            RequiredCharCount = RequiredCharCount + CharsToConsume;
+            ArgOffset = ArgOffset + CharsToConsume;
             Char.StartOfString += CharsToConsume;
-            Char.LengthInChars -= CharsToConsume;
+            Char.LengthInChars = Char.LengthInChars - CharsToConsume;
 
             if (Char.LengthInChars == 0) {
                 if (!CurrentArgFound) {
@@ -597,9 +883,7 @@ YoriLibShParseCmdlineToCmdContext(
                     CmdContext->CurrentArg = ArgCount;
                     CmdContext->CurrentArgOffset = ArgOffset;
                 }
-                ArgCount++;
-                ArgOffset = 0;
-                QuoteTerminated = FALSE;
+                YoriLibParseMoveToNextArgumentInitialScan(CmdContext, CurrentArgFound, &ArgCount, &ArgOffset, &PreviousCharWasQuote, &QuoteTerminated, &FirstQuoteEndOffset);
                 break;
             }
 
@@ -617,9 +901,7 @@ YoriLibShParseCmdlineToCmdContext(
                     CmdContext->CurrentArgOffset = ArgOffset;
                 }
 
-                ArgCount++;
-                ArgOffset = 0;
-                QuoteTerminated = FALSE;
+                YoriLibParseMoveToNextArgumentInitialScan(CmdContext, CurrentArgFound, &ArgCount, &ArgOffset, &PreviousCharWasQuote, &QuoteTerminated, &FirstQuoteEndOffset);
             }
 
             if (Char.LengthInChars > 0 && Char.StartOfString[0] == '"') {
@@ -629,6 +911,12 @@ YoriLibShParseCmdlineToCmdContext(
             }
 
         } else {
+
+            if (Char.StartOfString[0] == '"') {
+                PreviousCharWasQuote = TRUE;
+            } else {
+                PreviousCharWasQuote = FALSE;
+            }
 
             RequiredCharCount++;
             ArgOffset++;
@@ -656,9 +944,7 @@ YoriLibShParseCmdlineToCmdContext(
                     CmdContext->CurrentArg = ArgCount;
                     CmdContext->CurrentArgOffset = ArgOffset;
                 }
-                ArgOffset = 0;
-                ArgCount++;
-                QuoteTerminated = FALSE;
+                YoriLibParseMoveToNextArgumentInitialScan(CmdContext, CurrentArgFound, &ArgCount, &ArgOffset, &PreviousCharWasQuote, &QuoteTerminated, &FirstQuoteEndOffset);
             }
         }
     }
@@ -675,15 +961,18 @@ YoriLibShParseCmdlineToCmdContext(
     CmdContext->ArgC = ArgCount;
 
     if (ArgCount == 0) {
-        CmdContext->MemoryToFree = NULL;
         CmdContext->ArgV = NULL;
         CmdContext->ArgContexts = NULL;
+        CmdContext->MemoryToFreeArgV = NULL;
+        CmdContext->MemoryToFreeArgContexts = NULL;
         return TRUE;
     }
 
-    if (!YoriLibShAllocateArgCount(CmdContext, ArgCount, (RequiredCharCount + ArgCount) * sizeof(TCHAR), &OutputString)) {
+    if (!YoriLibShAllocateArgCount(CmdContext, ArgCount, (RequiredCharCount + ArgCount) * sizeof(TCHAR), (PVOID *)&OutputString)) {
         return FALSE;
     }
+
+    __analysis_assume(CmdContext->ArgV != NULL);
 
     ArgCount = 0;
     QuoteOpen = FALSE;
@@ -692,8 +981,8 @@ YoriLibShParseCmdlineToCmdContext(
     CmdContext->ArgV[ArgCount].StartOfString = OutputString;
     CmdContext->ArgContexts[ArgCount].Quoted = FALSE;
     CmdContext->ArgContexts[ArgCount].QuoteTerminated = FALSE;
-    YoriLibReference(CmdContext->MemoryToFree);
-    CmdContext->ArgV[ArgCount].MemoryToFree = CmdContext->MemoryToFree;
+    YoriLibReference(CmdContext->ArgV);
+    CmdContext->ArgV[ArgCount].MemoryToFree = CmdContext->ArgV;
 
     //
     //  Consume all spaces.  After this, we're either at
@@ -713,31 +1002,43 @@ YoriLibShParseCmdlineToCmdContext(
     } else {
         LookingForFirstQuote = FALSE;
     }
+    FirstQuoteEndOffset = YORI_MAX_ALLOC_SIZE;
+    PreviousCharWasQuote = FALSE;
 
     while (Char.LengthInChars > 0) {
 
         //
         //  If it's an escape char, consume two characters as literal until
-        //  we hit the end of the string.
+        //  we hit the end of the string.  If the end of the string ends the
+        //  argument and the argument is quoted, drop the escape so as to not
+        //  escape the end quote.
         //
 
         if (YoriLibIsEscapeChar(Char.StartOfString[0])) {
-            *OutputString = Char.StartOfString[0];
-            Char.StartOfString++;
-            Char.LengthInChars--;
-            OutputString++;
-            if (Char.LengthInChars > 0) {
+            if (Char.LengthInChars == 1 && CmdContext->ArgContexts[ArgCount].QuoteTerminated) {
+                Char.StartOfString++;
+                Char.LengthInChars--;
+            } else {
+                PreviousCharWasQuote = FALSE;
                 *OutputString = Char.StartOfString[0];
                 Char.StartOfString++;
                 Char.LengthInChars--;
                 OutputString++;
+                if (Char.LengthInChars > 0) {
+                    *OutputString = Char.StartOfString[0];
+                    Char.StartOfString++;
+                    Char.LengthInChars--;
+                    OutputString++;
+                }
             }
             continue;
         }
 
         if (Char.StartOfString[0] == '\\') {
 
-            DWORD CharsToOutput;
+            YORI_ALLOC_SIZE_T CharsToOutput;
+
+            PreviousCharWasQuote = FALSE;
 
             YoriLibShCountCharsAtBackslash(&Char,
                                            QuoteOpen,
@@ -763,33 +1064,33 @@ YoriLibShParseCmdlineToCmdContext(
 
             OutputString += CharsToOutput;
             Char.StartOfString += CharsToOutput;
-            Char.LengthInChars -= CharsToOutput;
+            Char.LengthInChars = Char.LengthInChars - CharsToOutput;
 
             continue;
 
-        } else {
+        } else if (Char.StartOfString[0] == '"') {
 
             //
-            //  If the argument started with a quote and we found the end to that
-            //  quote, don't copy it into the output string.
+            //  If the argument started with a quote and we found the end
+            //  to that quote, copy it into the output string, and make a
+            //  note of where it is to facilitate later removal.  It will
+            //  be removed if the argument doesn't end in a quote, which
+            //  we don't know at this point.
             //
 
-            if (Char.StartOfString[0] == '"' && QuoteOpen && LookingForFirstQuote) {
+            if (QuoteOpen && LookingForFirstQuote) {
                 QuoteOpen = FALSE;
                 LookingForFirstQuote = FALSE;
                 ASSERT(!CmdContext->ArgContexts[ArgCount].QuoteTerminated);
                 CmdContext->ArgContexts[ArgCount].QuoteTerminated = TRUE;
-                Char.StartOfString++;
-                Char.LengthInChars--;
-                continue;
-            }
+                FirstQuoteEndOffset = (YORI_ALLOC_SIZE_T)(OutputString - CmdContext->ArgV[ArgCount].StartOfString);
+            } else {
 
-            //
-            //  If we see a quote, either we're opening a section that belongs in
-            //  one argument or we're ending that section.
-            //
+                //
+                //  If we see a quote, either we're opening a section that
+                //  belongs in one argument or we're ending that section.
+                //
 
-            if (Char.StartOfString[0] == '"') {
                 QuoteOpen = (BOOLEAN)(!QuoteOpen);
                 if (LookingForFirstQuote) {
                     Char.StartOfString++;
@@ -815,7 +1116,7 @@ YoriLibShParseCmdlineToCmdContext(
                 TerminateArg = TRUE;
                 TerminateNextArg = FALSE;
                 CharsToConsume = 0;
-            } else if ((ArgCount > 0 || (DWORD)(OutputString - CmdContext->ArgV[ArgCount].StartOfString) > 0) &&
+            } else if ((ArgCount > 0 || (YORI_ALLOC_SIZE_T)(OutputString - CmdContext->ArgV[ArgCount].StartOfString) > 0) &&
                        YoriLibShIsArgumentSeperator(&Char, &CharsToConsume, &TerminateNextArg)) {
                 TerminateArg = TRUE;
             }
@@ -824,26 +1125,10 @@ YoriLibShParseCmdlineToCmdContext(
         if (TerminateArg) {
 
             YoriLibShTrimSpacesFromBeginning(&Char);
-
-            *OutputString = '\0';
-            CmdContext->ArgV[ArgCount].LengthInChars = (DWORD)(OutputString - CmdContext->ArgV[ArgCount].StartOfString);
-            CmdContext->ArgV[ArgCount].LengthAllocated = CmdContext->ArgV[ArgCount].LengthInChars + 1;
-            OutputString++;
+            YoriLibParseTerminateCurrentArgument(&OutputString, &CmdContext->ArgV[ArgCount], PreviousCharWasQuote, FirstQuoteEndOffset);
 
             if (Char.LengthInChars > 0) {
-                ArgCount++;
-                YoriLibInitEmptyString(&CmdContext->ArgV[ArgCount]);
-                CmdContext->ArgV[ArgCount].StartOfString = OutputString;
-                if (Char.StartOfString[0] == '"') {
-                    CmdContext->ArgContexts[ArgCount].Quoted = TRUE;
-                    LookingForFirstQuote = TRUE;
-                } else {
-                    CmdContext->ArgContexts[ArgCount].Quoted = FALSE;
-                    LookingForFirstQuote = FALSE;
-                }
-                CmdContext->ArgContexts[ArgCount].QuoteTerminated = FALSE;
-                YoriLibReference(CmdContext->MemoryToFree);
-                CmdContext->ArgV[ArgCount].MemoryToFree = CmdContext->MemoryToFree;
+                YoriLibParseMoveToNextArgumentPopulate(CmdContext, &ArgCount, &Char, OutputString, &PreviousCharWasQuote, &LookingForFirstQuote, &FirstQuoteEndOffset);
 
                 //
                 //  If we were processing a space but the next argument is a
@@ -862,7 +1147,7 @@ YoriLibShParseCmdlineToCmdContext(
                     memcpy(OutputString, Char.StartOfString, CharsToConsume * sizeof(TCHAR));
                     OutputString += CharsToConsume;
                     Char.StartOfString += CharsToConsume;
-                    Char.LengthInChars -= CharsToConsume;
+                    Char.LengthInChars = Char.LengthInChars - CharsToConsume;
 
                     //
                     //  Check for '>"file name"' type syntax.  This isn't a
@@ -882,28 +1167,19 @@ YoriLibShParseCmdlineToCmdContext(
 
                 if (TerminateNextArg) {
                     YoriLibShTrimSpacesFromBeginning(&Char);
-                    *OutputString = '\0';
-                    CmdContext->ArgV[ArgCount].LengthInChars = (DWORD)(OutputString - CmdContext->ArgV[ArgCount].StartOfString);
-                    CmdContext->ArgV[ArgCount].LengthAllocated = CmdContext->ArgV[ArgCount].LengthInChars + 1;
-                    OutputString++;
+                    YoriLibParseTerminateCurrentArgument(&OutputString, &CmdContext->ArgV[ArgCount], PreviousCharWasQuote, FirstQuoteEndOffset);
                     if (Char.LengthInChars > 0) {
-                        ArgCount++;
-                        YoriLibInitEmptyString(&CmdContext->ArgV[ArgCount]);
-                        CmdContext->ArgV[ArgCount].StartOfString = OutputString;
-                        if (Char.StartOfString[0] == '"') {
-                            CmdContext->ArgContexts[ArgCount].Quoted = TRUE;
-                            LookingForFirstQuote = TRUE;
-                        } else {
-                            CmdContext->ArgContexts[ArgCount].Quoted = FALSE;
-                            LookingForFirstQuote = FALSE;
-                        }
-                        CmdContext->ArgContexts[ArgCount].QuoteTerminated = FALSE;
-                        YoriLibReference(CmdContext->MemoryToFree);
-                        CmdContext->ArgV[ArgCount].MemoryToFree = CmdContext->MemoryToFree;
+                        YoriLibParseMoveToNextArgumentPopulate(CmdContext, &ArgCount, &Char, OutputString, &PreviousCharWasQuote, &LookingForFirstQuote, &FirstQuoteEndOffset);
                     }
                 }
             }
         } else {
+
+            if (Char.StartOfString[0] == '"') {
+                PreviousCharWasQuote = TRUE;
+            } else {
+                PreviousCharWasQuote = FALSE;
+            }
 
             *OutputString = Char.StartOfString[0];
             OutputString++;
@@ -917,9 +1193,7 @@ YoriLibShParseCmdlineToCmdContext(
     //
 
     if (CmdContext->ArgV[ArgCount].LengthInChars == 0) {
-        *OutputString = '\0';
-        CmdContext->ArgV[ArgCount].LengthInChars = (DWORD)(OutputString - CmdContext->ArgV[ArgCount].StartOfString);
-        CmdContext->ArgV[ArgCount].LengthAllocated = CmdContext->ArgV[ArgCount].LengthInChars + 1;
+        YoriLibParseTerminateCurrentArgument(&OutputString, &CmdContext->ArgV[ArgCount], PreviousCharWasQuote, FirstQuoteEndOffset);
     }
 
     return TRUE;
@@ -954,17 +1228,17 @@ YoriLibShBuildCmdlineFromCmdContext(
     __in PYORI_LIBSH_CMD_CONTEXT CmdContext,
     __inout PYORI_STRING CmdLine,
     __in BOOL RemoveEscapes,
-    __out_opt PDWORD BeginCurrentArg,
-    __out_opt PDWORD EndCurrentArg
+    __out_opt PYORI_ALLOC_SIZE_T BeginCurrentArg,
+    __out_opt PYORI_ALLOC_SIZE_T EndCurrentArg
     )
 {
-    DWORD count;
-    DWORD BufferLength = 0;
-    DWORD CmdLineOffset = 0;
+    YORI_ALLOC_SIZE_T count;
+    YORI_ALLOC_SIZE_T BufferLength = 0;
+    YORI_ALLOC_SIZE_T CmdLineOffset = 0;
     LPTSTR String;
     PYORI_STRING ThisArg;
-    DWORD SrcOffset;
-    DWORD DestOffset;
+    YORI_ALLOC_SIZE_T SrcOffset;
+    YORI_ALLOC_SIZE_T DestOffset;
 
     for (count = 0; count < CmdContext->ArgC; count++) {
         BufferLength += 1;
@@ -972,13 +1246,13 @@ YoriLibShBuildCmdlineFromCmdContext(
             BufferLength += 2;
         }
         ThisArg = &CmdContext->ArgV[count];
-        BufferLength += ThisArg->LengthInChars;
+        BufferLength = BufferLength + ThisArg->LengthInChars;
     }
 
     BufferLength += 1;
 
     if (CmdLine->LengthAllocated < BufferLength) {
-        if (!YoriLibReallocateStringWithoutPreservingContents(CmdLine, BufferLength)) {
+        if (!YoriLibReallocStringNoContents(CmdLine, BufferLength)) {
             return FALSE;
         }
     }
@@ -1021,7 +1295,7 @@ YoriLibShBuildCmdlineFromCmdContext(
                 String[CmdLineOffset + DestOffset] = ThisArg->StartOfString[SrcOffset];
             }
         }
-        CmdLineOffset += DestOffset;
+        CmdLineOffset = CmdLineOffset + DestOffset;
 
         if (CmdContext->ArgContexts[count].Quoted) {
             if (CmdContext->ArgContexts[count].QuoteTerminated) {
@@ -1058,13 +1332,13 @@ YoriLibShBuildCmdlineFromCmdContext(
 __success(return)
 BOOLEAN
 YoriLibShRemoveEscapesFromArgCArgV(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __inout PYORI_STRING ArgV
     )
 {
-    DWORD ArgIndex;
-    DWORD CharIndex;
-    DWORD DestIndex;
+    YORI_ALLOC_SIZE_T ArgIndex;
+    YORI_ALLOC_SIZE_T CharIndex;
+    YORI_ALLOC_SIZE_T DestIndex;
     BOOLEAN EscapeFound;
     PYORI_STRING ThisArg;
 
@@ -1168,9 +1442,9 @@ YoriLibShRemoveEscapesFromCmdContext(
 VOID
 YoriLibShCopyArg(
     __in PYORI_LIBSH_CMD_CONTEXT SrcCmdContext,
-    __in DWORD SrcArgument,
+    __in YORI_ALLOC_SIZE_T SrcArgument,
     __in PYORI_LIBSH_CMD_CONTEXT DestCmdContext,
-    __in DWORD DestArgument
+    __in YORI_ALLOC_SIZE_T DestArgument
     )
 {
     DestCmdContext->ArgContexts[DestArgument].Quoted = SrcCmdContext->ArgContexts[SrcArgument].Quoted;
@@ -1200,7 +1474,7 @@ YoriLibShCopyCmdContext(
     __in PYORI_LIBSH_CMD_CONTEXT SrcCmdContext
     )
 {
-    DWORD Count;
+    YORI_ALLOC_SIZE_T Count;
 
     if (!YoriLibShAllocateArgCount(DestCmdContext, SrcCmdContext->ArgC, 0, NULL)) {
         return FALSE;
@@ -1213,6 +1487,72 @@ YoriLibShCopyCmdContext(
     for (Count = 0; Count < DestCmdContext->ArgC; Count++) {
         YoriLibShCopyArg(SrcCmdContext, Count, DestCmdContext, Count);
     }
+
+    return TRUE;
+}
+
+/**
+ Add extra arguments into a CmdContext.  This routine can reallocate the
+ ArgV and ArgContexts arrays to the specified size.
+
+ @param CmdContext Pointer to the command context to expand.
+
+ @param NewArgOffset Indicates the insertion point of any new argument. The
+        newly allocated argument at this offset will be empty, and any
+        existing argument at this offset will be moved.
+
+ @param NewArgCount Specifies the new number of arguments to insert.
+
+ @return TRUE to indicate success, FALSE to indicate failure.
+ */
+__success(return)
+BOOL
+YoriLibShExpandCmdContext(
+    __inout PYORI_LIBSH_CMD_CONTEXT CmdContext,
+    __in DWORD NewArgOffset,
+    __in DWORD NewArgCount
+    )
+{
+    YORI_ALLOC_SIZE_T Count;
+    YORI_LIBSH_CMD_CONTEXT OldCmdContext;
+    DWORD NewArgC;
+
+    ZeroMemory(&OldCmdContext, sizeof(OldCmdContext));
+
+    OldCmdContext.ArgC = CmdContext->ArgC;
+    OldCmdContext.ArgV = CmdContext->ArgV;
+    OldCmdContext.ArgContexts = CmdContext->ArgContexts;
+    OldCmdContext.MemoryToFreeArgV = CmdContext->MemoryToFreeArgV;
+    OldCmdContext.MemoryToFreeArgContexts = CmdContext->MemoryToFreeArgContexts;
+
+    NewArgC = CmdContext->ArgC + NewArgCount;
+
+    CmdContext->ArgV = NULL;
+    CmdContext->ArgContexts = NULL;
+    CmdContext->MemoryToFreeArgV = NULL;
+    CmdContext->MemoryToFreeArgContexts = NULL;
+
+    if (!YoriLibShAllocateArgCount(CmdContext, NewArgC, 0, NULL)) {
+        CmdContext->ArgV = OldCmdContext.ArgV;
+        CmdContext->ArgContexts = OldCmdContext.ArgContexts;
+        CmdContext->MemoryToFreeArgV = OldCmdContext.MemoryToFreeArgV;
+        CmdContext->MemoryToFreeArgContexts = OldCmdContext.MemoryToFreeArgContexts;
+        return FALSE;
+    }
+
+    if (CmdContext->CurrentArg >= NewArgOffset) {
+        CmdContext->CurrentArg = CmdContext->CurrentArg + NewArgCount;
+    }
+
+    for (Count = 0; Count < OldCmdContext.ArgC; Count++) {
+        if (Count >= NewArgOffset) {
+            YoriLibShCopyArg(&OldCmdContext, Count, CmdContext, Count + NewArgOffset);
+        } else {
+            YoriLibShCopyArg(&OldCmdContext, Count, CmdContext, Count);
+        }
+    }
+
+    YoriLibShFreeCmdContext(&OldCmdContext);
 
     return TRUE;
 }
@@ -1231,7 +1571,7 @@ YoriLibShCopyCmdContext(
 VOID
 YoriLibShCheckIfArgNeedsQuotes(
     __in PYORI_LIBSH_CMD_CONTEXT CmdContext,
-    __in DWORD ArgIndex
+    __in YORI_ALLOC_SIZE_T ArgIndex
     )
 {
     BOOL HasWhiteSpace;
@@ -1255,15 +1595,22 @@ YoriLibShFreeCmdContext(
     __in PYORI_LIBSH_CMD_CONTEXT CmdContext
     )
 {
-    DWORD Count;
+    YORI_ALLOC_SIZE_T Count;
 
     if (CmdContext->ArgV != NULL) {
         for (Count = 0; Count < CmdContext->ArgC; Count++) {
             YoriLibFreeStringContents(&CmdContext->ArgV[Count]);
         }
     }
-    if (CmdContext->MemoryToFree) {
-        YoriLibDereference(CmdContext->MemoryToFree);
+
+    if (CmdContext->MemoryToFreeArgV) {
+        YoriLibDereference(CmdContext->MemoryToFreeArgV);
+        CmdContext->MemoryToFreeArgV = NULL;
+    }
+
+    if (CmdContext->MemoryToFreeArgContexts) {
+        YoriLibDereference(CmdContext->MemoryToFreeArgContexts);
+        CmdContext->MemoryToFreeArgContexts = NULL;
     }
 }
 
@@ -1361,18 +1708,18 @@ YoriLibShIsArgumentProgramSeperator(
     __in BOOL EndOfExpression
     )
 {
-    if (YoriLibCompareStringWithLiteralInsensitive(Arg, _T("&")) == 0 ||
-        YoriLibCompareStringWithLiteralInsensitive(Arg, _T("&&")) == 0 ||
-        YoriLibCompareStringWithLiteralInsensitive(Arg, _T("\n")) == 0 ||
-        YoriLibCompareStringWithLiteralInsensitive(Arg, _T("|")) == 0 ||
-        YoriLibCompareStringWithLiteralInsensitive(Arg, _T("||")) == 0) {
+    if (YoriLibCompareStringLitIns(Arg, _T("&")) == 0 ||
+        YoriLibCompareStringLitIns(Arg, _T("&&")) == 0 ||
+        YoriLibCompareStringLitIns(Arg, _T("\n")) == 0 ||
+        YoriLibCompareStringLitIns(Arg, _T("|")) == 0 ||
+        YoriLibCompareStringLitIns(Arg, _T("||")) == 0) {
 
         return TRUE;
     }
 
     if (EndOfExpression) {
-        if (YoriLibCompareStringWithLiteralInsensitive(Arg, _T("&!")) == 0 ||
-            YoriLibCompareStringWithLiteralInsensitive(Arg, _T("&!!")) == 0) {
+        if (YoriLibCompareStringLitIns(Arg, _T("&!")) == 0 ||
+            YoriLibCompareStringLitIns(Arg, _T("&!!")) == 0) {
 
             return TRUE;
         }
@@ -1402,7 +1749,7 @@ __success(return)
 BOOL
 YoriLibShCheckForDeviceNameAndDuplicate(
     __inout PYORI_STRING UserString,
-    __in DWORD UserStringOffset,
+    __in YORI_ALLOC_SIZE_T UserStringOffset,
     __inout PYORI_STRING ResolvedName
     )
 {
@@ -1470,21 +1817,21 @@ YoriLibShCheckForDeviceNameAndDuplicate(
          how to execute a single program.
  */
 __success(return > 0)
-DWORD
+YORI_ALLOC_SIZE_T
 YoriLibShParseCmdContextToExecContext(
     __in PYORI_LIBSH_CMD_CONTEXT CmdContext,
-    __in DWORD InitialArgument,
+    __in YORI_ALLOC_SIZE_T InitialArgument,
     __out PYORI_LIBSH_SINGLE_EXEC_CONTEXT ExecContext,
-    __out_opt PBOOL CurrentArgIsForProgram,
-    __out_opt PDWORD CurrentArgIndex,
-    __out_opt PDWORD CurrentArgOffset
+    __out_opt PBOOLEAN CurrentArgIsForProgram,
+    __out_opt PYORI_ALLOC_SIZE_T CurrentArgIndex,
+    __out_opt PYORI_ALLOC_SIZE_T CurrentArgOffset
     )
 {
-    DWORD Count;
-    BOOL RemoveThisArg;
-    BOOL EndOfExpression;
-    DWORD ArgumentsConsumed = 0;
-    DWORD CharOffset;
+    YORI_ALLOC_SIZE_T Count;
+    BOOLEAN RemoveThisArg;
+    BOOLEAN EndOfExpression;
+    YORI_ALLOC_SIZE_T ArgumentsConsumed = 0;
+    YORI_ALLOC_SIZE_T CharOffset;
     PYORI_STRING ThisArg;
     PYORI_STRING ExecContextRedirectString;
 
@@ -1847,20 +2194,20 @@ YoriLibShParseCmdContextToExecPlan(
     __in PYORI_LIBSH_CMD_CONTEXT CmdContext,
     __out PYORI_LIBSH_EXEC_PLAN ExecPlan,
     __out_opt PYORI_LIBSH_SINGLE_EXEC_CONTEXT* CurrentExecContext,
-    __out_opt PBOOL CurrentArgIsForProgram,
-    __out_opt PDWORD CurrentArgIndex,
-    __out_opt PDWORD CurrentArgOffset
+    __out_opt PBOOLEAN CurrentArgIsForProgram,
+    __out_opt PYORI_ALLOC_SIZE_T CurrentArgIndex,
+    __out_opt PYORI_ALLOC_SIZE_T CurrentArgOffset
     )
 {
-    DWORD CurrentArg = 0;
-    DWORD ArgsConsumed;
-    DWORD ArgOfLastOperatorIndex = 0;
+    YORI_ALLOC_SIZE_T CurrentArg = 0;
+    YORI_ALLOC_SIZE_T ArgsConsumed;
+    YORI_ALLOC_SIZE_T ArgOfLastOperatorIndex = 0;
     PYORI_LIBSH_SINGLE_EXEC_CONTEXT ThisProgram;
     PYORI_LIBSH_SINGLE_EXEC_CONTEXT PreviousProgram = NULL;
-    BOOL LocalCurrentArgIsForProgram;
-    BOOL FoundProgramMatch;
-    DWORD LocalCurrentArgIndex;
-    DWORD LocalCurrentArgOffset;
+    BOOLEAN LocalCurrentArgIsForProgram;
+    BOOLEAN FoundProgramMatch;
+    YORI_ALLOC_SIZE_T LocalCurrentArgIndex;
+    YORI_ALLOC_SIZE_T LocalCurrentArgOffset;
 
     if (CmdContext->ArgC == 0) {
         return FALSE;
@@ -1918,7 +2265,7 @@ YoriLibShParseCmdContextToExecPlan(
             if (!CmdContext->ArgContexts[CurrentArg + ArgsConsumed].Quoted &&
                 ThisArg->StartOfString[0] == '&') {
 
-                if (YoriLibCompareStringWithLiteral(ThisArg, _T("&")) == 0) {
+                if (YoriLibCompareStringLit(ThisArg, _T("&")) == 0) {
                     ExecPlan->WaitForCompletion = FALSE;
                     ExecPlan->EntireCmd.WaitForCompletion = FALSE;
 
@@ -1927,7 +2274,7 @@ YoriLibShParseCmdContextToExecPlan(
                     YoriLibFreeStringContents(&ExecPlan->EntireCmd.CmdToExec.ArgV[CurrentArg + ArgsConsumed]);
                     ExecPlan->EntireCmd.CmdToExec.ArgC--;
                     ArgsConsumed++;
-                } else if (YoriLibCompareStringWithLiteral(ThisArg, _T("&!")) == 0) {
+                } else if (YoriLibCompareStringLit(ThisArg, _T("&!")) == 0) {
                     ExecPlan->WaitForCompletion = FALSE;
 
                     ExecPlan->EntireCmd.WaitForCompletion = FALSE;
@@ -1947,7 +2294,7 @@ YoriLibShParseCmdContextToExecPlan(
                     YoriLibFreeStringContents(&ExecPlan->EntireCmd.CmdToExec.ArgV[CurrentArg + ArgsConsumed]);
                     ExecPlan->EntireCmd.CmdToExec.ArgC--;
                     ArgsConsumed++;
-                } else if (YoriLibCompareStringWithLiteral(ThisArg, _T("&!!")) == 0) {
+                } else if (YoriLibCompareStringLit(ThisArg, _T("&!!")) == 0) {
                     ExecPlan->WaitForCompletion = FALSE;
 
                     ExecPlan->EntireCmd.WaitForCompletion = FALSE;
@@ -2001,14 +2348,14 @@ YoriLibShParseCmdContextToExecPlan(
             ArgOfLastOperator = &CmdContext->ArgV[ArgOfLastOperatorIndex];
 
             PreviousProgram->NextProgram = ThisProgram;
-            if (YoriLibCompareStringWithLiteralInsensitive(ArgOfLastOperator, _T("&")) == 0 ||
-                YoriLibCompareStringWithLiteralInsensitive(ArgOfLastOperator, _T("\n")) == 0) {
+            if (YoriLibCompareStringLitIns(ArgOfLastOperator, _T("&")) == 0 ||
+                YoriLibCompareStringLitIns(ArgOfLastOperator, _T("\n")) == 0) {
                 PreviousProgram->NextProgramType = NextProgramExecUnconditionally;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(ArgOfLastOperator, _T("&&")) == 0) {
+            } else if (YoriLibCompareStringLitIns(ArgOfLastOperator, _T("&&")) == 0) {
                 PreviousProgram->NextProgramType = NextProgramExecOnSuccess;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(ArgOfLastOperator, _T("||")) == 0) {
+            } else if (YoriLibCompareStringLitIns(ArgOfLastOperator, _T("||")) == 0) {
                 PreviousProgram->NextProgramType = NextProgramExecOnFailure;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(ArgOfLastOperator, _T("|")) == 0) {
+            } else if (YoriLibCompareStringLitIns(ArgOfLastOperator, _T("|")) == 0) {
                 PreviousProgram->NextProgramType = NextProgramExecConcurrently;
                 if (PreviousProgram->StdOutType == StdOutTypeDefault) {
                     PreviousProgram->StdOutType = StdOutTypePipe;
@@ -2027,7 +2374,7 @@ YoriLibShParseCmdContextToExecPlan(
 
         ExecPlan->NumberCommands++;
         PreviousProgram = ThisProgram;
-        CurrentArg += ArgsConsumed;
+        CurrentArg = CurrentArg + ArgsConsumed;
 
         while (CurrentArg < CmdContext->ArgC &&
                YoriLibShIsArgumentProgramSeperator(&CmdContext->ArgV[CurrentArg], FALSE)) {
@@ -2118,26 +2465,26 @@ typedef struct _YORI_LIBSH_BACKQUOTE_ENTRY {
      member compared to the master string, but keeping it in integer form
      is convenient.
      */
-    DWORD StartingOffset;
+    YORI_ALLOC_SIZE_T StartingOffset;
 
     /**
      Indicates the level of nesting of this match.  Higher numbers indicate
      more nesting and should be executed earlier.
      */
-    DWORD TreeDepth;
+    YORI_ALLOC_SIZE_T TreeDepth;
 
     /**
      Set to TRUE if this is a new style entry, aka $(foo) form.  Matches
      such as `foo` will have this be FALSE.
      */
-    BOOL NewStyleMatch;
+    BOOLEAN NewStyleMatch;
 
     /**
      Set to TRUE to indicate this entry has found an opening and closing
      operator, and the string is updated to contain the contents in
      between.
      */
-    BOOL Terminated;
+    BOOLEAN Terminated;
 
     /**
      Set to TRUE if this entry has been closed implicitly by encountering
@@ -2145,7 +2492,7 @@ typedef struct _YORI_LIBSH_BACKQUOTE_ENTRY {
      something that can be executed, but it is recorded for the benefit
      of tab completion.
      */
-    BOOL Abandoned;
+    BOOLEAN Abandoned;
 } YORI_LIBSH_BACKQUOTE_ENTRY, *PYORI_LIBSH_BACKQUOTE_ENTRY;
 
 
@@ -2166,17 +2513,17 @@ typedef struct _YORI_LIBSH_BACKQUOTE_CONTEXT {
     /**
      The number of elements within the tree.
      */
-    DWORD MatchCount;
+    YORI_ALLOC_SIZE_T MatchCount;
 
     /**
      The maximum depth of any entry within the tree.
      */
-    DWORD MaxDepth;
+    YORI_ALLOC_SIZE_T MaxDepth;
 
     /**
      The current depth of the tree (number of opens minus number of closes)
      */
-    DWORD CurrentDepth;
+    YORI_ALLOC_SIZE_T CurrentDepth;
 } YORI_LIBSH_BACKQUOTE_CONTEXT, *PYORI_LIBSH_BACKQUOTE_CONTEXT;
 
 /**
@@ -2234,8 +2581,8 @@ PYORI_LIBSH_BACKQUOTE_ENTRY
 YoriLibShAllocateBackquoteEntry(
     __in PYORI_LIBSH_BACKQUOTE_CONTEXT BackquoteContext,
     __in PYORI_STRING CompleteString,
-    __in DWORD Offset,
-    __in BOOL NewStyleMatch
+    __in YORI_ALLOC_SIZE_T Offset,
+    __in BOOLEAN NewStyleMatch
     )
 {
     PYORI_LIBSH_BACKQUOTE_ENTRY BackquoteEntry;
@@ -2290,8 +2637,8 @@ YoriLibShAllocateBackquoteEntry(
 PYORI_LIBSH_BACKQUOTE_ENTRY
 YoriLibShTerminateMatchingBackquoteEntry(
     __in PYORI_LIBSH_BACKQUOTE_CONTEXT BackquoteContext,
-    __in DWORD Offset,
-    __in BOOL NewStyleMatch
+    __in YORI_ALLOC_SIZE_T Offset,
+    __in BOOLEAN NewStyleMatch
     )
 {
 
@@ -2379,7 +2726,7 @@ YoriLibShParseBackquoteSubstrings(
     )
 {
     PYORI_LIBSH_BACKQUOTE_ENTRY Entry;
-    DWORD Index;
+    YORI_ALLOC_SIZE_T Index;
     BOOLEAN QuoteOpen;
 
     YoriLibInitializeListHead(&BackquoteContext->MatchList);
@@ -2469,13 +2816,13 @@ BOOL
 YoriLibShFindNextBackquoteSubstring(
     __in PYORI_STRING String,
     __out PYORI_STRING CurrentSubset,
-    __out PDWORD CharsInPrefix
+    __out PYORI_ALLOC_SIZE_T CharsInPrefix
     )
 {
     YORI_LIBSH_BACKQUOTE_CONTEXT BackquoteContext;
     PYORI_LIST_ENTRY ListEntry;
     PYORI_LIBSH_BACKQUOTE_ENTRY BackquoteEntry;
-    DWORD SeekingDepth;
+    YORI_ALLOC_SIZE_T SeekingDepth;
     if (!YoriLibShParseBackquoteSubstrings(String, &BackquoteContext)) {
         return FALSE;
     }
@@ -2522,14 +2869,14 @@ __success(return)
 BOOL
 YoriLibShFindBestBackquoteSubstringAtOffset(
     __in PYORI_STRING String,
-    __in DWORD StringOffset,
+    __in YORI_ALLOC_SIZE_T StringOffset,
     __out PYORI_STRING CurrentSubset
     )
 {
     YORI_LIBSH_BACKQUOTE_CONTEXT BackquoteContext;
     PYORI_LIST_ENTRY ListEntry;
     PYORI_LIBSH_BACKQUOTE_ENTRY BackquoteEntry;
-    DWORD SeekingDepth;
+    YORI_ALLOC_SIZE_T SeekingDepth;
 
     if (!YoriLibShParseBackquoteSubstrings(String, &BackquoteContext)) {
         return FALSE;

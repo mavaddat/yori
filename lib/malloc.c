@@ -29,6 +29,17 @@
 
 #if YORI_SPECIAL_HEAP
 
+#if YORI_MAX_ALLOC_SIZE < ((DWORD)-1)
+/**
+ This module allocates more bytes than specified to support page alignment
+ and guard pages.  Since this is NT specific, use 32 bit integers here to
+ support 16 bit allocations.
+ */
+typedef DWORD YORI_SPECIAL_ALLOC_SIZE_T;
+#else
+typedef YORI_ALLOC_SIZE_T YORI_SPECIAL_ALLOC_SIZE_T;
+#endif
+
 /**
  The number of stack frames to capture when the OS supports it.
  */
@@ -42,13 +53,13 @@ typedef struct _YORI_SPECIAL_HEAP_HEADER {
     /**
      Offset in bytes from the top of the page to the user's allocation.
      */
-    DWORD OffsetToData;
+    YORI_SPECIAL_ALLOC_SIZE_T OffsetToData;
 
     /**
      Number of pages in the allocation.  Special heap allocations are
      always a multiple of pages.
      */
-    DWORD PagesInAllocation;
+    YORI_SPECIAL_ALLOC_SIZE_T PagesInAllocation;
 
     /**
      List of all active memory allocations.
@@ -85,10 +96,8 @@ typedef struct _YORI_SPECIAL_HEAP_HEADER {
 } YORI_SPECIAL_HEAP_HEADER, *PYORI_SPECIAL_HEAP_HEADER;
 
 /**
- The number of bytes in a page on this architecture.
+ A structure containing process global state for the special heap allocator.
  */
-#define PAGE_SIZE (0x1000)
-
 typedef struct _YORI_SPECIAL_HEAP_GLOBAL {
 
     /**
@@ -126,6 +135,9 @@ typedef struct _YORI_SPECIAL_HEAP_GLOBAL {
 
 } YORI_SPECIAL_HEAP_GLOBAL, PYORI_SPECIAL_HEAP_GLOBAL;
 
+/**
+ Process global state for the special heap allocator.
+ */
 YORI_SPECIAL_HEAP_GLOBAL YoriLibSpecialHeap;
 
 #endif
@@ -141,7 +153,7 @@ YORI_SPECIAL_HEAP_GLOBAL YoriLibSpecialHeap;
  */
 PVOID
 YoriLibMalloc(
-    __in DWORD Bytes
+    __in YORI_ALLOC_SIZE_T Bytes
     )
 {
     PVOID Alloc;
@@ -173,21 +185,22 @@ YoriLibMalloc(
  */
 PVOID
 YoriLibMallocSpecialHeap(
-    __in DWORD Bytes,
+    __in YORI_ALLOC_SIZE_T Bytes,
     __in LPCSTR Function,
     __in LPCSTR File,
     __in DWORD Line
     )
 {
-    DWORD TotalPagesNeeded;
+    YORI_SPECIAL_ALLOC_SIZE_T TotalPagesNeeded;
     PYORI_SPECIAL_HEAP_HEADER Header;
     PYORI_SPECIAL_HEAP_HEADER Commit;
-    DWORD StackSize;
+    YORI_ALLOC_SIZE_T StackSize;
     DWORD OldAccess;
-#if _M_MRX000
-    DWORD Alignment = sizeof(DWORD);
+    YORI_SPECIAL_ALLOC_SIZE_T PageSize;
+#if defined(_M_MRX000) || defined(_M_ARM64) || defined(_M_ALPHA) || defined(_M_PPC)
+    YORI_SPECIAL_ALLOC_SIZE_T Alignment = sizeof(DWORD);
 #else
-    DWORD Alignment = sizeof(UCHAR);
+    YORI_SPECIAL_ALLOC_SIZE_T Alignment = sizeof(UCHAR);
 #endif
 
     StackSize = 0;
@@ -195,7 +208,10 @@ YoriLibMallocSpecialHeap(
         StackSize = sizeof(PVOID) * YORI_SPECIAL_HEAP_STACK_FRAMES;
     }
 
-    TotalPagesNeeded = (Bytes + sizeof(YORI_SPECIAL_HEAP_HEADER) + StackSize + 2 * PAGE_SIZE - 1) / PAGE_SIZE;
+    PageSize = YoriLibGetPageSize();
+
+    TotalPagesNeeded = Bytes;
+    TotalPagesNeeded = (TotalPagesNeeded + sizeof(YORI_SPECIAL_HEAP_HEADER) + StackSize + 2 * PageSize - 1) / PageSize;
 
     if (YoriLibSpecialHeap.Mutex == NULL) {
         YoriLibSpecialHeap.Mutex = CreateMutex(NULL, FALSE, NULL);
@@ -209,33 +225,36 @@ YoriLibMallocSpecialHeap(
         YoriLibInitializeListHead(&YoriLibSpecialHeap.ActiveAllocationsList);
     }
 
-    Header = VirtualAlloc(NULL, TotalPagesNeeded * PAGE_SIZE, MEM_RESERVE, PAGE_READWRITE);
+    Header = VirtualAlloc(NULL, TotalPagesNeeded * PageSize, MEM_RESERVE, PAGE_READWRITE);
     if (Header == NULL) {
         return NULL;
     }
 
-    Commit = VirtualAlloc(Header, TotalPagesNeeded * PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE);
+    Commit = VirtualAlloc(Header, TotalPagesNeeded * PageSize, MEM_COMMIT, PAGE_READWRITE);
     if (Commit == NULL) {
         VirtualFree(Header, 0, MEM_RELEASE);
         return NULL;
     }
 
-    if (!VirtualProtect((PUCHAR)Header + (TotalPagesNeeded - 1) * PAGE_SIZE, PAGE_SIZE, PAGE_NOACCESS, &OldAccess)) {
-        VirtualFree(Header, TotalPagesNeeded * PAGE_SIZE, MEM_DECOMMIT);
+    if (!VirtualProtect((PUCHAR)Header + (TotalPagesNeeded - 1) * PageSize, PageSize, PAGE_NOACCESS, &OldAccess)) {
+        VirtualFree(Header, TotalPagesNeeded * PageSize, MEM_DECOMMIT);
         VirtualFree(Header, 0, MEM_RELEASE);
         return NULL;
     }
 
-    FillMemory(Header, (TotalPagesNeeded - 1) * PAGE_SIZE, '@');
+    FillMemory(Header, (TotalPagesNeeded - 1) * PageSize, '@');
 
     Header->PagesInAllocation = TotalPagesNeeded;
-    Header->OffsetToData = ((TotalPagesNeeded - 1) * PAGE_SIZE - Bytes) & ~(Alignment - 1);
+    Header->OffsetToData = ((YORI_SPECIAL_ALLOC_SIZE_T)((TotalPagesNeeded - 1) * PageSize - Bytes)) & (YORI_SPECIAL_ALLOC_SIZE_T)~(Alignment - 1);
     Header->Function = Function;
     Header->File = File;
     Header->Line = Line;
-    ASSERT(Header->OffsetToData < (PAGE_SIZE + sizeof(YORI_SPECIAL_HEAP_HEADER) + StackSize));
+    ASSERT(Header->OffsetToData < (PageSize + sizeof(YORI_SPECIAL_HEAP_HEADER) + StackSize));
     if (DllKernel32.pRtlCaptureStackBackTrace != NULL) {
-        DllKernel32.pRtlCaptureStackBackTrace(1, YORI_SPECIAL_HEAP_STACK_FRAMES, YoriLibAddToPointer(Header, sizeof(YORI_SPECIAL_HEAP_HEADER)), NULL);
+        DllKernel32.pRtlCaptureStackBackTrace(1,
+                                              YORI_SPECIAL_HEAP_STACK_FRAMES,
+                                              YoriLibAddToPointer(Header, sizeof(YORI_SPECIAL_HEAP_HEADER)),
+                                              NULL);
     }
 
     WaitForSingleObject(YoriLibSpecialHeap.Mutex, INFINITE);
@@ -265,16 +284,19 @@ YoriLibFree(
     PUCHAR TestChar;
     DWORD MyEntry;
     DWORD OldAccess;
-    DWORD BytesToFree;
-    DWORD StackSize;
+    YORI_SPECIAL_ALLOC_SIZE_T BytesToFree;
+    YORI_SPECIAL_ALLOC_SIZE_T StackSize;
+    DWORD_PTR PageSize;
 
     StackSize = 0;
     if (DllKernel32.pRtlCaptureStackBackTrace != NULL) {
         StackSize = sizeof(PVOID) * YORI_SPECIAL_HEAP_STACK_FRAMES;
     }
 
+    PageSize = YoriLibGetPageSize();
+
     Header = YoriLibSubtractFromPointer(Ptr, sizeof(YORI_SPECIAL_HEAP_HEADER) + StackSize);
-    Header = (PYORI_SPECIAL_HEAP_HEADER)((DWORD_PTR)Header & ~(PAGE_SIZE - 1));
+    Header = (PYORI_SPECIAL_HEAP_HEADER)((DWORD_PTR)Header & ~(PageSize - 1));
 
     TestChar = (PUCHAR)Header;
     ASSERT(TestChar + Header->OffsetToData == Ptr);
@@ -285,7 +307,7 @@ YoriLibFree(
         TestChar++;
     }
 
-    BytesToFree = (Header->PagesInAllocation - 1) * PAGE_SIZE - Header->OffsetToData;
+    BytesToFree = (Header->PagesInAllocation - 1) * (YORI_SPECIAL_ALLOC_SIZE_T)PageSize - Header->OffsetToData;
 
     WaitForSingleObject(YoriLibSpecialHeap.Mutex, INFINITE);
 
@@ -300,10 +322,10 @@ YoriLibFree(
 
         OldHeader = YoriLibSpecialHeap.RecentlyFreed[MyEntry];
 
-        if (!VirtualProtect(OldHeader, PAGE_SIZE, PAGE_READWRITE, &OldAccess)) {
+        if (!VirtualProtect(OldHeader, PageSize, PAGE_READWRITE, &OldAccess)) {
             ASSERT(!"VirtualProtect failure");
         }
-        if (!VirtualFree(OldHeader, OldHeader->PagesInAllocation * PAGE_SIZE, MEM_DECOMMIT)) {
+        if (!VirtualFree(OldHeader, OldHeader->PagesInAllocation * PageSize, MEM_DECOMMIT)) {
             ASSERT(!"VirtualFree failure");
         }
         if (!VirtualFree(OldHeader, 0, MEM_RELEASE)) {
@@ -311,7 +333,7 @@ YoriLibFree(
         }
     }
 
-    if (!VirtualProtect(Header, Header->PagesInAllocation * PAGE_SIZE, PAGE_NOACCESS, &OldAccess)) {
+    if (!VirtualProtect(Header, Header->PagesInAllocation * PageSize, PAGE_NOACCESS, &OldAccess)) {
         ASSERT(!"VirtualProtect failure");
     }
 
@@ -331,20 +353,30 @@ VOID
 YoriLibDisplayMemoryUsage(VOID)
 {
 #if YORI_SPECIAL_HEAP
+    YORI_ALLOC_SIZE_T PageSize;
+    PageSize = YoriLibGetPageSize();
     if (YoriLibSpecialHeap.BytesCurrentlyAllocated > 0 ||
         (YoriLibSpecialHeap.NumberAllocated - YoriLibSpecialHeap.NumberFreed > 0)) {
 
         PYORI_LIST_ENTRY Entry;
         PYORI_SPECIAL_HEAP_HEADER Header;
-        DWORD BytesAllocated;
+        YORI_SPECIAL_ALLOC_SIZE_T BytesAllocated;
 
-        YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("%i bytes allocated in %i allocations\n"), YoriLibSpecialHeap.BytesCurrentlyAllocated, YoriLibSpecialHeap.NumberAllocated - YoriLibSpecialHeap.NumberFreed);
+        YoriLibOutput(YORI_LIB_OUTPUT_STDERR,
+                      _T("%i bytes allocated in %i allocations\n"),
+                      YoriLibSpecialHeap.BytesCurrentlyAllocated,
+                      YoriLibSpecialHeap.NumberAllocated - YoriLibSpecialHeap.NumberFreed);
 
         Entry = YoriLibGetNextListEntry(&YoriLibSpecialHeap.ActiveAllocationsList, NULL);
         while (Entry != NULL) {
             Header = CONTAINING_RECORD(Entry, YORI_SPECIAL_HEAP_HEADER, ListEntry);
-            BytesAllocated = (Header->PagesInAllocation - 1) * PAGE_SIZE - Header->OffsetToData;
-            YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("%hs (%hs:%i) allocated %i bytes\n"), Header->Function, Header->File, Header->Line, BytesAllocated);
+            BytesAllocated = (Header->PagesInAllocation - 1) * PageSize - Header->OffsetToData;
+            YoriLibOutput(YORI_LIB_OUTPUT_STDERR,
+                          _T("%hs (%hs:%i) allocated %i bytes\n"),
+                          Header->Function,
+                          Header->File,
+                          Header->Line,
+                          BytesAllocated);
             Entry = YoriLibGetNextListEntry(&YoriLibSpecialHeap.ActiveAllocationsList, Entry);
         }
 
@@ -376,7 +408,7 @@ typedef struct _YORILIB_REFERENCED_MALLOC_HEADER {
  */
 PVOID
 YoriLibReferencedMalloc(
-    __in DWORD Bytes
+    __in YORI_ALLOC_SIZE_T Bytes
     )
 {
     PYORILIB_REFERENCED_MALLOC_HEADER Header;
@@ -410,7 +442,7 @@ YoriLibReferencedMalloc(
  */
 PVOID
 YoriLibReferencedMallocSpecialHeap(
-    __in DWORD Bytes,
+    __in YORI_ALLOC_SIZE_T Bytes,
     __in LPCSTR Function,
     __in LPCSTR File,
     __in DWORD Line
@@ -463,6 +495,150 @@ YoriLibDereference(
     if (Header->ReferenceCount == 0) {
         YoriLibFree(Header);
     }
+}
+
+/*
+The optimizer does a good job at condensing the function below, but
+unfortunately early optimizers get it wrong.
+
+Visual C++ 2.0:
+00000000: 83 7C 24 08 00     cmp         dword ptr [esp+08],00
+00000005: 75 07              jne         0000000E
+00000007: F6 44 24 04 00     test        byte ptr [esp+04],00
+0000000C: 75 04              jne         00000012
+0000000E: 32 C0              xor         al,al
+00000010: EB 02              jmp         00000014
+00000012: B0 01              mov         al,01
+00000014: C2 08 00           ret         0008
+
+Visual C++ 4.1/4.2:
+00000000: 83 7C 24 08 00     cmp         dword ptr [esp+8],0
+00000005: 75 07              jne         0000000E
+00000007: F6 44 24 04 00     test        byte ptr [esp+4],0
+0000000C: 74 04              je          00000012
+0000000E: 32 C0              xor         al,al
+00000010: EB 02              jmp         00000014
+00000012: B0 01              mov         al,1
+00000014: C2 08 00           ret         8
+
+Visual C++ 5.0:
+00000000: 8B 4C 24 08        mov         ecx,dword ptr [esp+8]
+00000004: 33 C0              xor         eax,eax
+00000006: 0B C1              or          eax,ecx
+00000008: 74 04              je          0000000E
+0000000A: 32 C0              xor         al,al
+0000000C: EB 02              jmp         00000010
+0000000E: B0 01              mov         al,1
+00000010: C2 08 00           ret         8
+
+
+This function is trying to say "if the upper bits are nonzero, this is not a
+valid allocation."  Visual C++ 2.x and 4.x both attempt to interpret the low
+8 bits, although note the tests are inverted, which causes them to fail
+differently.
+
+Visual C++ 5.0 gets it "right" by not looking at the low 32 bits at all.
+*/
+#if defined(_MSC_VER) && _MSC_VER < 1100
+#pragma optimize("", off)
+#endif
+
+/**
+ Determine if the specified size is allocatable.  If the specified size
+ exceeds an implementation or specified limit, the size cannot be allowed.
+
+ @param Size The proposed allocation size.
+
+ @return TRUE to indicate the new size is acceptable, FALSE if it is not.
+ */
+BOOLEAN
+YoriLibIsSizeAllocatable(
+    __in YORI_MAX_UNSIGNED_T Size
+    )
+{
+    YORI_MAX_UNSIGNED_T AllocMask;
+    YORI_ALLOC_SIZE_T MaxAlloc;
+
+    MaxAlloc = (YORI_ALLOC_SIZE_T)-1;
+    AllocMask = MaxAlloc;
+    AllocMask = ~AllocMask;
+
+    if (Size & AllocMask) {
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+#if defined(_MSC_VER) && _MSC_VER < 1100
+#pragma optimize("", on)
+#endif
+
+/**
+ Determine if any value within the specified range is a valid allocation, and
+ if so, return the largest possible size to allocate within the range.  If no
+ value is allocatable, return zero.
+
+ @param RequiredSize The minimum size to allocate, where if this is not
+        available execution cannot continue.
+
+ @param DesiredSize The maximum size to allocate if it is possible.
+ 
+ @return The number of bytes that can be allocated.
+ */
+YORI_ALLOC_SIZE_T
+YoriLibMaximumAllocationInRange(
+    __in YORI_MAX_UNSIGNED_T RequiredSize,
+    __in YORI_MAX_UNSIGNED_T DesiredSize
+    )
+{
+    YORI_ALLOC_SIZE_T MaxAlloc;
+
+    ASSERT(DesiredSize >= RequiredSize);
+
+    MaxAlloc = (YORI_ALLOC_SIZE_T)-1;
+
+    if (DesiredSize <= MaxAlloc) {
+        return (YORI_ALLOC_SIZE_T)DesiredSize;
+    }
+
+    if (RequiredSize > MaxAlloc) {
+        return 0;
+    }
+
+    return MaxAlloc;
+}
+
+
+/**
+ Check if an existing allocation can be extended by the specified number of
+ bytes.  This function takes multiple allocatable values and validates they
+ can still be allocated if combined.
+
+ @param ExistingSize The existing size of an allocation, which is implicitly
+        required.
+
+ @param RequiredExtraSize Any additional size that is required.
+
+ @param DesiredExtraSize Any size which is beneficial but can be truncated
+        as needed.
+
+ @return The maximum number of bytes that can be allocated, or zero on
+         failure.
+ */
+YORI_ALLOC_SIZE_T
+YoriLibIsAllocationExtendable(
+    __in YORI_ALLOC_SIZE_T ExistingSize,
+    __in YORI_ALLOC_SIZE_T RequiredExtraSize,
+    __in YORI_ALLOC_SIZE_T DesiredExtraSize
+    )
+{
+    YORI_MAX_UNSIGNED_T AllocSize;
+
+    ASSERT(DesiredExtraSize >= RequiredExtraSize);
+
+    AllocSize = ExistingSize;
+    return YoriLibMaximumAllocationInRange(AllocSize + RequiredExtraSize, AllocSize + DesiredExtraSize);
 }
 
 

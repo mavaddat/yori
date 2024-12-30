@@ -3,12 +3,10 @@ BINARIES=sdir.exe
 
 !INCLUDE "..\config\common.mk"
 
-!IF $(PDB)==1
 LINKPDB=/Pdb:sdir.pdb
-!ENDIF
 
 BIN_OBJS=\
-		 callbacks.obj \
+		 callback.obj  \
 		 color.obj     \
 		 display.obj   \
 		 init.obj      \
@@ -17,22 +15,22 @@ BIN_OBJS=\
 		 utils.obj
 
 MOD_OBJS=\
-		 callbacks.obj \
+		 callback.obj  \
 		 color.obj     \
 		 display.obj   \
 		 init.obj      \
-		 mod_sdir.obj  \
+		 msdir.obj     \
 		 usage.obj     \
 		 utils.obj
 
 
 compile: $(BIN_OBJS) builtins.lib
 
-sdir.exe: $(BIN_OBJS) $(YORILIB) $(YORICRT) $(YORIVER)
+sdir.exe: $(BIN_OBJS) $(YORILIBS) $(YORIVER)
 	@echo $@
-	@$(LINK) $(LDFLAGS) -entry:$(YENTRY) $(BIN_OBJS) $(LIBS) $(CRTLIB) $(YORILIB) $(YORIVER) -version:$(YORI_VER_MAJOR).$(YORI_VER_MINOR) $(LINKPDB) -out:$@
+	@$(LINK) $(LDFLAGS) -entry:$(YENTRY) $(BIN_OBJS) $(YORILIBS) $(EXTERNLIBS) $(YORIVER) -version:$(YORI_VER_MAJOR).$(YORI_VER_MINOR) $(LINKPDB) -out:$@
 
-mod_sdir.obj: sdir.c
+msdir.obj: sdir.c
 	@echo $@
 	@$(CC) -c -DYORI_BUILTIN=1 $(CFLAGS) -Fo$@ sdir.c
 

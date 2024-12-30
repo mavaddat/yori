@@ -3,7 +3,7 @@
  *
  * Yori shell display process list
  *
- * Copyright (c) 2019 Malcolm J. Smith
+ * Copyright (c) 2019-2022 Malcolm J. Smith
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -56,47 +56,14 @@ PsHelp(VOID)
 }
 
 /**
- Output a 64 bit integer.
-
- @param LargeInt A large integer to output.
-
- @param NumberBase Specifies the numeric base to use.  Should be 10 for
-        decimal or 16 for hex.
-
- @param OutputString Pointer to a string to populate with the contents of
-        the variable.
-
- @return The number of characters populated into the variable, or the number
-         of characters required to successfully populate the contents into
-         the variable.
- */
-DWORD
-PsOutputLargeInteger(
-    __in LARGE_INTEGER LargeInt,
-    __in DWORD NumberBase,
-    __inout PYORI_STRING OutputString
-    )
-{
-    YORI_STRING String;
-    TCHAR StringBuffer[32];
-
-    YoriLibInitEmptyString(&String);
-    String.StartOfString = StringBuffer;
-    String.LengthAllocated = sizeof(StringBuffer)/sizeof(StringBuffer[0]);
-
-    YoriLibNumberToString(&String, LargeInt.QuadPart, NumberBase, 0, ' ');
-
-    if (OutputString->LengthAllocated >= String.LengthInChars) {
-        memcpy(OutputString->StartOfString, String.StartOfString, String.LengthInChars * sizeof(TCHAR));
-    }
-
-    return String.LengthInChars;
-}
-
-/**
  Context about process enumeration tasks to perform.
  */
 typedef struct _PS_CONTEXT {
+
+    /**
+     The current system time.
+     */
+    LARGE_INTEGER Now;
 
     /**
      TRUE to attempt to display the command line for the process.
@@ -125,7 +92,7 @@ PsDisplayHeader(
     __in PPS_CONTEXT PsContext
     )
 {
-    YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("  Pid  | Parent | ExecTime | Process         "));
+    YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("  Pid  | Parent | LiveTime | ExecTime | Process         "));
     if (PsContext->DisplayMemory) {
         YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("| WorkingSet | Commit     "));
     }
@@ -161,6 +128,7 @@ PsDisplayProcessCommandLine(
     PVOID ProcessParamsBlockToRead;
     PVOID CommandLineToRead;
     DWORD CommandLineBytes;
+    YORI_ALLOC_SIZE_T BytesToAllocate;
     YORI_STRING CommandLine;
 
     ProcessHandle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, (DWORD)ProcessId);
@@ -238,7 +206,13 @@ PsDisplayProcessCommandLine(
     //  Try to read the command line.
     //
 
-    if (!YoriLibAllocateString(&CommandLine, CommandLineBytes / sizeof(TCHAR))) {
+    if (!YoriLibIsSizeAllocatable(CommandLineBytes / sizeof(TCHAR))) {
+        CloseHandle(ProcessHandle);
+        return FALSE;
+    }
+
+    BytesToAllocate = (YORI_ALLOC_SIZE_T)(CommandLineBytes / sizeof(TCHAR));
+    if (!YoriLibAllocateString(&CommandLine, BytesToAllocate)) {
         CloseHandle(ProcessHandle);
         return FALSE;
     }
@@ -249,7 +223,7 @@ PsDisplayProcessCommandLine(
         return FALSE;
     }
 
-    CommandLine.LengthInChars = (DWORD)BytesReturned / sizeof(TCHAR);
+    CommandLine.LengthInChars = (YORI_ALLOC_SIZE_T)(BytesReturned / sizeof(TCHAR));
 
     YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T(" | %y"), &CommandLine);
     YoriLibFreeStringContents(&CommandLine);
@@ -277,9 +251,15 @@ PsDisplayProcessByStructure(
 {
     YORI_STRING BaseName;
     LARGE_INTEGER ExecuteTime;
+    LARGE_INTEGER LiveTime;
+    DWORD LiveTimeSeconds;
+    DWORD LiveTimeMinutes;
+    DWORD LiveTimeHours;
     DWORD ExecTimeSeconds;
     DWORD ExecTimeMinutes;
     DWORD ExecTimeHours;
+    YORI_STRING LiveTimeString;
+    TCHAR LiveTimeBuffer[sizeof("12:34:56")];
 
     YoriLibInitEmptyString(&BaseName);
     BaseName.StartOfString = ProcessInfo->ImageName;
@@ -287,6 +267,25 @@ PsDisplayProcessByStructure(
 
     if (BaseName.LengthInChars == 0 && ProcessInfo->ProcessId == 0) {
         YoriLibConstantString(&BaseName, _T("Idle"));
+    }
+
+    LiveTime.QuadPart = PsContext->Now.QuadPart - ProcessInfo->CreateTime.QuadPart;
+    // LiveTime.QuadPart = ProcessInfo->CreateTime.QuadPart;
+    if (LiveTime.QuadPart < 0) {
+        LiveTime.QuadPart = 0;
+    }
+    LiveTime.QuadPart = LiveTime.QuadPart / (10 * 1000 * 1000);
+    LiveTimeSeconds = (DWORD)(LiveTime.QuadPart % 60);
+    LiveTimeMinutes = (DWORD)((LiveTime.QuadPart / 60) % 60);
+    LiveTimeHours = (DWORD)(LiveTime.QuadPart / 3600);
+
+    YoriLibInitEmptyString(&LiveTimeString);
+    LiveTimeString.StartOfString = LiveTimeBuffer;
+    LiveTimeString.LengthAllocated = sizeof(LiveTimeBuffer)/sizeof(LiveTimeBuffer[0]);
+    if (LiveTimeHours > 99) {
+        LiveTimeString.LengthInChars = YoriLibSPrintfS(LiveTimeString.StartOfString, LiveTimeString.LengthAllocated, _T("%id"), LiveTimeHours / 24);
+    } else {
+        LiveTimeString.LengthInChars = YoriLibSPrintfS(LiveTimeString.StartOfString, LiveTimeString.LengthAllocated, _T("%02i:%02i:%02i"), LiveTimeHours, LiveTimeMinutes, LiveTimeSeconds);
     }
 
     ExecuteTime.QuadPart = ProcessInfo->KernelTime.QuadPart + ProcessInfo->UserTime.QuadPart;
@@ -321,9 +320,27 @@ PsDisplayProcessByStructure(
         YoriLibFileSizeToString(&CommitString, &liCommit);
         YoriLibFileSizeToString(&WorkingSetString, &liWorkingSet);
 
-        YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("%-6i | %-6i | %02i:%02i:%02i | %-15y | %-10y | %-10y"), ProcessInfo->ProcessId, ProcessInfo->ParentProcessId, ExecTimeHours, ExecTimeMinutes, ExecTimeSeconds, &BaseName, &WorkingSetString, &CommitString);
+        YoriLibOutput(YORI_LIB_OUTPUT_STDOUT,
+                      _T("%-6i | %-6i | %8y | %02i:%02i:%02i | %-15y | %-10y | %-10y"),
+                      ProcessInfo->ProcessId,
+                      ProcessInfo->ParentProcessId,
+                      &LiveTimeString,
+                      ExecTimeHours,
+                      ExecTimeMinutes,
+                      ExecTimeSeconds,
+                      &BaseName,
+                      &WorkingSetString,
+                      &CommitString);
     } else {
-        YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("%-6i | %-6i | %02i:%02i:%02i | %-15y"), ProcessInfo->ProcessId, ProcessInfo->ParentProcessId, ExecTimeHours, ExecTimeMinutes, ExecTimeSeconds, &BaseName);
+        YoriLibOutput(YORI_LIB_OUTPUT_STDOUT,
+                      _T("%-6i | %-6i | %8y | %02i:%02i:%02i | %-15y"),
+                      ProcessInfo->ProcessId,
+                      ProcessInfo->ParentProcessId,
+                      &LiveTimeString,
+                      ExecTimeHours,
+                      ExecTimeMinutes,
+                      ExecTimeSeconds,
+                      &BaseName);
     }
 
     if (PsContext->DisplayCommandLine) {
@@ -421,7 +438,7 @@ PsDisplayConsoleProcesses(
 {
     PYORI_SYSTEM_PROCESS_INFORMATION ProcessInfo = NULL;
     LPDWORD PidList = NULL;
-    DWORD PidListSize = 0;
+    YORI_ALLOC_SIZE_T PidListSize = 0;
     DWORD PidCountReturned;
     DWORD Index;
 
@@ -457,7 +474,15 @@ PsDisplayConsoleProcesses(
             YoriLibFree(PidList);
         }
 
-        PidListSize = PidCountReturned + 4;
+        if (!YoriLibIsSizeAllocatable((PidListSize + 4) * sizeof(DWORD))) {
+            YoriLibFree(ProcessInfo);
+            if (PidList) {
+                YoriLibFree(PidList);
+            }
+            return FALSE;
+        }
+
+        PidListSize = (YORI_ALLOC_SIZE_T)(PidCountReturned + 4);
         PidList = YoriLibMalloc(PidListSize * sizeof(DWORD));
         if (PidList == NULL) {
             YoriLibFree(ProcessInfo);
@@ -500,15 +525,15 @@ PsDisplayConsoleProcesses(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     YORI_STRING Arg;
-    BOOL DisplayAll;
+    BOOLEAN DisplayAll;
     PS_CONTEXT PsContext;
 
     ZeroMemory(&PsContext, sizeof(PsContext));
@@ -521,19 +546,19 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 PsHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
-                YoriLibDisplayMitLicense(_T("2019"));
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
+                YoriLibDisplayMitLicense(_T("2019-2022"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("a")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("a")) == 0) {
                 DisplayAll = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("f")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("f")) == 0) {
                 PsContext.DisplayCommandLine = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("l")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("l")) == 0) {
                 PsContext.DisplayMemory = TRUE;
                 ArgumentUnderstood = TRUE;
             }
@@ -547,6 +572,8 @@ ENTRYPOINT(
             YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("Argument not understood, ignored: %y\n"), &ArgV[i]);
         }
     }
+
+    PsContext.Now.QuadPart = YoriLibGetSystemTimeAsInteger();
 
     if (DisplayAll) {
         PsDisplayAllProcesses(&PsContext);

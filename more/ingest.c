@@ -41,12 +41,12 @@ typedef struct _MORE_LINE_ALLOC_CONTEXT {
     /**
      The currently used number of bytes in the buffer above.
      */
-    DWORD BufferOffset;
+    YORI_ALLOC_SIZE_T BufferOffset;
 
     /**
      The number of bytes remaining in the buffer above.
      */
-    DWORD BytesRemainingInBuffer;
+    YORI_ALLOC_SIZE_T BytesRemainingInBuffer;
 
     /**
      The color that the next physical line should start with.  This is
@@ -78,12 +78,12 @@ MoreAddPhysicalLineToBuffer(
     )
 {
     PMORE_PHYSICAL_LINE NewLine;
-    DWORD TabCount;
-    DWORD CharIndex;
-    DWORD DestIndex;
-    DWORD TabIndex;
-    DWORD Alignment;
-    DWORD BytesRequired;
+    YORI_ALLOC_SIZE_T TabCount;
+    YORI_ALLOC_SIZE_T CharIndex;
+    YORI_ALLOC_SIZE_T DestIndex;
+    YORI_ALLOC_SIZE_T TabIndex;
+    YORI_ALLOC_SIZE_T Alignment;
+    YORI_ALLOC_SIZE_T BytesRequired;
 
     //
     //  Count the number of tabs.  These are replaced at ingestion time, 
@@ -117,7 +117,7 @@ MoreAddPhysicalLineToBuffer(
         if (AllocContext->Buffer != NULL) {
             YoriLibDereference(AllocContext->Buffer);
         }
-        AllocContext->BytesRemainingInBuffer = 64 * 1024;
+        AllocContext->BytesRemainingInBuffer = YoriLibMaximumAllocationInRange(16 * 1024, 64 * 1024);
         if (BytesRequired > AllocContext->BytesRemainingInBuffer) {
             AllocContext->BytesRemainingInBuffer = BytesRequired;
         }
@@ -137,9 +137,12 @@ MoreAddPhysicalLineToBuffer(
     NewLine = (PMORE_PHYSICAL_LINE)YoriLibAddToPointer(AllocContext->Buffer, AllocContext->BufferOffset);
 
     YoriLibReference(AllocContext->Buffer);
+    NewLine->FilteredLineList.Next = NULL;
+    NewLine->FilteredLineList.Prev = NULL;
     NewLine->MemoryToFree = AllocContext->Buffer;
     NewLine->InitialColor = AllocContext->PreviousColor;
     NewLine->LineNumber = MoreContext->LineCount + 1;
+    NewLine->FilteredLineNumber = NewLine->LineNumber;
     YoriLibReference(AllocContext->Buffer);
     NewLine->LineContents.MemoryToFree = AllocContext->Buffer;
     NewLine->LineContents.StartOfString = (LPTSTR)(NewLine + 1);
@@ -155,23 +158,22 @@ MoreAddPhysicalLineToBuffer(
             LineString->StartOfString[CharIndex + 1] == '[') {
 
             YORI_STRING EscapeSubset;
-            DWORD EndOfEscape;
+            YORI_ALLOC_SIZE_T EndOfEscape;
 
             YoriLibInitEmptyString(&EscapeSubset);
             EscapeSubset.StartOfString = &LineString->StartOfString[CharIndex + 2];
             EscapeSubset.LengthInChars = LineString->LengthInChars - CharIndex - 2;
-            EndOfEscape = YoriLibCountStringContainingChars(&EscapeSubset, _T("0123456789;"));
+            EndOfEscape = YoriLibCntStringWithChars(&EscapeSubset, _T("0123456789;"));
 
             //
-            //  Count everything as consuming the source and needing buffer
-            //  space in the destination but consuming no display cells.  This
-            //  may include the final letter, if we found one.
+            //  Look for color changes so any later line can be marked as
+            //  starting with this color.
             //
 
             if (LineString->LengthInChars > CharIndex + 2 + EndOfEscape) {
                 EscapeSubset.StartOfString -= 2;
                 EscapeSubset.LengthInChars = EndOfEscape + 3;
-                YoriLibVtFinalColorFromSequence(AllocContext->PreviousColor, &EscapeSubset, &AllocContext->PreviousColor);
+                YoriLibVtFinalColorFromEsc(AllocContext->PreviousColor, &EscapeSubset, &AllocContext->PreviousColor);
             }
         }
         if (LineString->StartOfString[CharIndex] == '\t') {
@@ -188,8 +190,8 @@ MoreAddPhysicalLineToBuffer(
     NewLine->LineContents.LengthInChars = DestIndex;
     NewLine->LineContents.LengthAllocated = DestIndex + 1;
 
-    AllocContext->BufferOffset += BytesRequired;
-    AllocContext->BytesRemainingInBuffer -= BytesRequired;
+    AllocContext->BufferOffset = AllocContext->BufferOffset + BytesRequired;
+    AllocContext->BytesRemainingInBuffer = AllocContext->BytesRemainingInBuffer - BytesRequired;
 
     //
     //  Align the buffer to 8 bytes.  There's no length checking because
@@ -199,8 +201,8 @@ MoreAddPhysicalLineToBuffer(
     Alignment = AllocContext->BufferOffset % 8;
     if (Alignment > 0) {
         Alignment = 8 - Alignment;
-        AllocContext->BufferOffset += Alignment;
-        AllocContext->BytesRemainingInBuffer -= Alignment;
+        AllocContext->BufferOffset = AllocContext->BufferOffset + Alignment;
+        AllocContext->BytesRemainingInBuffer = AllocContext->BytesRemainingInBuffer - Alignment;
     }
 
     //
@@ -210,6 +212,13 @@ MoreAddPhysicalLineToBuffer(
     WaitForSingleObject(MoreContext->PhysicalLineMutex, INFINITE);
     MoreContext->LineCount++;
     YoriLibAppendList(&MoreContext->PhysicalLineList, &NewLine->LineList);
+    if (!MoreContext->FilterToSearch ||
+        MoreFindNextSearchMatch(MoreContext, &NewLine->LineContents, NULL, NULL)) {
+
+        YoriLibAppendList(&MoreContext->FilteredPhysicalLineList, &NewLine->FilteredLineList);
+        MoreContext->FilteredLineCount++;
+        NewLine->FilteredLineNumber = MoreContext->FilteredLineCount;
+    }
     ReleaseMutex(MoreContext->PhysicalLineMutex);
 
     SetEvent(MoreContext->PhysicalLineAvailableEvent);
@@ -408,7 +417,7 @@ MoreIngestThread(
     )
 {
     PMORE_CONTEXT MoreContext = (PMORE_CONTEXT)Context;
-    DWORD MatchFlags;
+    WORD MatchFlags;
     DWORD i;
 
     //

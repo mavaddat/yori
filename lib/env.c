@@ -45,7 +45,9 @@ YoriLibGetEnvironmentStrings(
 {
     LPTSTR OsEnvStrings;
     LPSTR OsEnvStringsA;
-    DWORD CharCount;
+    YORI_ALLOC_SIZE_T CharCount;
+
+#ifdef UNICODE
 
     //
     //  Use GetEnvironmentStringsW where it exists.  Where it doesn't
@@ -79,6 +81,9 @@ YoriLibGetEnvironmentStrings(
     }
 
     OsEnvStringsA = DllKernel32.pGetEnvironmentStrings();
+#else
+    OsEnvStringsA = GetEnvironmentStrings();
+#endif
 
     for (CharCount = 0; OsEnvStringsA[CharCount] != '\0' || OsEnvStringsA[CharCount + 1] != '\0'; CharCount++);
 
@@ -86,7 +91,11 @@ YoriLibGetEnvironmentStrings(
     if (!YoriLibAllocateString(EnvStrings, CharCount)) {
         return FALSE;
     }
+#ifdef UNICODE
     MultiByteToWideChar(CP_ACP, 0, OsEnvStringsA, CharCount, EnvStrings->StartOfString, CharCount);
+#else
+    memcpy(EnvStrings->StartOfString, OsEnvStrings, CharCount * sizeof(TCHAR));
+#endif
     EnvStrings->LengthInChars = CharCount;
 
     return TRUE;
@@ -105,11 +114,11 @@ YoriLibGetEnvironmentStrings(
  */
 __success(return)
 BOOL
-YoriLibAreEnvironmentStringsValid(
+YoriLibAreEnvStringsValid(
     __inout PYORI_STRING EnvStrings
     )
 {
-    DWORD Index;
+    YORI_ALLOC_SIZE_T Index;
 
     if (EnvStrings->LengthAllocated < 2) {
         return FALSE;
@@ -127,6 +136,8 @@ YoriLibAreEnvironmentStringsValid(
 
     return FALSE;
 }
+
+#ifdef UNICODE
 
 /**
  Checks if ANSI environment strings are double NULL terminated within
@@ -148,11 +159,11 @@ __success(return)
 BOOL
 YoriLibAreAnsiEnvironmentStringsValid(
     __in PUCHAR AnsiEnvStringBuffer,
-    __in DWORD BufferLength,
+    __in YORI_ALLOC_SIZE_T BufferLength,
     __out PYORI_STRING UnicodeStrings
     )
 {
-    DWORD Index;
+    YORI_ALLOC_SIZE_T Index;
 
     YoriLibInitEmptyString(UnicodeStrings);
 
@@ -179,6 +190,8 @@ YoriLibAreAnsiEnvironmentStringsValid(
     return FALSE;
 }
 
+#endif
+
 /**
  Capture the value from an environment variable, allocating a Yori string of
  appropriate size to contain the contents.
@@ -192,26 +205,26 @@ YoriLibAreAnsiEnvironmentStringsValid(
  */
 __success(return)
 BOOL
-YoriLibAllocateAndGetEnvironmentVariable(
+YoriLibAllocateAndGetEnvVar(
     __in LPCTSTR Name,
     __inout PYORI_STRING Value
     )
 {
-    DWORD LengthNeeded;
+    YORI_ALLOC_SIZE_T LengthNeeded;
 
-    LengthNeeded = GetEnvironmentVariable(Name, NULL, 0);
+    LengthNeeded = (YORI_ALLOC_SIZE_T)GetEnvironmentVariable(Name, NULL, 0);
     if (LengthNeeded == 0) {
         YoriLibInitEmptyString(Value);
         return TRUE;
     }
 
     if (LengthNeeded > Value->LengthAllocated) {
-        if (!YoriLibReallocateString(Value, LengthNeeded)) {
+        if (!YoriLibReallocString(Value, LengthNeeded)) {
             return FALSE;
         }
     }
 
-    Value->LengthInChars = GetEnvironmentVariable(Name, Value->StartOfString, Value->LengthAllocated);
+    Value->LengthInChars = (YORI_ALLOC_SIZE_T)GetEnvironmentVariable(Name, Value->StartOfString, Value->LengthAllocated);
     if (Value->LengthInChars == 0 ||
         Value->LengthInChars >= Value->LengthAllocated) {
 
@@ -235,17 +248,17 @@ YoriLibAllocateAndGetEnvironmentVariable(
  */
 __success(return)
 BOOL
-YoriLibGetEnvironmentVariableAsNumber(
+YoriLibGetEnvVarAsNumber(
     __in LPCTSTR Name,
-    __out PLONGLONG Value
+    __out PYORI_MAX_SIGNED_T Value
     )
 {
-    DWORD LengthNeeded;
+    YORI_ALLOC_SIZE_T LengthNeeded;
     YORI_STRING Temp;
     TCHAR Buffer[32];
-    DWORD CharsConsumed;
+    YORI_ALLOC_SIZE_T CharsConsumed;
 
-    LengthNeeded = GetEnvironmentVariable(Name, NULL, 0);
+    LengthNeeded = (YORI_ALLOC_SIZE_T)GetEnvironmentVariable(Name, NULL, 0);
 
     if (LengthNeeded == 0) {
         return FALSE;
@@ -259,7 +272,7 @@ YoriLibGetEnvironmentVariableAsNumber(
         return FALSE;
     }
 
-    Temp.LengthInChars = GetEnvironmentVariable(Name, Temp.StartOfString, Temp.LengthAllocated);
+    Temp.LengthInChars = (YORI_ALLOC_SIZE_T)GetEnvironmentVariable(Name, Temp.StartOfString, Temp.LengthAllocated);
     if (Temp.LengthInChars == 0 ||
         Temp.LengthInChars >= Temp.LengthAllocated) {
 
@@ -299,7 +312,7 @@ YoriLibGetEnvironmentVariableAsNumber(
  */
 __success(return)
 BOOL
-YoriLibAddEnvironmentComponentToString(
+YoriLibAddEnvCompToString(
     __inout PYORI_STRING ExistingString,
     __in PCYORI_STRING NewComponent,
     __in BOOL InsertAtFront
@@ -317,7 +330,7 @@ YoriLibAddEnvironmentComponentToString(
     ThisPath = _tcstok_s(ExistingString->StartOfString, _T(";"), &TokCtx);
     while (ThisPath != NULL) {
         if (ThisPath[0] != '\0') {
-            if (YoriLibCompareStringWithLiteralInsensitive(NewComponent, ThisPath) == 0) {
+            if (YoriLibCompareStringLitIns(NewComponent, ThisPath) == 0) {
                 if (TokCtx != NULL) {
                     TokCtx--;
                     ASSERT(*TokCtx == '\0');
@@ -380,7 +393,7 @@ YoriLibAddEnvironmentComponentToString(
             ExistingString->LengthInChars++;
         }
         memcpy(&ExistingString->StartOfString[ExistingString->LengthInChars], NewComponent->StartOfString, NewComponent->LengthInChars * sizeof(TCHAR));
-        ExistingString->LengthInChars += NewComponent->LengthInChars;
+        ExistingString->LengthInChars = ExistingString->LengthInChars + NewComponent->LengthInChars;
         ExistingString->StartOfString[ExistingString->LengthInChars] = '\0';
     }
     return TRUE;
@@ -403,14 +416,14 @@ YoriLibAddEnvironmentComponentToString(
  */
 __success(return)
 BOOL
-YoriLibAddEnvironmentComponentReturnString(
+YoriLibAddEnvCompReturnString(
     __in PYORI_STRING EnvironmentVariable,
     __in PYORI_STRING NewComponent,
     __in BOOL InsertAtFront,
     __out PYORI_STRING Result
     )
 {
-    DWORD EnvVarLength;
+    YORI_ALLOC_SIZE_T EnvVarLength;
 
     ASSERT(YoriLibIsStringNullTerminated(EnvironmentVariable));
 
@@ -419,15 +432,15 @@ YoriLibAddEnvironmentComponentReturnString(
     //  space to append the specified directory in case we need to.
     //
 
-    EnvVarLength = GetEnvironmentVariable(EnvironmentVariable->StartOfString, NULL, 0);
+    EnvVarLength = (YORI_ALLOC_SIZE_T)GetEnvironmentVariable(EnvironmentVariable->StartOfString, NULL, 0);
     if (!YoriLibAllocateString(Result, EnvVarLength + 1 + NewComponent->LengthInChars + 1)) {
         return FALSE;
     }
 
     Result->StartOfString[0] = '\0';
-    Result->LengthInChars = GetEnvironmentVariable(EnvironmentVariable->StartOfString, Result->StartOfString, Result->LengthAllocated);
+    Result->LengthInChars = (YORI_ALLOC_SIZE_T)GetEnvironmentVariable(EnvironmentVariable->StartOfString, Result->StartOfString, Result->LengthAllocated);
 
-    YoriLibAddEnvironmentComponentToString(Result, NewComponent, InsertAtFront);
+    YoriLibAddEnvCompToString(Result, NewComponent, InsertAtFront);
     return TRUE;
 }
 
@@ -447,7 +460,7 @@ YoriLibAddEnvironmentComponentReturnString(
  */
 __success(return)
 BOOL
-YoriLibAddEnvironmentComponent(
+YoriLibAddEnvComponent(
     __in LPTSTR EnvironmentVariable,
     __in PYORI_STRING NewComponent,
     __in BOOL InsertAtFront
@@ -458,7 +471,7 @@ YoriLibAddEnvironmentComponent(
 
     YoriLibConstantString(&YsEnvironmentVariable, EnvironmentVariable);
 
-    if (!YoriLibAddEnvironmentComponentReturnString(&YsEnvironmentVariable, NewComponent, InsertAtFront, &EnvData)) {
+    if (!YoriLibAddEnvCompReturnString(&YsEnvironmentVariable, NewComponent, InsertAtFront, &EnvData)) {
         return FALSE;
     }
 
@@ -486,7 +499,7 @@ YoriLibAddEnvironmentComponent(
  */
 __success(return)
 BOOL
-YoriLibRemoveEnvironmentComponentFromString(
+YoriLibRmEnvCompFromString(
     __in PYORI_STRING String,
     __in PYORI_STRING ComponentToRemove,
     __out PYORI_STRING Result
@@ -495,8 +508,8 @@ YoriLibRemoveEnvironmentComponentFromString(
     LPTSTR NewPathData;
     LPTSTR ThisPath;
     TCHAR * TokCtx;
-    DWORD NewOffset;
-    DWORD CharsPopulated;
+    YORI_ALLOC_SIZE_T NewOffset;
+    YORI_ALLOC_SIZE_T CharsPopulated;
 
     ASSERT(YoriLibIsStringNullTerminated(String));
 
@@ -510,7 +523,7 @@ YoriLibRemoveEnvironmentComponentFromString(
     ThisPath = _tcstok_s(String->StartOfString, _T(";"), &TokCtx);
     while (ThisPath != NULL) {
         if (ThisPath[0] != '\0') {
-            if (YoriLibCompareStringWithLiteralInsensitive(ComponentToRemove, ThisPath) != 0) {
+            if (YoriLibCompareStringLitIns(ComponentToRemove, ThisPath) != 0) {
                 if (NewOffset != 0) {
                     CharsPopulated = YoriLibSPrintf(&NewPathData[NewOffset], _T(";%s"), ThisPath);
                 } else {
@@ -521,7 +534,7 @@ YoriLibRemoveEnvironmentComponentFromString(
                     YoriLibDereference(NewPathData);
                     return FALSE;
                 }
-                NewOffset += CharsPopulated;
+                NewOffset = NewOffset + CharsPopulated;
             }
         }
         if (TokCtx != NULL) {
@@ -571,14 +584,14 @@ YoriLibRemoveEnvironmentComponentFromString(
  */
 __success(return)
 BOOL
-YoriLibRemoveEnvironmentComponentReturnString(
+YoriLibRmEnvCompReturnString(
     __in PYORI_STRING EnvironmentVariable,
     __in PYORI_STRING ComponentToRemove,
     __out PYORI_STRING Result
     )
 {
     YORI_STRING PathData;
-    DWORD PathLength;
+    YORI_ALLOC_SIZE_T PathLength;
     BOOL Success;
 
     ASSERT(YoriLibIsStringNullTerminated(EnvironmentVariable));
@@ -588,15 +601,15 @@ YoriLibRemoveEnvironmentComponentReturnString(
     //  space to append the specified directory in case we need to.
     //
 
-    PathLength = GetEnvironmentVariable(EnvironmentVariable->StartOfString, NULL, 0);
+    PathLength = (YORI_ALLOC_SIZE_T)GetEnvironmentVariable(EnvironmentVariable->StartOfString, NULL, 0);
     if (!YoriLibAllocateString(&PathData, PathLength + 1)) {
         return FALSE;
     }
 
     PathData.StartOfString[0] = '\0';
-    PathData.LengthInChars = GetEnvironmentVariable(EnvironmentVariable->StartOfString, PathData.StartOfString, PathData.LengthAllocated);
+    PathData.LengthInChars = (YORI_ALLOC_SIZE_T)GetEnvironmentVariable(EnvironmentVariable->StartOfString, PathData.StartOfString, PathData.LengthAllocated);
 
-    Success = YoriLibRemoveEnvironmentComponentFromString(&PathData, ComponentToRemove, Result);
+    Success = YoriLibRmEnvCompFromString(&PathData, ComponentToRemove, Result);
 
     YoriLibFreeStringContents(&PathData);
 
@@ -615,7 +628,7 @@ YoriLibRemoveEnvironmentComponentReturnString(
  */
 __success(return)
 BOOL
-YoriLibRemoveEnvironmentComponent(
+YoriLibRemoveEnvComponent(
     __in LPTSTR EnvironmentVariable,
     __in PYORI_STRING ComponentToRemove
     )
@@ -626,7 +639,7 @@ YoriLibRemoveEnvironmentComponent(
 
     YoriLibConstantString(&YsEnvironmentVariable, EnvironmentVariable);
 
-    if (!YoriLibRemoveEnvironmentComponentReturnString(&YsEnvironmentVariable, ComponentToRemove, &CombinedString)) {
+    if (!YoriLibRmEnvCompReturnString(&YsEnvironmentVariable, ComponentToRemove, &CombinedString)) {
         return FALSE;
     }
 

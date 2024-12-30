@@ -38,6 +38,8 @@ YoriLibEnableNamedPrivilege(
     )
 {
     HANDLE ProcessToken;
+    DWORD Err;
+
     YoriLibLoadAdvApi32Functions();
 
     //
@@ -66,7 +68,12 @@ YoriLibEnableNamedPrivilege(
             CloseHandle(ProcessToken);
             return FALSE;
         }
+
+        Err = GetLastError();
         CloseHandle(ProcessToken);
+        if (Err == ERROR_NOT_ALL_ASSIGNED) {
+            return FALSE;
+        }
         return TRUE;
     }
 
@@ -99,6 +106,65 @@ BOOL
 YoriLibEnableDebugPrivilege(VOID)
 {
     return YoriLibEnableNamedPrivilege(SE_DEBUG_NAME);
+}
+
+/**
+ Attempt to enable manage volume privilege to mount VHD files.
+
+ @return TRUE to indicate that the privilege enablement was successful.
+ */
+BOOL
+YoriLibEnableManageVolumePrivilege(VOID)
+{
+    return YoriLibEnableNamedPrivilege(SE_MANAGE_VOLUME_NAME);
+}
+
+
+/**
+ Attempt to enable shutdown privilege to the system to shut down.
+
+ @return TRUE to indicate that the privilege enablement was successful.
+ */
+BOOL
+YoriLibEnableShutdownPrivilege(VOID)
+{
+    return YoriLibEnableNamedPrivilege(SE_SHUTDOWN_NAME);
+}
+
+/**
+ Attempt to enable symbolic link privilege to allow creation of symbolic
+ links.
+
+ @return TRUE to indicate that the privilege enablement was successful.
+ */
+BOOL
+YoriLibEnableSymbolicLinkPrivilege(VOID)
+{
+    return YoriLibEnableNamedPrivilege(SE_CREATE_SYMBOLIC_LINK_NAME);
+}
+
+/**
+ Attempt to enable system time privilege to allow Administrators to change the
+ system clock.
+
+ @return TRUE to indicate that the privilege enablement was successful.
+ */
+BOOL
+YoriLibEnableSystemTimePrivilege(VOID)
+{
+    return YoriLibEnableNamedPrivilege(SE_SYSTEMTIME_NAME);
+}
+
+/**
+ Attempt to enable take ownership privilege to allow Administrators update
+ system registry keys.
+
+ @return TRUE to indicate that the privilege enablement was successful.
+ */
+BOOL
+YoriLibEnableTakeOwnershipPrivilege(VOID)
+{
+    return YoriLibEnableNamedPrivilege(SE_TAKE_OWNERSHIP_NAME);
 }
 
 // vim:sw=4:ts=4:et:

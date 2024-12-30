@@ -142,7 +142,10 @@ YoriLibReallocateAttributeArray(
     //  reallocations
     //
 
-    AttributeBuffer->AttributeArray = YoriLibMalloc(RequiredLength * sizeof(WORD));
+    if (!YoriLibIsSizeAllocatable(RequiredLength * sizeof(WORD))) {
+        return FALSE;
+    }
+    AttributeBuffer->AttributeArray = YoriLibMalloc((YORI_ALLOC_SIZE_T)(RequiredLength * sizeof(WORD)));
     if (AttributeBuffer->AttributeArray != NULL) {
         AttributeBuffer->BufferSize = RequiredLength;
         return TRUE;
@@ -271,7 +274,11 @@ YoriLibReadConsoleOutputAttributeForSelection(
             dwAllocSize = 0x100;
         }
 
-        CharInfo = YoriLibMalloc(dwAllocSize * sizeof(CHAR_INFO));
+        if (!YoriLibIsSizeAllocatable(dwAllocSize * sizeof(CHAR_INFO))) {
+            return FALSE;
+        }
+
+        CharInfo = YoriLibMalloc((YORI_ALLOC_SIZE_T)(dwAllocSize * sizeof(CHAR_INFO)));
         if (CharInfo == NULL) {
             return FALSE;
         }
@@ -357,7 +364,11 @@ YoriLibReadConsoleOutputCharacterForSelection(
             dwAllocSize = 0x100;
         }
 
-        CharInfo = YoriLibMalloc(dwAllocSize * sizeof(CHAR_INFO));
+        if (!YoriLibIsSizeAllocatable(dwAllocSize * sizeof(CHAR_INFO))) {
+            return FALSE;
+        }
+
+        CharInfo = YoriLibMalloc((YORI_ALLOC_SIZE_T)(dwAllocSize * sizeof(CHAR_INFO)));
         if (CharInfo == NULL) {
             return FALSE;
         }
@@ -497,7 +508,8 @@ YoriLibDrawCurrentSelectionDisplay(
 
     ConsoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
 
-    RequiredLength = (Selection->CurrentlyDisplayed.Right - Selection->CurrentlyDisplayed.Left + 1) * (Selection->CurrentlyDisplayed.Bottom - Selection->CurrentlyDisplayed.Top + 1);
+    RequiredLength = (Selection->CurrentlyDisplayed.Right - Selection->CurrentlyDisplayed.Left + 1) *
+                     (Selection->CurrentlyDisplayed.Bottom - Selection->CurrentlyDisplayed.Top + 1);
 
     ActiveAttributes = &Selection->PreviousBuffer[Selection->CurrentPreviousIndex];
 
@@ -845,7 +857,13 @@ YoriLibDrawCurrentSelectionOverPreviousSelection(
         Selection->SelectionColorSet = TRUE;
     }
 
-    YoriLibCreateNewAttributeBufferFromPreviousBuffer(Selection, OldAttributes, &Selection->PreviouslyDisplayed, NewAttributes, &Selection->CurrentlyDisplayed, TRUE, Selection->SelectionColor);
+    YoriLibCreateNewAttributeBufferFromPreviousBuffer(Selection,
+                                                      OldAttributes,
+                                                      &Selection->PreviouslyDisplayed,
+                                                      NewAttributes,
+                                                      &Selection->CurrentlyDisplayed,
+                                                      TRUE,
+                                                      Selection->SelectionColor);
 
     ASSERT(Selection->CurrentPreviousIndex != NewAttributeIndex);
     Selection->CurrentPreviousIndex = NewAttributeIndex;
@@ -1401,10 +1419,10 @@ YoriLibCopySelectionIfPresent(
     //
 
     if (!YoriLibIsPreviousSelectionActive(Selection) &&
-        Selection->CurrentlyDisplayed.Left != Selection->PreviouslyDisplayed.Left ||
-        Selection->CurrentlyDisplayed.Right != Selection->PreviouslyDisplayed.Right ||
-        Selection->CurrentlyDisplayed.Top != Selection->PreviouslyDisplayed.Top ||
-        Selection->CurrentlyDisplayed.Bottom != Selection->PreviouslyDisplayed.Bottom) {
+        (Selection->CurrentlyDisplayed.Left != Selection->PreviouslyDisplayed.Left ||
+         Selection->CurrentlyDisplayed.Right != Selection->PreviouslyDisplayed.Right ||
+         Selection->CurrentlyDisplayed.Top != Selection->PreviouslyDisplayed.Top ||
+         Selection->CurrentlyDisplayed.Bottom != Selection->PreviouslyDisplayed.Bottom)) {
 
         YoriLibRedrawSelection(Selection);
     }
@@ -1445,7 +1463,7 @@ YoriLibCopySelectionIfPresent(
         TextWritePoint += LineLength;
     }
 
-    TextToCopy.LengthInChars = (DWORD)(TextWritePoint - TextToCopy.StartOfString);
+    TextToCopy.LengthInChars = (YORI_ALLOC_SIZE_T)(TextWritePoint - TextToCopy.StartOfString);
 
     StartPoint.X = (SHORT)(Selection->CurrentlySelected.Right - Selection->CurrentlySelected.Left + 1);
     StartPoint.Y = (SHORT)(Selection->CurrentlySelected.Bottom - Selection->CurrentlySelected.Top + 1);
@@ -1517,7 +1535,7 @@ YoriLibCopySelectionIfPresent(
             TextWritePoint++;
         }
 
-        TextToCopy.LengthInChars = (DWORD)(TextWritePoint - TextToCopy.StartOfString);
+        TextToCopy.LengthInChars = (YORI_ALLOC_SIZE_T)(TextWritePoint - TextToCopy.StartOfString);
 
         //
         //  Remove the final CRLF
@@ -1575,105 +1593,5 @@ YoriLibCopySelectionIfPresent(
     YoriLibFreeStringContents(&TextToCopy);
     return FALSE;
 }
-
-/**
- Return the set of characters that should be considered break characters when
- the user double clicks to select.  Break characters are never themselves
- selected.
-
- @param BreakChars On successful completion, populated with a set of
-        characters that should be considered break characters.
-
- @return TRUE to indicate success, FALSE to indicate failure.
- */
-BOOL
-YoriLibGetSelectionDoubleClickBreakChars(
-    __out PYORI_STRING BreakChars
-    )
-{
-    DWORD WriteIndex;
-    DWORD ReadIndex;
-    YORI_STRING Substring;
-
-    YoriLibInitEmptyString(BreakChars);
-    if (!YoriLibAllocateAndGetEnvironmentVariable(_T("YORIQUICKEDITBREAKCHARS"), BreakChars) || BreakChars->LengthInChars == 0) {
-
-        //
-        //  0x2500 is Unicode full horizontal line (used by sdir)
-        //  0x2502 is Unicode full vertical line (used by sdir)
-        //  0x00BB is double angle quotation mark, used in elevated prompts
-        //
-
-        YoriLibConstantString(BreakChars, _T(" '[]<>|\x2500\x2502\x252c\x2534\x00BB"));
-        return TRUE;
-    }
-
-    ReadIndex = 0;
-    WriteIndex = 0;
-    YoriLibInitEmptyString(&Substring);
-
-    for (ReadIndex = 0; ReadIndex < BreakChars->LengthInChars; ReadIndex++) {
-        if (ReadIndex + 1 < BreakChars->LengthInChars &&
-            BreakChars->StartOfString[ReadIndex] == '0' &&
-            BreakChars->StartOfString[ReadIndex + 1] == 'x') {
-
-            DWORD CharsConsumed;
-            LONGLONG Number;
-
-            Substring.StartOfString = &BreakChars->StartOfString[ReadIndex];
-            Substring.LengthInChars = BreakChars->LengthInChars - ReadIndex;
-
-            if (YoriLibStringToNumber(&Substring, FALSE, &Number, &CharsConsumed) &&
-                CharsConsumed > 0 &&
-                Number <= 0xFFFF) {
-
-                BreakChars->StartOfString[WriteIndex] = (TCHAR)Number;
-                WriteIndex++;
-                ReadIndex += CharsConsumed;
-            }
-        } else {
-            if (ReadIndex != WriteIndex) {
-                BreakChars->StartOfString[WriteIndex] = BreakChars->StartOfString[ReadIndex];
-            }
-            WriteIndex++;
-        }
-    }
-
-    BreakChars->LengthInChars = WriteIndex;
-
-    return TRUE;
-}
-
-/**
- Indicates if Yori QuickEdit should be enabled based on the state of the
- environment.  In this mode, the shell will disable QuickEdit support from
- the console and implement its own selection logic, but reenable QuickEdit
- for the benefit of applications.
-
- @return TRUE to indicate YoriQuickEdit should be enabled, and FALSE to
-         leave the user's selection for QuickEdit behavior in effect.
- */
-BOOL
-YoriLibIsYoriQuickEditEnabled(VOID)
-{
-    YORI_STRING EnvVar;
-    LONGLONG llTemp;
-    DWORD CharsConsumed;
-
-    YoriLibInitEmptyString(&EnvVar);
-    if (!YoriLibAllocateAndGetEnvironmentVariable(_T("YORIQUICKEDIT"), &EnvVar)) {
-        return FALSE;
-    }
-
-    if (YoriLibStringToNumber(&EnvVar, TRUE, &llTemp, &CharsConsumed) && CharsConsumed > 0) {
-        YoriLibFreeStringContents(&EnvVar);
-        if (llTemp == 1) {
-            return TRUE;
-        }
-    }
-    YoriLibFreeStringContents(&EnvVar);
-    return FALSE;
-}
-
 
 // vim:sw=4:ts=4:et:

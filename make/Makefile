@@ -3,9 +3,7 @@ BINARIES=ymake.exe
 
 !INCLUDE "..\config\common.mk"
 
-!IF $(PDB)==1
 LINKPDB=/Pdb:ymake.pdb
-!ENDIF
 
 BIN_OBJS=\
 	 alloc.obj        \
@@ -20,7 +18,7 @@ BIN_OBJS=\
 MOD_OBJS=\
 	 alloc.obj        \
 	 exec.obj         \
-	 mod_make.obj     \
+	 mmake.obj     \
 	 minish.obj       \
 	 preproc.obj      \
 	 scope.obj        \
@@ -29,13 +27,13 @@ MOD_OBJS=\
 
 compile: $(BIN_OBJS) builtins.lib
 
-MAKE_LIBS=$(YORILIB) $(YORICRT) $(YORISH) $(YORIVER) ..\echo\builtins.lib ..\mkdir\builtins.lib ..\rmdir\builtins.lib
+MAKE_LIBS=$(YORILIBS) $(YORISH) $(YORIVER) ..\builtins\builtins.lib ..\echo\builtins.lib ..\mkdir\builtins.lib ..\rmdir\builtins.lib
 
 ymake.exe: $(BIN_OBJS) $(MAKE_LIBS)
 	@echo $@
-	@$(LINK) $(LDFLAGS) -entry:$(YENTRY) $(BIN_OBJS) $(LIBS) $(CRTLIB) $(MAKE_LIBS) -version:$(YORI_VER_MAJOR).$(YORI_VER_MINOR) $(LINKPDB) -out:$@
+	@$(LINK) $(LDFLAGS) -entry:$(YENTRY) $(BIN_OBJS) $(MAKE_LIBS) $(EXTERNLIBS) -version:$(YORI_VER_MAJOR).$(YORI_VER_MINOR) $(LINKPDB) -out:$@
 
-mod_make.obj: make.c
+mmake.obj: make.c
 	@echo $@
 	@$(CC) -c -DYORI_BUILTIN=1 $(CFLAGS) -Fo$@ make.c
 

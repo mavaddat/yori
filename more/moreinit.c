@@ -3,7 +3,7 @@
  *
  * Yori shell more initialization
  *
- * Copyright (c) 2017-2018 Malcolm J. Smith
+ * Copyright (c) 2017-2022 Malcolm J. Smith
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -42,12 +42,12 @@
 VOID
 MoreGetViewportDimensions(
     __in PCONSOLE_SCREEN_BUFFER_INFO ScreenInfo,
-    __out PDWORD ViewportWidth,
-    __out PDWORD ViewportHeight
+    __out PYORI_ALLOC_SIZE_T ViewportWidth,
+    __out PYORI_ALLOC_SIZE_T ViewportHeight
     )
 {
     *ViewportWidth = ScreenInfo->dwSize.X;
-    *ViewportHeight = (DWORD)(ScreenInfo->srWindow.Bottom - ScreenInfo->srWindow.Top);
+    *ViewportHeight = (YORI_ALLOC_SIZE_T)(ScreenInfo->srWindow.Bottom - ScreenInfo->srWindow.Top);
 }
 
 /**
@@ -67,10 +67,10 @@ MoreGetViewportDimensions(
          returned.  FALSE if neither are being returned.
  */
 __success(return)
-BOOL
+BOOLEAN
 MoreAllocateViewportStructures(
-    __in DWORD ViewportWidth,
-    __in DWORD ViewportHeight,
+    __in YORI_ALLOC_SIZE_T ViewportWidth,
+    __in YORI_ALLOC_SIZE_T ViewportHeight,
     __out PMORE_LOGICAL_LINE * DisplayViewportLines,
     __out PMORE_LOGICAL_LINE * StagingViewportLines
     )
@@ -134,10 +134,10 @@ MoreAllocateViewportStructures(
          FALSE to indicate initialization was unsuccessful, and the
          MoreContext should be cleaned up with @ref MoreCleanupContext.
  */
-BOOL
+BOOLEAN
 MoreInitContext(
     __inout PMORE_CONTEXT MoreContext,
-    __in DWORD ArgCount,
+    __in YORI_ALLOC_SIZE_T ArgCount,
     __in_opt PYORI_STRING ArgStrings,
     __in BOOLEAN Recursive,
     __in BOOLEAN BasicEnumeration,
@@ -147,7 +147,17 @@ MoreInitContext(
     )
 {
     CONSOLE_SCREEN_BUFFER_INFO ScreenInfo;
+    YORI_ALLOC_SIZE_T Index;
     DWORD ThreadId;
+    UCHAR Color;
+    UCHAR SearchColors[5] = {
+        FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY,
+        FOREGROUND_GREEN | FOREGROUND_INTENSITY,
+        FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY,
+        FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY,
+        FOREGROUND_RED | FOREGROUND_INTENSITY
+    };
+
 
     ZeroMemory(MoreContext, sizeof(MORE_CONTEXT));
 
@@ -159,6 +169,7 @@ MoreInitContext(
     MoreContext->TabWidth = 4;
 
     YoriLibInitializeListHead(&MoreContext->PhysicalLineList);
+    YoriLibInitializeListHead(&MoreContext->FilteredPhysicalLineList);
     MoreContext->PhysicalLineMutex = CreateMutex(NULL, FALSE, NULL);
     if (MoreContext->PhysicalLineMutex == NULL) {
         return FALSE;
@@ -185,7 +196,19 @@ MoreInitContext(
 
     YoriLibVtSetDefaultColor(ScreenInfo.wAttributes);
     MoreContext->InitialColor = YoriLibVtGetDefaultColor();
-    MoreContext->SearchColor = YoriLibGetSelectionColor(GetStdHandle(STD_OUTPUT_HANDLE));
+
+    for (Index = 0; Index < MORE_MAX_SEARCHES; Index++) {
+        YoriLibInitEmptyString(&MoreContext->SearchStrings[Index]);
+        MoreContext->SearchContext[Index].ColorIndex = (UCHAR)-1;
+        if (Index < sizeof(SearchColors)/sizeof(SearchColors[0])) {
+            Color = (UCHAR)(((MoreContext->InitialColor & 0xF0) >> 4) | (SearchColors[Index] << 4));
+        } else {
+            Color = (UCHAR)((MoreContext->InitialColor & 0xF0) | SearchColors[Index % 5]);
+        }
+        MoreContext->SearchColors[Index] = Color;
+    }
+
+    MoreContext->SearchColorIndex = 0;
 
     MoreGetViewportDimensions(&ScreenInfo, &MoreContext->ViewportWidth, &MoreContext->ViewportHeight);
 
@@ -216,6 +239,11 @@ MoreCleanupContext(
     __inout PMORE_CONTEXT MoreContext
     )
 {
+    YORI_ALLOC_SIZE_T Index;
+
+    ASSERT(YoriLibIsListEmpty(&MoreContext->PhysicalLineList));
+    ASSERT(YoriLibIsListEmpty(&MoreContext->FilteredPhysicalLineList));
+
     if (MoreContext->DisplayViewportLines != NULL) {
         YoriLibFree(MoreContext->DisplayViewportLines);
         MoreContext->DisplayViewportLines = NULL;
@@ -246,7 +274,12 @@ MoreCleanupContext(
         MoreContext->IngestThread = NULL;
     }
 
-    YoriLibFreeStringContents(&MoreContext->SearchString);
+    for (Index = 0; Index < MORE_MAX_SEARCHES; Index++) {
+        YoriLibFreeStringContents(&MoreContext->SearchStrings[Index]);
+        MoreContext->SearchContext[Index].ColorIndex = (UCHAR)-1;
+    }
+
+    MoreContext->SearchColorIndex = 0;
 }
 
 /**
@@ -263,7 +296,7 @@ MoreGracefulExit(
 {
     PYORI_LIST_ENTRY ListEntry;
     PMORE_PHYSICAL_LINE PhysicalLine;
-    DWORD Index;
+    YORI_ALLOC_SIZE_T Index;
 
     YoriLibCancelSet();
     SetEvent(MoreContext->ShutdownEvent);
@@ -271,6 +304,14 @@ MoreGracefulExit(
     for (Index = 0; Index < MoreContext->ViewportHeight; Index++) {
         YoriLibFreeStringContents(&MoreContext->DisplayViewportLines[Index].Line);
     }
+
+    ListEntry = YoriLibGetNextListEntry(&MoreContext->FilteredPhysicalLineList, NULL);
+    while (ListEntry != NULL) {
+        PhysicalLine = CONTAINING_RECORD(ListEntry, MORE_PHYSICAL_LINE, LineList);
+        YoriLibRemoveListItem(ListEntry);
+        ListEntry = YoriLibGetNextListEntry(&MoreContext->FilteredPhysicalLineList, NULL);
+    }
+
     ListEntry = YoriLibGetNextListEntry(&MoreContext->PhysicalLineList, NULL);
     while (ListEntry != NULL) {
         PhysicalLine = CONTAINING_RECORD(ListEntry, MORE_PHYSICAL_LINE, LineList);

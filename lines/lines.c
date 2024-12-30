@@ -35,9 +35,10 @@ CHAR strLinesHelpText[] =
         "\n"
         "Count the number of lines in one or more files.\n"
         "\n"
-        "LINES [-license] [-b] [-s] [-t] [<file>...]\n"
+        "LINES [-license] [-b] [-l] [-s] [-t] [<file>...]\n"
         "\n"
         "   -b             Use basic search criteria for files only\n"
+        "   -l             Display line length statistics\n"
         "   -s             Process files from all subdirectories\n"
         "   -t             Display total line count of all files\n";
 
@@ -67,6 +68,12 @@ typedef struct _LINES_CONTEXT {
     BOOLEAN SummaryOnly;
 
     /**
+     TRUE to indicate the shortest, longest and average line sizes should be
+     displayed.  By default, only the line count is displayed.
+     */
+    BOOLEAN DisplayLengthStats;
+
+    /**
      TRUE to indicate that files are being enumerated recursively.
      */
     BOOLEAN Recursive;
@@ -82,23 +89,39 @@ typedef struct _LINES_CONTEXT {
     /**
      Records the total number of files processed.
      */
-    LONGLONG FilesFound;
+    YORI_MAX_SIGNED_T FilesFound;
 
     /**
      Records the total number of files processed within a single command line
      argument.
      */
-    LONGLONG FilesFoundThisArg;
+    YORI_MAX_SIGNED_T FilesFoundThisArg;
 
     /**
      Records the number of lines found in a single file.
      */
-    LONGLONG FileLinesFound;
+    YORI_MAX_SIGNED_T FileLinesFound;
+
+    /**
+     The shortest line within a single file.
+     */
+    YORI_MAX_UNSIGNED_T FileShortestLine;
+
+    /**
+     The longest line within a single file.
+     */
+    YORI_MAX_UNSIGNED_T FileLongestLine;
+
+    /**
+     The total number of characters within all lines in a single file, used
+     to display an average if one is requested.
+     */
+    YORI_MAX_SIGNED_T FileTotalChars;
 
     /**
      Records the total number of lines processed for all files.
      */
-    LONGLONG TotalLinesFound;
+    YORI_MAX_SIGNED_T TotalLinesFound;
 } LINES_CONTEXT, *PLINES_CONTEXT;
 
 /**
@@ -118,12 +141,17 @@ LinesProcessStream(
 {
     PVOID LineContext = NULL;
     YORI_STRING LineString;
+    BOOLEAN OneLineFound;
 
     YoriLibInitEmptyString(&LineString);
 
     LinesContext->FilesFound++;
     LinesContext->FilesFoundThisArg++;
     LinesContext->FileLinesFound = 0;
+    LinesContext->FileShortestLine = 0;
+    LinesContext->FileLongestLine = 0;
+    LinesContext->FileTotalChars = 0;
+    OneLineFound = FALSE;
 
     while (TRUE) {
 
@@ -132,6 +160,15 @@ LinesProcessStream(
         }
 
         LinesContext->FileLinesFound++;
+        LinesContext->FileTotalChars = LinesContext->FileTotalChars + LineString.LengthInChars;
+        if (LineString.LengthInChars > LinesContext->FileLongestLine) {
+            LinesContext->FileLongestLine = LineString.LengthInChars;
+        }
+
+        if (!OneLineFound || LineString.LengthInChars < LinesContext->FileShortestLine) {
+            LinesContext->FileShortestLine = LineString.LengthInChars;
+            OneLineFound = TRUE;
+        }
     }
 
     YoriLibLineReadCloseOrCache(LineContext);
@@ -207,7 +244,17 @@ LinesFileFoundCallback(
             YoriLibNumberToString(&StringFormOfLineCount, LinesContext->FileLinesFound, 10, 3, ',');
             YoriLibInitEmptyString(&UnescapedFilePath);
             YoriLibUnescapePath(FilePath, &UnescapedFilePath);
-            YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("%16y %y\n"), &StringFormOfLineCount, &UnescapedFilePath);
+            if (LinesContext->DisplayLengthStats == FALSE) {
+                YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("%16y %y\n"), &StringFormOfLineCount, &UnescapedFilePath);
+            } else {
+                YoriLibOutput(YORI_LIB_OUTPUT_STDOUT,
+                              _T("%16y %6lli %6lli %6lli %y\n"),
+                              &StringFormOfLineCount,
+                              LinesContext->FileShortestLine,
+                              LinesContext->FileTotalChars / LinesContext->FileLinesFound,
+                              LinesContext->FileLongestLine,
+                              &UnescapedFilePath);
+            }
             YoriLibFreeStringContents(&StringFormOfLineCount);
             YoriLibFreeStringContents(&UnescapedFilePath);
         }
@@ -267,7 +314,7 @@ LinesFileEnumerateErrorCallback(
         DirName.StartOfString = UnescapedFilePath.StartOfString;
         FilePart = YoriLibFindRightMostCharacter(&UnescapedFilePath, '\\');
         if (FilePart != NULL) {
-            DirName.LengthInChars = (DWORD)(FilePart - DirName.StartOfString);
+            DirName.LengthInChars = (YORI_ALLOC_SIZE_T)(FilePart - DirName.StartOfString);
         } else {
             DirName.LengthInChars = UnescapedFilePath.LengthInChars;
         }
@@ -303,15 +350,15 @@ LinesFileEnumerateErrorCallback(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
-    DWORD MatchFlags;
-    BOOL BasicEnumeration = FALSE;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
+    WORD MatchFlags;
+    BOOLEAN BasicEnumeration = FALSE;
     LINES_CONTEXT LinesContext;
     YORI_STRING Arg;
 
@@ -324,22 +371,25 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 LinesHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
-                YoriLibDisplayMitLicense(_T("2017-2019"));
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
+                YoriLibDisplayMitLicense(_T("2017-2023"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("b")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("b")) == 0) {
                 BasicEnumeration = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("s")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("l")) == 0) {
+                LinesContext.DisplayLengthStats = TRUE;
+                ArgumentUnderstood = TRUE;
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("s")) == 0) {
                 LinesContext.Recursive = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("t")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("t")) == 0) {
                 LinesContext.SummaryOnly = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 StartArg = i + 1;
                 ArgumentUnderstood = TRUE;
                 break;
@@ -351,12 +401,12 @@ ENTRYPOINT(
         }
 
         if (!ArgumentUnderstood) {
-            YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("Argument not understood, ignored: %y\n"), &ArgV[i]);
+            YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("lines: Argument not understood, ignored: %y\n"), &ArgV[i]);
         }
     }
 
 #if YORI_BUILTIN
-    YoriLibCancelEnable();
+    YoriLibCancelEnable(FALSE);
 #endif
 
     //
@@ -373,7 +423,7 @@ ENTRYPOINT(
 
     if (StartArg == 0 || StartArg == ArgC) {
         if (YoriLibIsStdInConsole()) {
-            YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("No file or pipe for input\n"));
+            YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("lines: No file or pipe for input\n"));
             return EXIT_FAILURE;
         }
 
@@ -409,7 +459,7 @@ ENTRYPOINT(
                     YoriLibFreeStringContents(&FullPath);
                 }
                 if (LinesContext.SavedErrorThisArg != ERROR_SUCCESS) {
-                    YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("File or directory not found: %y\n"), &ArgV[i]);
+                    YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("lines: File or directory not found: %y\n"), &ArgV[i]);
                 }
             }
         }

@@ -81,7 +81,7 @@ EchoHelp(VOID)
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
@@ -90,11 +90,11 @@ ENTRYPOINT(
     BOOLEAN StdErr = FALSE;
     BOOLEAN Result;
     BOOLEAN Debug = FALSE;
-    DWORD OutputFlags;
-    DWORD i;
-    DWORD Count;
-    DWORD StartArg = 1;
-    DWORD RepeatCount = 1;
+    WORD OutputFlags;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T Count;
+    YORI_ALLOC_SIZE_T StartArg = 1;
+    YORI_ALLOC_SIZE_T RepeatCount = 1;
     YORI_STRING Arg;
     YORI_STRING Text;
 
@@ -105,34 +105,34 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 EchoHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2020"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("d")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("d")) == 0) {
                 Debug = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("e")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("e")) == 0) {
                 StdErr = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("n")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("n")) == 0) {
                 NewLine = FALSE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("r")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("r")) == 0) {
                 if (i + 1 < ArgC) {
-                    LONGLONG llRepeat;
-                    DWORD CharsConsumed;
+                    YORI_MAX_SIGNED_T llRepeat;
+                    YORI_ALLOC_SIZE_T CharsConsumed;
                     if (YoriLibStringToNumber(&ArgV[i + 1], TRUE, &llRepeat, &CharsConsumed) &&
                         CharsConsumed > 0) {
 
-                        RepeatCount = (DWORD)llRepeat;
+                        RepeatCount = (YORI_ALLOC_SIZE_T)llRepeat;
                         ArgumentUnderstood = TRUE;
                         i++;
                     }
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 ArgumentUnderstood = TRUE;
                 StartArg = i + 1;
                 break;

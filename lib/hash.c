@@ -38,14 +38,18 @@
  */
 PYORI_HASH_TABLE
 YoriLibAllocateHashTable(
-    __in DWORD NumberBuckets
+    __in YORI_ALLOC_SIZE_T NumberBuckets
     )
 {
     DWORD SizeNeeded = sizeof(YORI_HASH_TABLE) + NumberBuckets * sizeof(YORI_HASH_BUCKET);
     PYORI_HASH_TABLE HashTable;
     DWORD BucketIndex;
 
-    HashTable = YoriLibReferencedMalloc(SizeNeeded);
+    if (!YoriLibIsSizeAllocatable(SizeNeeded)) {
+        return NULL;
+    }
+
+    HashTable = YoriLibReferencedMalloc((YORI_ALLOC_SIZE_T)SizeNeeded);
     if (HashTable == NULL) {
         return NULL;
     }
@@ -197,7 +201,7 @@ YoriLibHashLookupByKey(
     ListEntry = YoriLibGetNextListEntry(&HashTable->Buckets[BucketIndex].ListHead, NULL);
     while (ListEntry != NULL) {
         HashEntry = CONTAINING_RECORD(ListEntry, YORI_HASH_ENTRY, ListEntry);
-        if (YoriLibCompareStringInsensitive(KeyString, &HashEntry->Key) == 0) {
+        if (YoriLibCompareStringIns(KeyString, &HashEntry->Key) == 0) {
             break;
         }
         HashEntry = NULL;

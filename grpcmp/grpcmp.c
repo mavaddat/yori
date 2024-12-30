@@ -77,13 +77,13 @@ GrpcmpHelp(VOID)
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD StartArg;
-    DWORD i;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T StartArg;
+    YORI_ALLOC_SIZE_T i;
     BOOL IsMember = FALSE;
     BOOL BuiltinMode;
     YORI_STRING Arg;
@@ -98,16 +98,16 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 GrpcmpHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2018-2020"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("b")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("b")) == 0) {
                 BuiltinMode = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 StartArg = i + 1;
                 ArgumentUnderstood = TRUE;
                 break;
@@ -133,7 +133,10 @@ ENTRYPOINT(
     if (DllAdvApi32.pAllocateAndInitializeSid == NULL ||
         DllAdvApi32.pLookupAccountNameW == NULL ||
         DllAdvApi32.pFreeSid == NULL ||
-        DllAdvApi32.pCheckTokenMembership == NULL) {
+        DllAdvApi32.pOpenThreadToken == NULL ||
+        DllAdvApi32.pOpenProcessToken == NULL ||
+        DllAdvApi32.pGetTokenInformation == NULL ||
+        DllAdvApi32.pEqualSid == NULL) {
 
         YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("grpcmp: OS functionality not available\n"));
         return EXIT_FAILURE;
@@ -146,7 +149,7 @@ ENTRYPOINT(
 
         WellKnownId = 0;
 
-        if (YoriLibCompareStringWithLiteralInsensitive(&ArgV[StartArg], _T("Administrators")) == 0) {
+        if (YoriLibCompareStringLitIns(&ArgV[StartArg], _T("Administrators")) == 0) {
             WellKnownId = DOMAIN_ALIAS_RID_ADMINS;
         } else {
             YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("grpcmp: group name is not well known\n"));
@@ -168,7 +171,7 @@ ENTRYPOINT(
             return EXIT_FAILURE;
         }
 
-        if (DllAdvApi32.pCheckTokenMembership(NULL, pSid, &IsMember)) {
+        if (YoriLibCheckTokenMembership(NULL, pSid, &IsMember)) {
             DllAdvApi32.pFreeSid(pSid);
             if (IsMember) {
                 return EXIT_SUCCESS;
@@ -203,7 +206,7 @@ ENTRYPOINT(
             return EXIT_FAILURE;
         }
 
-        if (DllAdvApi32.pCheckTokenMembership(NULL, &Sid.Sid, &IsMember)) {
+        if (YoriLibCheckTokenMembership(NULL, &Sid.Sid, &IsMember)) {
             if (IsMember) {
                 return EXIT_SUCCESS;
             }

@@ -1,3 +1,5 @@
+#include <windows.h>
+
 #define VS_VERSION_INFO 1
 
 VS_VERSION_INFO VERSIONINFO
@@ -25,6 +27,6 @@ END
 #endif
 
 #ifndef YORI_CUSTOM_MANIFEST
-CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "..\\lib\\yori.manifest"
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "..\\lib\\yori.man"
 #endif
 

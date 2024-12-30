@@ -60,7 +60,7 @@ typedef struct _YORILIB_FOREACHFILE_CONTEXT {
      a phase to operate on the current directory and a phase to recurse into
      any subdirectories.
      */
-    DWORD NumberPhases;
+    WORD NumberPhases;
 
     /**
      Indicates the current phase number being used.  Note that for recursive
@@ -68,14 +68,14 @@ typedef struct _YORILIB_FOREACHFILE_CONTEXT {
      processed, so this number does not by itself indicate the operation
      being performed.
      */
-    DWORD CurrentPhase;
+    WORD CurrentPhase;
 
     /**
      The number of characters in EffectiveFileSpec to the final slash. A
      seperator may not be specified in EffectiveFileSpec, so this is only
      meaningful if the local FinalSlashFound is set.
      */
-    DWORD CharsToFinalSlash;
+    YORI_ALLOC_SIZE_T CharsToFinalSlash;
 
     /**
      Specifies an enumeration criteria to use if recursively invoking one of
@@ -90,6 +90,49 @@ typedef struct _YORILIB_FOREACHFILE_CONTEXT {
     WIN32_FIND_DATA FileInfo;
 
 } YORILIB_FOREACHFILE_CONTEXT, *PYORILIB_FOREACHFILE_CONTEXT;
+
+/**
+ If a string contains a directory that ends with a seperator, and it's not
+ referring to a drive root, remove the seperator.
+
+ This can be thought of as a mini version of @ref YoriLibFindEffectiveRoot .
+ Unlike that function, this one has to run on purely relative paths that
+ haven't been converted to their full form, where seperators could go
+ either way, where relative components are still present.  Also, it doesn't
+ need to deal with UNC paths because a share and a root are equivalent;
+ there's no concept of "current directory on UNC share" which is the meaning
+ if a trailing seperator is removed from a drive.
+
+ @param String The string to inspect and potentially trim if a trailing
+        seperator is present.
+ */
+VOID
+YoriLibTruncateTrailingSeperatorIfBenign(
+    __inout PYORI_STRING String
+    )
+{
+    //
+    //  Trim trailing slashes, except if the string is just a slash, or if
+    //  the slash follows a drive letter and colon, in which case it's
+    //  meaningful.
+    //
+
+    if (String->LengthInChars > 1 &&
+        YoriLibIsSep(String->StartOfString[String->LengthInChars - 1])) {
+
+        if (YoriLibIsPrefixedDriveLetterWithColonAndSlash(String)) {
+            if (String->LengthInChars >= sizeof("\\\\?\\c:\\")) {
+                String->LengthInChars--;
+            }
+        } else if (YoriLibIsDriveLetterWithColonAndSlash(String)) {
+            if (String->LengthInChars >= sizeof("c:\\")) {
+                String->LengthInChars--;
+            }
+        } else {
+            String->LengthInChars--;
+        }
+    }
+}
 
 /**
  Call a callback for every file matching a specified file pattern.
@@ -114,7 +157,7 @@ __success(return)
 BOOL
 YoriLibForEachFileEnum(
     __in PYORI_STRING FileSpec,
-    __in DWORD MatchFlags,
+    __in WORD MatchFlags,
     __in DWORD Depth,
     __in PYORILIB_FILE_ENUM_FN Callback,
     __in_opt PYORILIB_FILE_ENUM_ERROR_FN ErrorCallback,
@@ -128,6 +171,7 @@ YoriLibForEachFileEnum(
     BOOLEAN Result;
     BOOLEAN RecursePhase;
     BOOLEAN IsLink;
+    BOOLEAN TrailingSlashInParentComponent;
     PYORILIB_FOREACHFILE_CONTEXT ForEachContext = NULL;
 
     Result = TRUE;
@@ -166,7 +210,7 @@ YoriLibForEachFileEnum(
     //
 
     if (ForEachContext->EffectiveFileSpec.LengthInChars >= sizeof("file:///")) {
-        if (YoriLibCompareStringWithLiteralInsensitiveCount(&ForEachContext->EffectiveFileSpec, _T("file:///"), sizeof("file:///") - 1) == 0) {
+        if (YoriLibCompareStringLitInsCnt(&ForEachContext->EffectiveFileSpec, _T("file:///"), sizeof("file:///") - 1) == 0) {
             ForEachContext->EffectiveFileSpec.StartOfString = &ForEachContext->EffectiveFileSpec.StartOfString[sizeof("file:///") - 1];
             ForEachContext->EffectiveFileSpec.LengthInChars -= sizeof("file:///") - 1;
         }
@@ -199,7 +243,12 @@ YoriLibForEachFileEnum(
                     return FALSE;
                 }
 
-                NewFileSpec.LengthInChars = YoriLibSPrintf(NewFileSpec.StartOfString, _T("%y\\*"), &ForEachContext->EffectiveFileSpec);
+                if (ForEachContext->EffectiveFileSpec.LengthInChars > 0 &&
+                    YoriLibIsSep(ForEachContext->EffectiveFileSpec.StartOfString[ForEachContext->EffectiveFileSpec.LengthInChars - 1])) {
+                    NewFileSpec.LengthInChars = YoriLibSPrintf(NewFileSpec.StartOfString, _T("%y*"), &ForEachContext->EffectiveFileSpec);
+                } else {
+                    NewFileSpec.LengthInChars = YoriLibSPrintf(NewFileSpec.StartOfString, _T("%y\\*"), &ForEachContext->EffectiveFileSpec);
+                }
                 memcpy(&ForEachContext->EffectiveFileSpec, &NewFileSpec, sizeof(YORI_STRING));
             }
         } else if ((MatchFlags & (YORILIB_FILEENUM_RECURSE_AFTER_RETURN | YORILIB_FILEENUM_RECURSE_BEFORE_RETURN)) != 0 ||
@@ -213,6 +262,9 @@ YoriLibForEachFileEnum(
                     YoriLibFree(ForEachContext);
                     return FALSE;
                 }
+
+                YoriLibTruncateTrailingSeperatorIfBenign(&NewFileSpec);
+                NewFileSpec.StartOfString[NewFileSpec.LengthInChars] = '\0';
 
                 memcpy(&ForEachContext->EffectiveFileSpec, &NewFileSpec, sizeof(YORI_STRING));
             }
@@ -265,27 +317,13 @@ YoriLibForEachFileEnum(
         DirectoryPart.StartOfString = ForEachContext->EffectiveFileSpec.StartOfString;
         DirectoryPart.LengthInChars = ForEachContext->CharsToFinalSlash;
 
-        //
-        //  Trim trailing slashes, except if the string is just a slash, in
-        //  which case it's meaningful.
-        //
-        //  MSFIX This really wants to apply all the EffectiveRoot logic.
-        //
-
-        if ((DirectoryPart.LengthInChars > 3 ||
-             !YoriLibIsDriveLetterWithColonAndSlash(&DirectoryPart)) &&
-            DirectoryPart.LengthInChars > 1 &&
-            YoriLibIsSep(DirectoryPart.StartOfString[DirectoryPart.LengthInChars - 1])) {
-
-            DirectoryPart.LengthInChars--;
-        }
+        YoriLibTruncateTrailingSeperatorIfBenign(&DirectoryPart);
 
         if (!YoriLibGetFullPathNameReturnAllocation(&DirectoryPart, TRUE, &ForEachContext->ParentFullPath, NULL)) {
             YoriLibFreeStringContents(&ForEachContext->EffectiveFileSpec);
             YoriLibFree(ForEachContext);
             return FALSE;
         }
-
     } else {
         YORI_STRING ThisDir;
         YoriLibConstantString(&ThisDir, _T("."));
@@ -297,16 +335,19 @@ YoriLibForEachFileEnum(
     }
 
     //
-    //  If the result ends with a \, truncate it since all children we
-    //  report will unconditionally have a \ inserted between their name
-    //  and the parent.  This result will happen with X:\ type paths.
+    //  Check if there's still a trailing slash.  The logic above was
+    //  checking for these to ensure the correct path was used to expand
+    //  to a full path; having done that, we still have drive roots which
+    //  include a trailing slash and regular directories which don't, so
+    //  we want to determine whether to append an extra backslash when
+    //  building full paths.
     //
 
+    TrailingSlashInParentComponent = FALSE;
     if (ForEachContext->ParentFullPath.LengthInChars > 0 &&
         YoriLibIsSep(ForEachContext->ParentFullPath.StartOfString[ForEachContext->ParentFullPath.LengthInChars - 1])) {
 
-        ForEachContext->ParentFullPath.LengthInChars--;
-        ForEachContext->ParentFullPath.StartOfString[ForEachContext->ParentFullPath.LengthInChars] = '\0';
+        TrailingSlashInParentComponent = TRUE;
     }
 
     if (!YoriLibAllocateString(&ForEachContext->FullPath, ForEachContext->ParentFullPath.LengthInChars + 1 + sizeof(ForEachContext->FileInfo.cFileName) / sizeof(TCHAR) + 1)) {
@@ -318,7 +359,8 @@ YoriLibForEachFileEnum(
     for (ForEachContext->CurrentPhase = 0; ForEachContext->CurrentPhase < ForEachContext->NumberPhases; ForEachContext->CurrentPhase++) {
 
         RecursePhase = FALSE;
-        if ((MatchFlags & (YORILIB_FILEENUM_RECURSE_AFTER_RETURN | YORILIB_FILEENUM_RECURSE_BEFORE_RETURN)) == (YORILIB_FILEENUM_RECURSE_AFTER_RETURN | YORILIB_FILEENUM_RECURSE_BEFORE_RETURN)) {
+        if ((MatchFlags & (YORILIB_FILEENUM_RECURSE_AFTER_RETURN | YORILIB_FILEENUM_RECURSE_BEFORE_RETURN)) ==
+            (YORILIB_FILEENUM_RECURSE_AFTER_RETURN | YORILIB_FILEENUM_RECURSE_BEFORE_RETURN)) {
             if (ForEachContext->CurrentPhase == 0) {
                 RecursePhase = TRUE;
             }
@@ -341,7 +383,11 @@ YoriLibForEachFileEnum(
         if (RecursePhase &&
             (MatchFlags & YORILIB_FILEENUM_RECURSE_PRESERVE_WILD) != 0) {
 
-            ForEachContext->FullPath.LengthInChars = YoriLibSPrintfS(ForEachContext->FullPath.StartOfString, ForEachContext->FullPath.LengthAllocated, _T("%y\\*"), &ForEachContext->ParentFullPath);
+            ForEachContext->FullPath.LengthInChars =
+                YoriLibSPrintfS(ForEachContext->FullPath.StartOfString,
+                                ForEachContext->FullPath.LengthAllocated,
+                                _T("%y\\*"),
+                                &ForEachContext->ParentFullPath);
             hFind = FindFirstFile(ForEachContext->FullPath.StartOfString, &ForEachContext->FileInfo);
         } else {
             if (FinalSlashFound) {
@@ -356,12 +402,42 @@ YoriLibForEachFileEnum(
                 //
 
                 if (ForEachContext->CharsToFinalSlash == ForEachContext->EffectiveFileSpec.LengthInChars) {
-                    ForEachContext->FullPath.LengthInChars = YoriLibSPrintfS(ForEachContext->FullPath.StartOfString, ForEachContext->FullPath.LengthAllocated, _T("%y"), &ForEachContext->ParentFullPath);
+                    ForEachContext->FullPath.LengthInChars =
+                        YoriLibSPrintfS(ForEachContext->FullPath.StartOfString,
+                                        ForEachContext->FullPath.LengthAllocated,
+                                        _T("%y"),
+                                        &ForEachContext->ParentFullPath);
+                } else if (TrailingSlashInParentComponent) {
+                    ForEachContext->FullPath.LengthInChars =
+                        YoriLibSPrintfS(ForEachContext->FullPath.StartOfString,
+                                        ForEachContext->FullPath.LengthAllocated,
+                                        _T("%y%s"),
+                                        &ForEachContext->ParentFullPath,
+                                        &ForEachContext->EffectiveFileSpec.StartOfString[ForEachContext->CharsToFinalSlash]);
                 } else {
-                    ForEachContext->FullPath.LengthInChars = YoriLibSPrintfS(ForEachContext->FullPath.StartOfString, ForEachContext->FullPath.LengthAllocated, _T("%y\\%s"), &ForEachContext->ParentFullPath, &ForEachContext->EffectiveFileSpec.StartOfString[ForEachContext->CharsToFinalSlash]);
+                    ForEachContext->FullPath.LengthInChars =
+                        YoriLibSPrintfS(ForEachContext->FullPath.StartOfString,
+                                        ForEachContext->FullPath.LengthAllocated,
+                                        _T("%y\\%s"),
+                                        &ForEachContext->ParentFullPath,
+                                        &ForEachContext->EffectiveFileSpec.StartOfString[ForEachContext->CharsToFinalSlash]);
                 }
             } else {
-                ForEachContext->FullPath.LengthInChars = YoriLibSPrintfS(ForEachContext->FullPath.StartOfString, ForEachContext->FullPath.LengthAllocated, _T("%y\\%y"), &ForEachContext->ParentFullPath, &ForEachContext->EffectiveFileSpec);
+                if (TrailingSlashInParentComponent) {
+                    ForEachContext->FullPath.LengthInChars =
+                        YoriLibSPrintfS(ForEachContext->FullPath.StartOfString,
+                                        ForEachContext->FullPath.LengthAllocated,
+                                        _T("%y%y"),
+                                        &ForEachContext->ParentFullPath,
+                                        &ForEachContext->EffectiveFileSpec);
+                } else {
+                    ForEachContext->FullPath.LengthInChars =
+                        YoriLibSPrintfS(ForEachContext->FullPath.StartOfString,
+                                        ForEachContext->FullPath.LengthAllocated,
+                                        _T("%y\\%y"),
+                                        &ForEachContext->ParentFullPath,
+                                        &ForEachContext->EffectiveFileSpec);
+                }
             }
             hFind = FindFirstFile(ForEachContext->FullPath.StartOfString, &ForEachContext->FileInfo);
 
@@ -450,8 +526,8 @@ YoriLibForEachFileEnum(
                     RecursePhase &&
                     !IsLink) {
 
-                    DWORD FileNameLen = _tcslen(ForEachContext->FileInfo.cFileName);
-                    DWORD WildLength = 2;
+                    YORI_ALLOC_SIZE_T FileNameLen = (YORI_ALLOC_SIZE_T)_tcslen(ForEachContext->FileInfo.cFileName);
+                    YORI_ALLOC_SIZE_T WildLength = 2;
 
                     if ((MatchFlags & YORILIB_FILEENUM_RECURSE_PRESERVE_WILD) != 0) {
 
@@ -473,7 +549,7 @@ YoriLibForEachFileEnum(
                     memcpy(&ForEachContext->RecurseCriteria.StartOfString[ForEachContext->RecurseCriteria.LengthInChars],
                            ForEachContext->FileInfo.cFileName,
                            FileNameLen * sizeof(TCHAR));
-                    ForEachContext->RecurseCriteria.LengthInChars += FileNameLen;
+                    ForEachContext->RecurseCriteria.LengthInChars = ForEachContext->RecurseCriteria.LengthInChars + FileNameLen;
                     ForEachContext->RecurseCriteria.StartOfString[ForEachContext->RecurseCriteria.LengthInChars] = '\\';
                     ForEachContext->RecurseCriteria.LengthInChars++;
 
@@ -491,7 +567,7 @@ YoriLibForEachFileEnum(
                             _tcscpy(&ForEachContext->RecurseCriteria.StartOfString[ForEachContext->RecurseCriteria.LengthInChars],
                                     ForEachContext->EffectiveFileSpec.StartOfString);
                         }
-                        ForEachContext->RecurseCriteria.LengthInChars += WildLength;
+                        ForEachContext->RecurseCriteria.LengthInChars = ForEachContext->RecurseCriteria.LengthInChars + WildLength;
                     } else {
                         ForEachContext->RecurseCriteria.StartOfString[ForEachContext->RecurseCriteria.LengthInChars] = '*';
                         ForEachContext->RecurseCriteria.LengthInChars++;
@@ -525,7 +601,21 @@ YoriLibForEachFileEnum(
                     if (!FinalSlashFound ||
                         ForEachContext->CharsToFinalSlash != ForEachContext->EffectiveFileSpec.LengthInChars) {
 
-                        ForEachContext->FullPath.LengthInChars = YoriLibSPrintfS(ForEachContext->FullPath.StartOfString, ForEachContext->FullPath.LengthAllocated, _T("%y\\%s"), &ForEachContext->ParentFullPath, ForEachContext->FileInfo.cFileName);
+                        if (TrailingSlashInParentComponent) {
+                            ForEachContext->FullPath.LengthInChars =
+                                YoriLibSPrintfS(ForEachContext->FullPath.StartOfString,
+                                                ForEachContext->FullPath.LengthAllocated,
+                                                _T("%y%s"),
+                                                &ForEachContext->ParentFullPath,
+                                                ForEachContext->FileInfo.cFileName);
+                        } else {
+                            ForEachContext->FullPath.LengthInChars =
+                                YoriLibSPrintfS(ForEachContext->FullPath.StartOfString,
+                                                ForEachContext->FullPath.LengthAllocated,
+                                                _T("%y\\%s"),
+                                                &ForEachContext->ParentFullPath,
+                                                ForEachContext->FileInfo.cFileName);
+                        }
                     }
 
                     if (!Callback(&ForEachContext->FullPath, &ForEachContext->FileInfo, Depth, Context)) {
@@ -588,7 +678,7 @@ __success(return)
 BOOL
 YoriLibForEachFile(
     __in PYORI_STRING FileSpec,
-    __in DWORD MatchFlags,
+    __in WORD MatchFlags,
     __in DWORD Depth,
     __in PYORILIB_FILE_ENUM_FN Callback,
     __in_opt PYORILIB_FILE_ENUM_ERROR_FN ErrorCallback,
@@ -600,7 +690,7 @@ YoriLibForEachFile(
     YORI_STRING SubstituteValues;
     YORI_STRING MatchValue;
     YORI_STRING NewFileSpec;
-    DWORD CharsToOperator;
+    YORI_ALLOC_SIZE_T CharsToOperator;
     BOOL SingleCharMode;
 
     if (MatchFlags & YORILIB_FILEENUM_BASIC_EXPANSION) {
@@ -608,7 +698,7 @@ YoriLibForEachFile(
     }
 
     SingleCharMode = FALSE;
-    CharsToOperator = YoriLibCountStringNotContainingChars(FileSpec, _T("{["));
+    CharsToOperator = YoriLibCntStringNotWithChars(FileSpec, _T("{["));
 
     //
     //  If there are no [ or { operators, expand any ~ operators and 
@@ -641,7 +731,7 @@ YoriLibForEachFile(
     SubstituteValues.StartOfString = &FileSpec->StartOfString[CharsToOperator + 1];
     SubstituteValues.LengthInChars = FileSpec->LengthInChars - CharsToOperator - 1;
 
-    CharsToOperator = YoriLibCountStringNotContainingChars(&SubstituteValues, SingleCharMode?_T("]"):_T("}"));
+    CharsToOperator = YoriLibCntStringNotWithChars(&SubstituteValues, SingleCharMode?_T("]"):_T("}"));
     if (CharsToOperator == SubstituteValues.LengthInChars) {
         return YoriLibForEachFileEnum(FileSpec, MatchFlags, Depth, Callback, ErrorCallback, Context);
     }
@@ -679,7 +769,7 @@ YoriLibForEachFile(
     } else {
         while(TRUE) {
             MatchValue = SubstituteValues;
-            CharsToOperator = YoriLibCountStringNotContainingChars(&SubstituteValues, _T(","));
+            CharsToOperator = YoriLibCntStringNotWithChars(&SubstituteValues, _T(","));
 
             MatchValue.LengthInChars = CharsToOperator;
 
@@ -859,14 +949,34 @@ YoriLibUpdateFindDataFromFileInformation (
 
     if (hFile != INVALID_HANDLE_VALUE) {
 
-        GetFileInformationByHandle(hFile, &FileInfo);
+        //
+        //  Redirectors appear to be able to fail this call if the file wasn't
+        //  opened with FILE_READ_DATA, which we can't reliably do.  Fall back
+        //  to getting this information very inefficiently, on the expectation
+        //  that this case is rare.
+        //
 
-        FindData->dwFileAttributes = FileInfo.dwFileAttributes;
-        FindData->ftCreationTime = FileInfo.ftCreationTime;
-        FindData->ftLastAccessTime = FileInfo.ftLastAccessTime;
-        FindData->ftLastWriteTime = FileInfo.ftLastWriteTime;
-        FindData->nFileSizeHigh = FileInfo.nFileSizeHigh;
-        FindData->nFileSizeLow  = FileInfo.nFileSizeLow;
+        if (GetFileInformationByHandle(hFile, &FileInfo)) {
+            FindData->dwFileAttributes = FileInfo.dwFileAttributes;
+            FindData->ftCreationTime = FileInfo.ftCreationTime;
+            FindData->ftLastAccessTime = FileInfo.ftLastAccessTime;
+            FindData->ftLastWriteTime = FileInfo.ftLastWriteTime;
+            FindData->nFileSizeHigh = FileInfo.nFileSizeHigh;
+            FindData->nFileSizeLow  = FileInfo.nFileSizeLow;
+        } else {
+            FindData->dwFileAttributes = GetFileAttributes(FullPath);
+            if (FindData->dwFileAttributes == (DWORD)-1) {
+                CloseHandle(hFile);
+                return FALSE;
+            }
+
+            if (!GetFileTime(hFile, &FindData->ftCreationTime, &FindData->ftLastAccessTime, &FindData->ftLastWriteTime)) {
+                CloseHandle(hFile);
+                return FALSE;
+            }
+
+            FindData->nFileSizeLow = GetFileSize(hFile, &FindData->nFileSizeHigh);
+        }
 
         CloseHandle(hFile);
 

@@ -3,7 +3,7 @@
  *
  * Yori shell display operating system version
  *
- * Copyright (c) 2017-2021 Malcolm J. Smith
+ * Copyright (c) 2017-2022 Malcolm J. Smith
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -35,7 +35,10 @@ CHAR strOsVerHelpText[] =
         "\n"
         "Outputs the operating system version in a specified format.\n"
         "\n"
-        "OSVER [-license] [<fmt>]\n"
+        "OSVER [-license] [-l] [-s criteria] [<fmt>]\n"
+        "\n"
+        "   -l             List all known operating system builds\n"
+        "   -s             Search for build names containing string or build number\n"
         "\n"
         "Format specifiers are:\n"
         "   $arch$         The processor architecture\n"
@@ -145,8 +148,13 @@ OSVER_BUILD_DESCRIPTION OsVerBuildDescriptions[] = {
     {19041, "Windows 10 20H1 2004"},
     {19042, "Windows 10 20H2"},
     {19043, "Windows 10 21H1"},
+    {19044, "Windows 10 21H2"},
+    {19045, "Windows 10 22H2"},
     {20348, "Windows Server 2022"},
-    {22000, "Windows 11"}
+    {22000, "Windows 11"},
+    {22621, "Windows 11 22H2"},
+    {22631, "Windows 11 23H2"},
+    {26100, "Windows 11 24H2"}
 };
 
 /**
@@ -182,12 +190,12 @@ OsVerGetBuildDescriptionString(
  @return The number of characters in the human readable string describing the
          build.
  */
-DWORD
+YORI_ALLOC_SIZE_T
 OsVerLengthOfBuildDescription(
     __in DWORD BuildNumber
     )
 {
-    return strlen(OsVerGetBuildDescriptionString(BuildNumber));
+    return (YORI_ALLOC_SIZE_T)strlen(OsVerGetBuildDescriptionString(BuildNumber));
 }
 
 /**
@@ -215,13 +223,73 @@ const
 OSVER_ARCHITECTURE OsVerArchitecture[] = {
     {YORI_PROCESSOR_ARCHITECTURE_INTEL,  "i386"},
     {YORI_PROCESSOR_ARCHITECTURE_MIPS,   "MIPS"},
-    {YORI_PROCESSOR_ARCHITECTURE_ALPHA,  "Alpha"},
+    {YORI_PROCESSOR_ARCHITECTURE_ALPHA,  "AXP"},
     {YORI_PROCESSOR_ARCHITECTURE_PPC,    "PPC"},
     {YORI_PROCESSOR_ARCHITECTURE_ARM,    "ARM"},
     {YORI_PROCESSOR_ARCHITECTURE_IA64,   "IA64"},
+    {YORI_PROCESSOR_ARCHITECTURE_AXP64,  "AXP64"},
     {YORI_PROCESSOR_ARCHITECTURE_AMD64,  "AMD64"},
     {YORI_PROCESSOR_ARCHITECTURE_ARM64,  "ARM64"}
 };
+
+/**
+ Display a list of build strings that match a specified criteria.
+
+ @param MatchString Pointer to a string to match against.  Note this can be
+        NULL to match everything.
+ 
+ @return TRUE to indicate success, FALSE to indicate failure.
+ */
+BOOLEAN
+OsVerDisplayMatchingBuilds(
+    __in_opt PYORI_STRING MatchString
+    )
+{
+    YORI_MAX_SIGNED_T llTemp;
+    YORI_STRING DisplayString;
+    YORI_ALLOC_SIZE_T CharsConsumed;
+    YORI_ALLOC_SIZE_T CharsNeeded;
+    YORI_ALLOC_SIZE_T Index;
+
+    //
+    //  If the argument is a number, look up a string by build number.
+    //
+
+    if (MatchString != NULL &&
+        YoriLibStringToNumber(MatchString, TRUE, &llTemp, &CharsConsumed) &&
+        CharsConsumed > 0) {
+
+        YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("%lli: %hs\n"), llTemp, OsVerGetBuildDescriptionString((DWORD)llTemp));
+    }
+
+    //
+    //  Look for a substring match, even if the argument is numeric.
+    //
+    CharsNeeded = 0;
+    for (Index = 0; Index < sizeof(OsVerBuildDescriptions)/sizeof(OsVerBuildDescriptions[0]); Index++) {
+        CharsConsumed = (YORI_ALLOC_SIZE_T)strlen(OsVerBuildDescriptions[Index].BuildDescription);
+        if (CharsConsumed > CharsNeeded) {
+            CharsNeeded = CharsConsumed;
+        }
+    }
+
+    if (!YoriLibAllocateString(&DisplayString, CharsNeeded + 1)) {
+        return FALSE;
+    }
+
+    for (Index = 0; Index < sizeof(OsVerBuildDescriptions)/sizeof(OsVerBuildDescriptions[0]); Index++) {
+        DisplayString.LengthInChars = YoriLibSPrintf(DisplayString.StartOfString, _T("%hs"), OsVerBuildDescriptions[Index].BuildDescription);
+
+        if (MatchString == NULL ||
+            YoriLibFindFirstMatchSubstrIns(&DisplayString, 1, MatchString, NULL) != NULL) {
+            YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("%i: %y\n"), OsVerBuildDescriptions[Index].BuildNumber, &DisplayString);
+        }
+    }
+
+    YoriLibFreeStringContents(&DisplayString);
+
+    return TRUE;
+}
 
 /**
  Return a pointer to a constant string describing the processor architecture.
@@ -257,12 +325,12 @@ OsVerGetArchitectureDescriptionString(
  @return The number of characters in the human readable string describing the
          architecture.
  */
-DWORD
+YORI_ALLOC_SIZE_T
 OsVerLengthOfArchitectureDescription(
     __in DWORD Architecture
     )
 {
-    return strlen(OsVerGetArchitectureDescriptionString(Architecture));
+    return (YORI_ALLOC_SIZE_T)strlen(OsVerGetArchitectureDescriptionString(Architecture));
 }
 
 /**
@@ -282,36 +350,36 @@ OsVerLengthOfArchitectureDescription(
          characters required in order to successfully populate, or zero
          on error.
  */
-DWORD
+YORI_ALLOC_SIZE_T
 OsVerExpandVariables(
     __inout PYORI_STRING OutputString,
     __in PYORI_STRING VariableName,
     __in PVOID Context
     )
 {
-    DWORD CharsNeeded;
+    YORI_ALLOC_SIZE_T CharsNeeded;
     POSVER_VERSION_RESULT OsVerContext = (POSVER_VERSION_RESULT)Context;
 
-    if (YoriLibCompareStringWithLiteral(VariableName, _T("arch")) == 0) {
+    if (YoriLibCompareStringLit(VariableName, _T("arch")) == 0) {
         CharsNeeded = OsVerLengthOfArchitectureDescription(OsVerContext->Architecture);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("BUILD")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("BUILD")) == 0) {
         CharsNeeded = 5;
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("build")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("build")) == 0) {
         CharsNeeded = 5;
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("desc")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("desc")) == 0) {
         CharsNeeded = OsVerLengthOfBuildDescription(OsVerContext->BuildNumber);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("edition")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("edition")) == 0) {
         if (OsVerContext->Edition.LengthInChars == 0) {
             YoriLibLoadOsEdition(&OsVerContext->Edition);
         }
         CharsNeeded = OsVerContext->Edition.LengthInChars;
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("MAJOR")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("MAJOR")) == 0) {
         CharsNeeded = 2;
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("major")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("major")) == 0) {
         CharsNeeded = 3;
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("MINOR")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("MINOR")) == 0) {
         CharsNeeded = 2;
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("minor")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("minor")) == 0) {
         CharsNeeded = 3;
     } else {
         return 0;
@@ -321,31 +389,31 @@ OsVerExpandVariables(
         return CharsNeeded;
     }
 
-    if (YoriLibCompareStringWithLiteral(VariableName, _T("arch")) == 0) {
+    if (YoriLibCompareStringLit(VariableName, _T("arch")) == 0) {
         CharsNeeded = YoriLibSPrintf(OutputString->StartOfString, _T("%hs"), OsVerGetArchitectureDescriptionString(OsVerContext->Architecture));
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("BUILD")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("BUILD")) == 0) {
         YoriLibSPrintf(OutputString->StartOfString, _T("%05i"), OsVerContext->BuildNumber);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("build")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("build")) == 0) {
         if (OsVerContext->MinorVersion < 100000) {
             CharsNeeded = YoriLibSPrintf(OutputString->StartOfString, _T("%i"), OsVerContext->BuildNumber);
         } else {
             CharsNeeded = 0;
         }
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("desc")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("desc")) == 0) {
         CharsNeeded = YoriLibSPrintf(OutputString->StartOfString, _T("%hs"), OsVerGetBuildDescriptionString(OsVerContext->BuildNumber));
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("edition")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("edition")) == 0) {
         CharsNeeded = YoriLibSPrintf(OutputString->StartOfString, _T("%y"), &OsVerContext->Edition);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("MAJOR")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("MAJOR")) == 0) {
         YoriLibSPrintf(OutputString->StartOfString, _T("%02i"), OsVerContext->MajorVersion);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("MINOR")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("MINOR")) == 0) {
         YoriLibSPrintf(OutputString->StartOfString, _T("%02i"), OsVerContext->MinorVersion);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("major")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("major")) == 0) {
         if (OsVerContext->MajorVersion < 1000) {
             CharsNeeded = YoriLibSPrintf(OutputString->StartOfString, _T("%i"), OsVerContext->MajorVersion);
         } else {
             CharsNeeded = 0;
         }
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("minor")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("minor")) == 0) {
         if (OsVerContext->MinorVersion < 1000) {
             CharsNeeded = YoriLibSPrintf(OutputString->StartOfString, _T("%i"), OsVerContext->MinorVersion);
         } else {
@@ -395,21 +463,24 @@ OsVerGetArchitecture(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
     OSVER_VERSION_RESULT VersionResult;
-    BOOL ArgumentUnderstood;
+    BOOLEAN ArgumentUnderstood;
     LPTSTR FormatString = _T("\x1b[41;34;1m\x2584\x1b[42;33;1m\x2584\x1b[0m Windows version: $major$.$minor$.$build$ ($desc$), $arch$\n");
     YORI_STRING DisplayString;
-    DWORD i;
+    YORI_ALLOC_SIZE_T i;
     YORI_STRING Arg;
     YORI_STRING YsFormatString;
-    DWORD StartArg = 0;
+    PYORI_STRING SearchString;
+    YORI_ALLOC_SIZE_T StartArg = 0;
+    BOOLEAN ListAllBuilds = FALSE;
 
     ZeroMemory(&VersionResult, sizeof(VersionResult));
     YoriLibInitEmptyString(&YsFormatString);
+    SearchString = NULL;
 
     for (i = 1; i < ArgC; i++) {
 
@@ -418,12 +489,21 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 OsVerHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
-                YoriLibDisplayMitLicense(_T("2017-2021"));
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
+                YoriLibDisplayMitLicense(_T("2017-2022"));
                 return EXIT_SUCCESS;
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("l")) == 0) {
+                ListAllBuilds = TRUE;
+                ArgumentUnderstood = TRUE;
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("s")) == 0) {
+                if (i + 1 < ArgC) {
+                    SearchString = &ArgV[i + 1];
+                    i++;
+                    ArgumentUnderstood = TRUE;
+                }
             }
         } else {
             ArgumentUnderstood = TRUE;
@@ -434,6 +514,20 @@ ENTRYPOINT(
         if (!ArgumentUnderstood) {
             YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("Argument not understood, ignored: %y\n"), &ArgV[i]);
         }
+    }
+
+    if (ListAllBuilds) {
+        if (!OsVerDisplayMatchingBuilds(NULL)) {
+            return EXIT_FAILURE;
+        }
+
+        return EXIT_SUCCESS;
+    } else if (SearchString != NULL) {
+        if (!OsVerDisplayMatchingBuilds(SearchString)) {
+            return EXIT_FAILURE;
+        }
+
+        return EXIT_SUCCESS;
     }
 
     if (StartArg == 0) {

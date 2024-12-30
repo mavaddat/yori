@@ -85,21 +85,23 @@ TimeThisHelp(VOID)
          of characters required to successfully populate the contents into
          the variable.
  */
-DWORD
+YORI_ALLOC_SIZE_T
 TimeThisOutputLargeInteger(
     __in LARGE_INTEGER LargeInt,
-    __in DWORD NumberBase,
+    __in WORD NumberBase,
     __inout PYORI_STRING OutputString
     )
 {
     YORI_STRING String;
     TCHAR StringBuffer[32];
+    YORI_MAX_SIGNED_T Value;
 
     YoriLibInitEmptyString(&String);
     String.StartOfString = StringBuffer;
     String.LengthAllocated = sizeof(StringBuffer)/sizeof(StringBuffer[0]);
 
-    YoriLibNumberToString(&String, LargeInt.QuadPart, NumberBase, 0, ' ');
+    Value = (YORI_MAX_SIGNED_T)LargeInt.QuadPart;
+    YoriLibNumberToString(&String, Value, NumberBase, 0, ' ');
 
     if (OutputString->LengthAllocated >= String.LengthInChars) {
         memcpy(OutputString->StartOfString, String.StartOfString, String.LengthInChars * sizeof(TCHAR));
@@ -120,7 +122,7 @@ TimeThisOutputLargeInteger(
          of characters required to successfully populate the contents into
          the variable.
  */
-DWORD
+YORI_ALLOC_SIZE_T
 TimeThisOutputTimestamp(
     __in LARGE_INTEGER LargeInt,
     __inout PYORI_STRING OutputString
@@ -129,19 +131,19 @@ TimeThisOutputTimestamp(
     YORI_STRING String;
     TCHAR StringBuffer[32];
     LARGE_INTEGER Remainder;
-    DWORD Milliseconds;
-    DWORD Seconds;
-    DWORD Minutes;
-    DWORD Hours;
+    WORD Milliseconds;
+    WORD Seconds;
+    WORD Minutes;
+    WORD Hours;
 
     Remainder.QuadPart = LargeInt.QuadPart;
-    Milliseconds = Remainder.LowPart % 1000;
+    Milliseconds = (WORD)(Remainder.LowPart % 1000);
     Remainder.QuadPart = Remainder.QuadPart / 1000;
-    Seconds = Remainder.LowPart % 60;
+    Seconds = (WORD)(Remainder.LowPart % 60);
     Remainder.QuadPart = Remainder.QuadPart / 60;
-    Minutes = Remainder.LowPart % 60;
+    Minutes = (WORD)(Remainder.LowPart % 60);
     Remainder.QuadPart = Remainder.QuadPart / 60;
-    Hours = Remainder.LowPart;
+    Hours = (WORD)Remainder.LowPart;
 
     YoriLibInitEmptyString(&String);
     String.StartOfString = StringBuffer;
@@ -208,7 +210,7 @@ typedef struct _TIMETHIS_CONTEXT {
          characters required in order to successfully populate, or zero
          on error.
  */
-DWORD
+YORI_ALLOC_SIZE_T
 TimeThisExpandVariables(
     __inout PYORI_STRING OutputBuffer,
     __in PYORI_STRING VariableName,
@@ -218,37 +220,37 @@ TimeThisExpandVariables(
     LARGE_INTEGER CpuTime;
     PTIMETHIS_CONTEXT TimeThisContext = (PTIMETHIS_CONTEXT)Context;
 
-    if (YoriLibCompareStringWithLiteral(VariableName, _T("CHILDCPU")) == 0) {
+    if (YoriLibCompareStringLit(VariableName, _T("CHILDCPU")) == 0) {
         CpuTime.QuadPart = TimeThisContext->KernelTimeInMs.QuadPart + TimeThisContext->UserTimeInMs.QuadPart;
         return TimeThisOutputTimestamp(CpuTime, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("CHILDCPUMS")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("CHILDCPUMS")) == 0) {
         CpuTime.QuadPart = TimeThisContext->KernelTimeInMs.QuadPart + TimeThisContext->UserTimeInMs.QuadPart;
         return TimeThisOutputLargeInteger(CpuTime, 10, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("CHILDKERNEL")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("CHILDKERNEL")) == 0) {
         return TimeThisOutputTimestamp(TimeThisContext->KernelTimeInMs, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("CHILDKERNELMS")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("CHILDKERNELMS")) == 0) {
         return TimeThisOutputLargeInteger(TimeThisContext->KernelTimeInMs, 10, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("CHILDUSER")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("CHILDUSER")) == 0) {
         return TimeThisOutputTimestamp(TimeThisContext->UserTimeInMs, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("CHILDUSERMS")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("CHILDUSERMS")) == 0) {
         return TimeThisOutputLargeInteger(TimeThisContext->UserTimeInMs, 10, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("ELAPSEDTIME")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("ELAPSEDTIME")) == 0) {
         return TimeThisOutputTimestamp(TimeThisContext->WallTimeInMs, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("ELAPSEDTIMEMS")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("ELAPSEDTIMEMS")) == 0) {
         return TimeThisOutputLargeInteger(TimeThisContext->WallTimeInMs, 10, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("TREECPU")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("TREECPU")) == 0) {
         CpuTime.QuadPart = TimeThisContext->KernelTimeTreeInMs.QuadPart + TimeThisContext->UserTimeTreeInMs.QuadPart;
         return TimeThisOutputTimestamp(CpuTime, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("TREECPUMS")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("TREECPUMS")) == 0) {
         CpuTime.QuadPart = TimeThisContext->KernelTimeTreeInMs.QuadPart + TimeThisContext->UserTimeTreeInMs.QuadPart;
         return TimeThisOutputLargeInteger(CpuTime, 10, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("TREEKERNEL")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("TREEKERNEL")) == 0) {
         return TimeThisOutputTimestamp(TimeThisContext->KernelTimeTreeInMs, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("TREEKERNELMS")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("TREEKERNELMS")) == 0) {
         return TimeThisOutputLargeInteger(TimeThisContext->KernelTimeTreeInMs, 10, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("TREEUSER")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("TREEUSER")) == 0) {
         return TimeThisOutputTimestamp(TimeThisContext->UserTimeTreeInMs, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("TREEUSERMS")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("TREEUSERMS")) == 0) {
         return TimeThisOutputLargeInteger(TimeThisContext->UserTimeTreeInMs, 10, OutputBuffer);
     }
     return 0;
@@ -278,15 +280,15 @@ TimeThisExpandVariables(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
     YORI_STRING CmdLine;
     DWORD ExitCode;
-    BOOL ArgumentUnderstood;
-    DWORD StartArg = 0;
-    DWORD i;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T StartArg = 0;
+    YORI_ALLOC_SIZE_T i;
     YORI_STRING Arg;
     YORI_STRING DisplayString;
     YORI_STRING AllocatedFormatString;
@@ -321,13 +323,13 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 TimeThisHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2019"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("f")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("f")) == 0) {
                 if (ArgC > i + 1) {
                     YoriLibFreeStringContents(&AllocatedFormatString);
                     YoriLibCloneString(&AllocatedFormatString, &ArgV[i + 1]);
@@ -370,7 +372,7 @@ ENTRYPOINT(
 
 
     memcpy(&ChildArgs[0], &Executable, sizeof(YORI_STRING));
-    if (StartArg + 1 < ArgC) {
+    if (StartArg + 1 < (YORI_ALLOC_SIZE_T)ArgC) {
         memcpy(&ChildArgs[1], &ArgV[StartArg + 1], (ArgC - StartArg - 1) * sizeof(YORI_STRING));
     }
 
@@ -422,11 +424,11 @@ ENTRYPOINT(
         HANDLE HandleArray[2];
         DWORD WaitResult;
 
-        YoriLibCancelEnable();
+        YoriLibCancelEnable(FALSE);
         HandleArray[1] = YoriLibCancelGetEvent();
         HandleArray[0] = ProcessInfo.hProcess;
 
-        WaitResult = WaitForMultipleObjects(2, HandleArray, FALSE, INFINITE);
+        WaitResult = WaitForMultipleObjectsEx(2, HandleArray, FALSE, INFINITE, FALSE);
 
         //
         //  If cancelled, abort

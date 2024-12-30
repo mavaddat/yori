@@ -4,22 +4,30 @@ compile: yorilib.lib yoriver.obj
 !INCLUDE "..\config\common.mk"
 
 OBJS=\
+	 airplane.obj \
+	 bargraph.obj \
 	 builtin.obj  \
+	 bytebuf.obj  \
 	 cabinet.obj  \
 	 call.obj     \
 	 cancel.obj   \
 	 clip.obj     \
 	 cmdline.obj  \
 	 color.obj    \
+	 condrv.obj   \
+	 cpuinfo.obj  \
 	 cshot.obj    \
 	 curdir.obj   \
+	 cvtcons.obj  \
 	 cvthtml.obj  \
 	 cvtrtf.obj   \
+	 dblclk.obj   \
 	 debug.obj    \
 	 dyld.obj     \
 	 dyld_adv.obj \
 	 dyld_cab.obj \
 	 dyld_net.obj \
+	 dyld_usr.obj \
 	 env.obj      \
 	 ep_yori.obj  \
 	 filecomp.obj \
@@ -30,6 +38,7 @@ OBJS=\
 	 group.obj    \
 	 hash.obj     \
 	 hexdump.obj  \
+	 http.obj     \
 	 iconv.obj    \
 	 jobobj.obj   \
 	 license.obj  \
@@ -38,6 +47,7 @@ OBJS=\
 	 malloc.obj   \
 	 movefile.obj \
 	 numkey.obj   \
+	 obenum.obj   \
 	 osver.obj    \
 	 path.obj     \
 	 printf.obj   \
@@ -46,14 +56,29 @@ OBJS=\
 	 process.obj  \
 	 progman.obj  \
 	 recycle.obj  \
+	 rsrc.obj     \
 	 scut.obj     \
+	 scheme.obj   \
 	 select.obj   \
-	 string.obj   \
+	 strarray.obj \
 	 strmenum.obj \
 	 temp.obj     \
 	 update.obj   \
 	 util.obj     \
 	 vt.obj       \
+	 ylhomedr.obj \
+	 ylstralc.obj \
+	 ylstrcat.obj \
+	 ylstrcmp.obj \
+	 ylstrcnt.obj \
+	 ylstrcnv.obj \
+	 ylstrfnd.obj \
+	 ylstrhex.obj \
+	 ylstrnum.obj \
+	 ylstrsrt.obj \
+	 ylstrtrm.obj \
+	 ylvolpth.obj \
+	 ylvtdbg.obj  \
 
 all: yorilib.lib yoriver.obj
 

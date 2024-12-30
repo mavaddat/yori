@@ -122,6 +122,11 @@ typedef struct _MAKE_BUILTIN_NAME_MAPPING {
 /**
  Declaration for the builtin command.
  */
+YORI_CMD_BUILTIN YoriCmd_REM;
+
+/**
+ Declaration for the builtin command.
+ */
 YORI_CMD_BUILTIN YoriCmd_YECHO;
 
 /**
@@ -141,6 +146,7 @@ CONST MAKE_BUILTIN_NAME_MAPPING
 MakeBuiltinCmds[] = {
     {_T("ECHO"),      YoriCmd_YECHO},
     {_T("MKDIR"),     YoriCmd_YMKDIR},
+    {_T("REM"),       YoriCmd_REM},
     {_T("RMDIR"),     YoriCmd_YRMDIR},
     {NULL,            NULL}
 };
@@ -153,6 +159,168 @@ typedef enum _MAKE_PRIORITY {
     MakePriorityLow = 1,
     MakePriorityVeryLow = 2
 } MAKE_PRIORITY;
+
+
+/**
+ Given an array of arguments and a starting index, look for a variable=value
+ pair.  The value component may be quoted and may span later arguments.  If
+ that happens, allocate a value that contains the data from many arguments,
+ and return in EndIndex the argument that this routine ended parsing on.
+
+ @param ArgC The number of arguments.
+
+ @param ArgV An array of arguments.
+
+ @param StartIndex The index into the arguments, must be less than ArgC.
+
+ @param VariableName On successful completion, populated with a substring
+        containing the variable name.
+
+ @param Value On successful completion, populated with a string containing
+        the value component.  This may be a substring or may be a new
+        allocation.
+
+ @param EndIndex On successful completion, updated to contain the argument
+        containing the end of the value, which may be the one containing the
+        final quote.
+
+ @return TRUE to indicate the argument contains of a variable=value pair
+         which was successfully parsed.  FALSE indicates that the argument
+         is not a variable=value pair, or an allocation failure was
+         encountered.
+ */
+__success(return)
+BOOLEAN
+MakeBuildVariableValueString(
+    __in YORI_ALLOC_SIZE_T ArgC,
+    __in YORI_STRING ArgV[],
+    __in YORI_ALLOC_SIZE_T StartIndex,
+    __out PYORI_STRING VariableName,
+    __out_opt PYORI_STRING Value,
+    __out PYORI_ALLOC_SIZE_T EndIndex
+    )
+{
+    PYORI_STRING ThisArg;
+    LPTSTR Equals;
+    YORI_STRING LocalValue;
+    YORI_ALLOC_SIZE_T EndArgIndex;
+
+    //
+    //  Check if this argument is a variable=value pair
+    //
+
+    ThisArg = &ArgV[StartIndex];
+    Equals = YoriLibFindLeftMostCharacter(ThisArg, '=');
+    if (Equals == NULL) {
+        return FALSE;
+    }
+
+    //
+    //  Construct the variable and value components assuming it's all in one
+    //  argument (which it normally is)
+    //
+
+    YoriLibInitEmptyString(VariableName);
+    YoriLibInitEmptyString(&LocalValue);
+    VariableName->StartOfString = ThisArg->StartOfString;
+    VariableName->LengthInChars = (YORI_ALLOC_SIZE_T)(Equals - VariableName->StartOfString);
+
+    LocalValue.StartOfString = Equals + 1;
+    LocalValue.LengthInChars = ThisArg->LengthInChars - VariableName->LengthInChars - 1;
+    EndArgIndex = StartIndex;
+
+    //
+    //  Check if the value part starts with a quote.  If it does, we may need
+    //  to stitch multiple arguments together and return the value.  This also
+    //  indicates a need to allocate and double buffer
+    //
+
+    if (LocalValue.LengthInChars > 0 &&
+        LocalValue.StartOfString[0] == '"') {
+
+        YORI_STRING Substring;
+        LPTSTR EndQuote;
+
+        YoriLibInitEmptyString(&Substring);
+        Substring.StartOfString = LocalValue.StartOfString + 1;
+        Substring.LengthInChars = LocalValue.LengthInChars - 1;
+
+        //
+        //  Look for the end quote.  If it's in this arg, just get the
+        //  substring.
+        //
+
+        EndQuote = YoriLibFindLeftMostCharacter(&Substring, '"');
+        if (EndQuote != NULL) {
+            LocalValue.StartOfString = Substring.StartOfString;
+            LocalValue.LengthInChars = (YORI_ALLOC_SIZE_T)(EndQuote - LocalValue.StartOfString);
+        } else {
+            YORI_ALLOC_SIZE_T ArgIndex;
+            YORI_ALLOC_SIZE_T CharsNeeded;
+
+            //
+            //  Loop through the arguments looking for one with a quote.
+            //  If we find one, concatenate a string from after the first
+            //  quote, through all intermediate arguments, to the final
+            //  quote.
+            //
+
+            EndArgIndex = StartIndex + 1;
+            while (EndQuote == NULL && EndArgIndex < ArgC) {
+                ThisArg = &ArgV[EndArgIndex];
+                EndQuote = YoriLibFindLeftMostCharacter(ThisArg, '"');
+                if (EndQuote == NULL) {
+                    EndArgIndex++;
+                    continue;
+                }
+
+                CharsNeeded = Substring.LengthInChars + 1;
+                for (ArgIndex = StartIndex + 1; ArgIndex < EndArgIndex; ArgIndex++) {
+                    CharsNeeded = CharsNeeded + ArgV[ArgIndex].LengthInChars + 1;
+                }
+                CharsNeeded = CharsNeeded + (YORI_ALLOC_SIZE_T)(EndQuote - ThisArg->StartOfString) + 1;
+
+                if (Value != NULL) {
+
+                    if (!YoriLibAllocateString(&LocalValue, CharsNeeded)) {
+                        return FALSE;
+                    }
+
+                    memcpy(LocalValue.StartOfString, Substring.StartOfString, Substring.LengthInChars * sizeof(TCHAR));
+                    LocalValue.LengthInChars = Substring.LengthInChars;
+                    LocalValue.StartOfString[LocalValue.LengthInChars] = ' ';
+                    LocalValue.LengthInChars = LocalValue.LengthInChars + 1;
+                    for (ArgIndex = StartIndex + 1; ArgIndex < EndArgIndex; ArgIndex++) {
+                        memcpy(&LocalValue.StartOfString[LocalValue.LengthInChars], ArgV[ArgIndex].StartOfString, ArgV[ArgIndex].LengthInChars * sizeof(TCHAR));
+                        LocalValue.LengthInChars = LocalValue.LengthInChars + ArgV[ArgIndex].LengthInChars;
+                        LocalValue.StartOfString[LocalValue.LengthInChars] = ' ';
+                        LocalValue.LengthInChars = LocalValue.LengthInChars + 1;
+                    }
+
+                    Substring.StartOfString = ThisArg->StartOfString;
+                    Substring.LengthInChars = (YORI_ALLOC_SIZE_T)(EndQuote - ThisArg->StartOfString);
+
+                    memcpy(&LocalValue.StartOfString[LocalValue.LengthInChars], Substring.StartOfString, Substring.LengthInChars * sizeof(TCHAR));
+                    LocalValue.LengthInChars = LocalValue.LengthInChars + Substring.LengthInChars;
+                    LocalValue.StartOfString[LocalValue.LengthInChars] = '\0';
+                }
+
+            }
+        }
+    }
+
+    //
+    //  Return the string which might be a substring or a compound allocation.
+    //  Also return the argument that this routine parsed up to.
+    //
+
+    if (Value != NULL) {
+        memcpy(Value, &LocalValue, sizeof(YORI_STRING));
+    }
+    *EndIndex = EndArgIndex;
+
+    return TRUE;
+}
 
 
 #ifdef YORI_BUILTIN
@@ -178,13 +346,13 @@ typedef enum _MAKE_PRIORITY {
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i, j;
-    DWORD StartArg = 0;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i, j;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     MAKE_CONTEXT MakeContext;
     PYORI_STRING FileName;
     PMAKE_TARGET RootTarget;
@@ -194,11 +362,13 @@ ENTRYPOINT(
     HANDLE hStream;
     YORI_STRING Arg;
     YORI_STRING RootDir;
-    LONGLONG llTemp;
+    YORI_MAX_SIGNED_T llTemp;
     DWORD Result;
-    DWORD CharsConsumed;
+    YORI_ALLOC_SIZE_T CharsConsumed;
     MAKE_PRIORITY Priority;
     BOOLEAN ExplicitTargetFound;
+    WORD PerformanceProcessors;
+    WORD EfficiencyProcessors;
 
     FileName = NULL;
     RootTarget = NULL;
@@ -230,7 +400,7 @@ ENTRYPOINT(
         }
     }
 
-    CharsConsumed = GetCurrentDirectory(0, NULL);
+    CharsConsumed = (YORI_ALLOC_SIZE_T)GetCurrentDirectory(0, NULL);
     if (CharsConsumed == 0) {
         Result = EXIT_FAILURE;
         goto Cleanup;
@@ -241,7 +411,9 @@ ENTRYPOINT(
         goto Cleanup;
     }
 
-    MakeContext.ProcessCurrentDirectory.LengthInChars = GetCurrentDirectory(MakeContext.ProcessCurrentDirectory.LengthAllocated, MakeContext.ProcessCurrentDirectory.StartOfString);
+    MakeContext.ProcessCurrentDirectory.LengthInChars = (YORI_ALLOC_SIZE_T)
+        GetCurrentDirectory(MakeContext.ProcessCurrentDirectory.LengthAllocated,
+                            MakeContext.ProcessCurrentDirectory.StartOfString);
     if (MakeContext.ProcessCurrentDirectory.LengthInChars == 0) {
         Result = EXIT_FAILURE;
         goto Cleanup;
@@ -252,6 +424,17 @@ ENTRYPOINT(
     if (!YoriLibGetTempPath(&MakeContext.TempPath, 0)) {
         Result = EXIT_FAILURE;
         goto Cleanup;
+    }
+
+    //
+    //  Truncate trailing slashes if present so they can be added back
+    //  unconditionally
+    //
+
+    if (MakeContext.TempPath.LengthInChars > 0 &&
+        YoriLibIsSep(MakeContext.TempPath.StartOfString[MakeContext.TempPath.LengthInChars - 1])) {
+
+        MakeContext.TempPath.LengthInChars--;
     }
 
     MakeContext.Scopes = YoriLibAllocateHashTable(1000);
@@ -272,41 +455,41 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 MakeHelp();
                 Result = EXIT_SUCCESS;
                 goto Cleanup;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2021"));
                 Result = EXIT_SUCCESS;
                 goto Cleanup;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("f")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("f")) == 0) {
                 if (i + 1 < ArgC) {
                     FileName = &ArgV[i + 1];
                     ArgumentUnderstood = TRUE;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("j")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("j")) == 0) {
                 if (i + 1 < ArgC) {
                     if (YoriLibStringToNumber(&ArgV[i + 1], FALSE, &llTemp, &CharsConsumed) && CharsConsumed > 0) {
-                        MakeContext.NumberProcesses = (DWORD)llTemp;
+                        MakeContext.NumberProcesses = (YORI_ALLOC_SIZE_T)llTemp;
                         ArgumentUnderstood = TRUE;
                     }
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("k")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("k")) == 0) {
                 MakeContext.KeepGoing = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("m")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("m")) == 0) {
                 Priority = MakePriorityLow;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("mm")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("mm")) == 0) {
                 Priority = MakePriorityVeryLow;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("nologo")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("nologo")) == 0) {
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("perf")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("perf")) == 0) {
                 MakeContext.PerfDisplay = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("pru")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("pru")) == 0) {
                 if (MakeContext.PreprocessorCache == NULL) {
                     MakeContext.PreprocessorCache = YoriLibAllocateHashTable(100);
                     if (MakeContext.PreprocessorCache == NULL) {
@@ -316,13 +499,13 @@ ENTRYPOINT(
                 }
                 ArgumentUnderstood = TRUE;
 
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("s")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("s")) == 0) {
                 MakeContext.SilentCommandLaunching = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("wundef")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("wundef")) == 0) {
                 MakeContext.WarnOnUndefinedVariable = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 StartArg = i + 1;
                 ArgumentUnderstood = TRUE;
                 break;
@@ -335,7 +518,7 @@ ENTRYPOINT(
             //
 
             for (j = 0; j < sizeof(MakeArgsWithParameter)/sizeof(MakeArgsWithParameter[0]); j++) {
-                if (YoriLibCompareStringInsensitive(&Arg, &MakeArgsWithParameter[j]) == 0) {
+                if (YoriLibCompareStringIns(&Arg, &MakeArgsWithParameter[j]) == 0) {
                     i++;
                     break;
                 }
@@ -360,35 +543,25 @@ ENTRYPOINT(
 
     //
     //  If -j isn't specified, attempt to set the number of jobs based on the
-    //  environment variable.  If that's not available, set a default number
-    //  of jobs to execute as the number of logical processors plus one.
+    //  environment variable.
     //
 
     if (MakeContext.NumberProcesses == 0) {
         YORI_STRING JobCount;
         YoriLibInitEmptyString(&JobCount);
-        if (YoriLibAllocateAndGetEnvironmentVariable(_T("YMAKE_JOB_COUNT"), &JobCount)) {
+        if (YoriLibAllocateAndGetEnvVar(_T("YMAKE_JOB_COUNT"), &JobCount)) {
             if (YoriLibStringToNumber(&JobCount, FALSE, &llTemp, &CharsConsumed) && CharsConsumed > 0) {
-                MakeContext.NumberProcesses = (DWORD)llTemp;
+                MakeContext.NumberProcesses = (WORD)llTemp;
             }
             YoriLibFreeStringContents(&JobCount);
         }
     }
 
-    if (MakeContext.NumberProcesses == 0) {
-        SYSTEM_INFO SysInfo;
-        GetSystemInfo(&SysInfo);
-        MakeContext.NumberProcesses = SysInfo.dwNumberOfProcessors + 1;
-    }
-
     //
-    //  WaitForMultipleObjects has a limit of 64 things to wait for, so this
-    //  program can't currently have more than 64 children.
+    //  Very low priority means low page and IO priority.  This support was
+    //  added in Vista.  If running on an older release, interpret very low
+    //  and low as the same thing.
     //
-
-    if (MakeContext.NumberProcesses > 64) {
-        MakeContext.NumberProcesses = 64;
-    }
 
     if (Priority == MakePriorityVeryLow) {
         DWORD MajorVersion;
@@ -404,8 +577,44 @@ ENTRYPOINT(
         }
     }
 
+    YoriLibQueryCpuCount(&PerformanceProcessors, &EfficiencyProcessors);
+
     if (Priority == MakePriorityLow) {
-        SetPriorityClass(GetCurrentProcess(), IDLE_PRIORITY_CLASS);
+
+        //
+        //  When both performance and efficiency processors are present,
+        //  Windows might decide to interpret "low priority" as "only run
+        //  on efficiency cores" which is generally not a good idea for
+        //  a build system.  In this case we (arbitrarily) pick a heuristic
+        //  for low priority as leaving one processor unused to improve
+        //  responsiveness a little.
+        //
+
+        if (PerformanceProcessors > 0 && EfficiencyProcessors > 0) {
+            if (MakeContext.NumberProcesses == 0) {
+                MakeContext.NumberProcesses = PerformanceProcessors + EfficiencyProcessors - 1;
+            }
+        } else {
+            SetPriorityClass(GetCurrentProcess(), IDLE_PRIORITY_CLASS);
+        }
+    }
+
+    //
+    //  If no number of child processes has been determined yet, use the total
+    //  number of processors plus one.
+    //
+
+    if (MakeContext.NumberProcesses == 0) {
+        MakeContext.NumberProcesses = PerformanceProcessors + EfficiencyProcessors + 1;
+    }
+
+    //
+    //  WaitForMultipleObjects has a limit of 64 things to wait for, so this
+    //  program can't currently have more than 64 children.
+    //
+
+    if (MakeContext.NumberProcesses > 64) {
+        MakeContext.NumberProcesses = 64;
     }
 
     //
@@ -486,39 +695,30 @@ ENTRYPOINT(
     //
 
     for (i = 1; i < ArgC; i++) {
-        PYORI_STRING ThisArg;
-        LPTSTR Equals;
 
         if (i < StartArg && YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
             for (j = 0; j < sizeof(MakeArgsWithParameter)/sizeof(MakeArgsWithParameter[0]); j++) {
-                if (YoriLibCompareStringInsensitive(&Arg, &MakeArgsWithParameter[j]) == 0) {
+                if (YoriLibCompareStringIns(&Arg, &MakeArgsWithParameter[j]) == 0) {
                     i++;
                     break;
                 }
             }
         } else {
 
-            ThisArg = &ArgV[i];
+            YORI_STRING VariableName;
+            YORI_STRING Value;
 
-            Equals = YoriLibFindLeftMostCharacter(ThisArg, '=');
-            if (Equals != NULL) {
-                YORI_STRING VariableName;
-                YORI_STRING Value;
-
-                YoriLibInitEmptyString(&VariableName);
-                YoriLibInitEmptyString(&Value);
-                VariableName.StartOfString = ThisArg->StartOfString;
-                VariableName.LengthInChars = (DWORD)(Equals - VariableName.StartOfString);
-                Value.StartOfString = Equals + 1;
-                Value.LengthInChars = ThisArg->LengthInChars - VariableName.LengthInChars - 1;
+            if (MakeBuildVariableValueString(ArgC, ArgV, i, &VariableName, &Value, &i)) {
 
                 MakeSetVariable(MakeContext.RootScope, &VariableName, &Value, TRUE, MakeVariablePrecedenceCommandLine);
+
+                YoriLibFreeStringContents(&Value);
             }
         }
     }
 
 #if YORI_BUILTIN
-    YoriLibCancelEnable();
+    YoriLibCancelEnable(FALSE);
 #endif
 
     //
@@ -568,22 +768,22 @@ ENTRYPOINT(
     //
 
     for (i = 1; i < ArgC; i++) {
-        PYORI_STRING ThisArg;
-        LPTSTR Equals;
 
         if (i < StartArg && YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
             for (j = 0; j < sizeof(MakeArgsWithParameter)/sizeof(MakeArgsWithParameter[0]); j++) {
-                if (YoriLibCompareStringInsensitive(&Arg, &MakeArgsWithParameter[j]) == 0) {
+                if (YoriLibCompareStringIns(&Arg, &MakeArgsWithParameter[j]) == 0) {
                     i++;
                     break;
                 }
             }
         } else {
 
-            ThisArg = &ArgV[i];
+            PYORI_STRING ThisArg;
+            YORI_STRING VariableName;
 
-            Equals = YoriLibFindLeftMostCharacter(ThisArg, '=');
-            if (Equals == NULL) {
+            if (!MakeBuildVariableValueString(ArgC, ArgV, i, &VariableName, NULL, &i)) {
+                ThisArg = &ArgV[i];
+
                 if (!MakeMarkCommandLineTargetForBuild(&MakeContext, ThisArg)) {
                     YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("Could not determine how to build target %y\n"), ThisArg);
                     Result = EXIT_FAILURE;

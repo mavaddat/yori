@@ -110,8 +110,8 @@ KillTerminateProcessByName(
     PYORI_SYSTEM_PROCESS_INFORMATION CurrentEntry;
     YORI_STRING BaseName;
     YORI_STRING NameToCompare;
-    DWORD CharsToCompare;
-    DWORD KillCount;
+    YORI_ALLOC_SIZE_T CharsToCompare;
+    YORI_ALLOC_SIZE_T KillCount;
 
     //
     //  If the process name ends in '*', only compare the characters up to
@@ -143,7 +143,7 @@ KillTerminateProcessByName(
         BaseName.StartOfString = CurrentEntry->ImageName;
         BaseName.LengthInChars = CurrentEntry->ImageNameLengthInBytes / sizeof(WCHAR);
 
-        if (YoriLibCompareStringInsensitiveCount(&BaseName, &NameToCompare, CharsToCompare) == 0) {
+        if (YoriLibCompareStringInsCnt(&BaseName, &NameToCompare, CharsToCompare) == 0) {
             if (KillTerminateProcessById((DWORD)CurrentEntry->ProcessId)) {
                 KillCount++;
             }
@@ -183,17 +183,17 @@ KillTerminateProcessByName(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 1;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 1;
     YORI_STRING Arg;
     DWORD ProcessPid = 0;
-    LONGLONG llTemp;
-    DWORD CharsConsumed;
+    YORI_MAX_SIGNED_T llTemp;
+    YORI_ALLOC_SIZE_T CharsConsumed;
     DWORD KillCount;
     PYORI_SYSTEM_PROCESS_INFORMATION ProcessInfo = NULL;
 
@@ -204,10 +204,10 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 KillHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2020"));
                 return EXIT_SUCCESS;
             }

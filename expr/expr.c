@@ -72,7 +72,7 @@ typedef struct _EXPR_NUMBER {
     /**
      The number value.
      */
-    LONGLONG Value;
+    YORI_MAX_SIGNED_T Value;
 } EXPR_NUMBER, *PEXPR_NUMBER;
 
 /**
@@ -96,7 +96,7 @@ BOOL
 ExprStringToNumber(
     __in PYORI_STRING String,
     __out PEXPR_NUMBER Number,
-    __out PDWORD CharsConsumed
+    __out PYORI_ALLOC_SIZE_T CharsConsumed
     )
 {
     return YoriLibStringToNumber(String, TRUE, &Number->Value, CharsConsumed);
@@ -116,11 +116,11 @@ VOID
 ExprOutputNumber(
     __in EXPR_NUMBER Number,
     __in BOOL OutputSeperator,
-    __in DWORD Base
+    __in WORD Base
     )
 {
     YORI_STRING String;
-    DWORD SeperatorDigits = 0;
+    WORD SeperatorDigits = 0;
 
     if (!YoriLibAllocateString(&String, 32)) {
         return;
@@ -159,16 +159,16 @@ ExprOutputNumber(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD OutputBase = 10;
-    BOOL OutputSeperator = FALSE;
-    DWORD i;
-    DWORD StartArg = 0;
-    DWORD CharsConsumed;
+    BOOLEAN ArgumentUnderstood;
+    WORD OutputBase = 10;
+    BOOLEAN OutputSeperator = FALSE;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
+    YORI_ALLOC_SIZE_T CharsConsumed;
     DWORD BitsInOutput = 63;
     YORI_STRING RemainingString;
     EXPR_NUMBER Temp;
@@ -184,48 +184,48 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 ExprHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2019"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("h")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("h")) == 0) {
                 OutputBase = 16;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("o")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("o")) == 0) {
                 OutputBase = 8;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("b")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("b")) == 0) {
                 OutputBase = 2;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("int8")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("int8")) == 0) {
                 BitsInOutput = 7;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("int16")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("int16")) == 0) {
                 BitsInOutput = 15;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("int32")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("int32")) == 0) {
                 BitsInOutput = 31;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("s")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("s")) == 0) {
                 OutputSeperator = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("uint8")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("uint8")) == 0) {
                 BitsInOutput = 8;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("uint16")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("uint16")) == 0) {
                 BitsInOutput = 16;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("uint32")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("uint32")) == 0) {
                 BitsInOutput = 32;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 StartArg = i;
                 ArgumentUnderstood = TRUE;
                 break;
-            } else if (YoriLibCompareStringWithLiteralInsensitiveCount(&Arg, _T("0"), 1) >= 0 &&
-                       YoriLibCompareStringWithLiteralInsensitiveCount(&Arg, _T("9"), 1) <= 0) {
+            } else if (YoriLibCompareStringLitInsCnt(&Arg, _T("0"), 1) >= 0 &&
+                       YoriLibCompareStringLitInsCnt(&Arg, _T("9"), 1) <= 0) {
                 StartArg = i;
                 ArgumentUnderstood = TRUE;
                 break;
@@ -254,7 +254,7 @@ ENTRYPOINT(
         goto ParseFailure;
     }
     RemainingString.StartOfString += CharsConsumed;
-    RemainingString.LengthInChars -= CharsConsumed;
+    RemainingString.LengthInChars = RemainingString.LengthInChars - CharsConsumed;
 
     while (RemainingString.LengthInChars > 0) {
         YoriLibTrimSpaces(&RemainingString);
@@ -269,7 +269,7 @@ ENTRYPOINT(
                 }
                 Result.Value += Temp.Value;
                 RemainingString.StartOfString += CharsConsumed;
-                RemainingString.LengthInChars -= CharsConsumed;
+                RemainingString.LengthInChars = RemainingString.LengthInChars - CharsConsumed;
                 ArgumentUnderstood = TRUE;
                 break;
             case '*':
@@ -281,7 +281,7 @@ ENTRYPOINT(
                 }
                 Result.Value *= Temp.Value;
                 RemainingString.StartOfString += CharsConsumed;
-                RemainingString.LengthInChars -= CharsConsumed;
+                RemainingString.LengthInChars = RemainingString.LengthInChars - CharsConsumed;
                 ArgumentUnderstood = TRUE;
                 break;
             case '-':
@@ -293,7 +293,7 @@ ENTRYPOINT(
                 }
                 Result.Value -= Temp.Value;
                 RemainingString.StartOfString += CharsConsumed;
-                RemainingString.LengthInChars -= CharsConsumed;
+                RemainingString.LengthInChars = RemainingString.LengthInChars - CharsConsumed;
                 ArgumentUnderstood = TRUE;
                 break;
             case '/':
@@ -311,7 +311,7 @@ ENTRYPOINT(
                     return EXIT_FAILURE;
                 }
                 RemainingString.StartOfString += CharsConsumed;
-                RemainingString.LengthInChars -= CharsConsumed;
+                RemainingString.LengthInChars = RemainingString.LengthInChars - CharsConsumed;
                 ArgumentUnderstood = TRUE;
                 break;
             case '%':
@@ -329,7 +329,7 @@ ENTRYPOINT(
                     return EXIT_FAILURE;
                 }
                 RemainingString.StartOfString += CharsConsumed;
-                RemainingString.LengthInChars -= CharsConsumed;
+                RemainingString.LengthInChars = RemainingString.LengthInChars - CharsConsumed;
                 ArgumentUnderstood = TRUE;
                 break;
             case '<':
@@ -341,7 +341,7 @@ ENTRYPOINT(
                 }
                 Result.Value <<= Temp.Value;
                 RemainingString.StartOfString += CharsConsumed;
-                RemainingString.LengthInChars -= CharsConsumed;
+                RemainingString.LengthInChars = RemainingString.LengthInChars - CharsConsumed;
                 ArgumentUnderstood = TRUE;
                 break;
             case '>':
@@ -353,7 +353,7 @@ ENTRYPOINT(
                 }
                 Result.Value >>= Temp.Value;
                 RemainingString.StartOfString += CharsConsumed;
-                RemainingString.LengthInChars -= CharsConsumed;
+                RemainingString.LengthInChars = RemainingString.LengthInChars - CharsConsumed;
                 ArgumentUnderstood = TRUE;
                 break;
             case '^':
@@ -371,7 +371,7 @@ ENTRYPOINT(
                     }
                 }
                 RemainingString.StartOfString += CharsConsumed;
-                RemainingString.LengthInChars -= CharsConsumed;
+                RemainingString.LengthInChars = RemainingString.LengthInChars - CharsConsumed;
                 ArgumentUnderstood = TRUE;
                 break;
         }
@@ -384,22 +384,22 @@ ENTRYPOINT(
 
     switch (BitsInOutput) {
         case 32:
-            Result.Value = (LONGLONG)(DWORD)Result.Value;
+            Result.Value = (YORI_MAX_SIGNED_T)(DWORD)Result.Value;
             break;
         case 31:
-            Result.Value = (LONGLONG)(INT)Result.Value;
+            Result.Value = (YORI_MAX_SIGNED_T)(INT)Result.Value;
             break;
         case 16:
-            Result.Value = (LONGLONG)(WORD)Result.Value;
+            Result.Value = (YORI_MAX_SIGNED_T)(WORD)Result.Value;
             break;
         case 15:
-            Result.Value = (LONGLONG)(SHORT)Result.Value;
+            Result.Value = (YORI_MAX_SIGNED_T)(SHORT)Result.Value;
             break;
         case 8:
-            Result.Value = (LONGLONG)(UCHAR)Result.Value;
+            Result.Value = (YORI_MAX_SIGNED_T)(UCHAR)Result.Value;
             break;
         case 7:
-            Result.Value = (LONGLONG)(CHAR)Result.Value;
+            Result.Value = (YORI_MAX_SIGNED_T)(CHAR)Result.Value;
             break;
     }
 

@@ -3,7 +3,7 @@
  *
  * Yori shell display cpu topology information
  *
- * Copyright (c) 2019-2021 Malcolm J. Smith
+ * Copyright (c) 2019-2023 Malcolm J. Smith
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -47,9 +47,11 @@ CHAR strCpuInfoHelpText[] =
         "\n"
         "Format specifiers are:\n"
         "   $CORECOUNT$            The number of processor cores\n"
+        "   $EFFICIENCYCORECOUNT$  The number of low power processor cores\n"
         "   $GROUPCOUNT$           The number of processor groups\n"
         "   $LOGICALCOUNT$         The number of logical processors\n"
         "   $NUMANODECOUNT$        The number of NUMA nodes\n"
+        "   $PERFORMANCECORECOUNT$ The number of high performance processor cores\n"
         "   $UTILIZATION$          The current CPU utilization\n";
 
 /**
@@ -81,21 +83,23 @@ CpuInfoHelp(VOID)
          of characters required to successfully populate the contents into
          the variable.
  */
-DWORD
+YORI_ALLOC_SIZE_T
 CpuInfoOutputLargeInteger(
     __in LARGE_INTEGER LargeInt,
-    __in DWORD NumberBase,
+    __in WORD NumberBase,
     __inout PYORI_STRING OutputString
     )
 {
     YORI_STRING String;
     TCHAR StringBuffer[32];
+    YORI_MAX_SIGNED_T QuadPart;
 
     YoriLibInitEmptyString(&String);
     String.StartOfString = StringBuffer;
     String.LengthAllocated = sizeof(StringBuffer)/sizeof(StringBuffer[0]);
 
-    YoriLibNumberToString(&String, LargeInt.QuadPart, NumberBase, 0, ' ');
+    QuadPart = (YORI_MAX_SIGNED_T)LargeInt.QuadPart;
+    YoriLibNumberToString(&String, QuadPart, NumberBase, 0, ' ');
 
     if (OutputString->LengthAllocated >= String.LengthInChars) {
         memcpy(OutputString->StartOfString, String.StartOfString, String.LengthInChars * sizeof(TCHAR));
@@ -105,7 +109,7 @@ CpuInfoOutputLargeInteger(
 }
 
 /**
- Context about cpuinfoory state that is passed between cpuinfoory query and string
+ Context about cpuinfo state that is passed between query and string
  expansion.
  */
 typedef struct _CPUINFO_CONTEXT {
@@ -113,7 +117,7 @@ typedef struct _CPUINFO_CONTEXT {
     /**
      The number of bytes in the ProcInfo allocation.
      */
-    DWORD BytesInBuffer;
+    YORI_ALLOC_SIZE_T BytesInBuffer;
 
     /**
      The time to wait when measuring CPU utilization.
@@ -144,6 +148,18 @@ typedef struct _CPUINFO_CONTEXT {
      The total number of processor cores discovered in the above information.
      */
     LARGE_INTEGER CoreCount;
+
+    /**
+     The total number of low power processor cores discovered in the above
+     information.
+     */
+    LARGE_INTEGER EfficiencyCoreCount;
+
+    /**
+     The total number of high performance processor cores discovered in the
+     above information.
+     */
+    LARGE_INTEGER PerformanceCoreCount;
 
     /**
      The total number of logical processors discovered in the above
@@ -215,12 +231,12 @@ CpuInfoCaptureProcessorIdleTime(
             for (TargetInstance = 0; TargetInstance < (DWORD)PerfObject->NumInstances; TargetInstance++) {
 
                 InstanceString.StartOfString = YoriLibAddToPointer(PerfInstance, PerfInstance->NameOffset);
-                InstanceString.LengthInChars = PerfInstance->NameLength / sizeof(TCHAR);
+                InstanceString.LengthInChars = (YORI_ALLOC_SIZE_T)PerfInstance->NameLength / sizeof(TCHAR);
                 if (InstanceString.LengthInChars > 0) {
                     InstanceString.LengthInChars--;
                 }
 
-                if (YoriLibCompareStringWithLiteralInsensitive(&InstanceString, _T("_Total")) == 0) {
+                if (YoriLibCompareStringLitIns(&InstanceString, _T("_Total")) == 0) {
                     break;
                 }
 
@@ -293,7 +309,10 @@ CpuInfoLoadProcessorUtilization(
     }
 
     BufferSize = 64 * 1024;
-    PerfData = YoriLibMalloc(BufferSize);
+    if (!YoriLibIsSizeAllocatable(BufferSize)) {
+        BufferSize = 32 * 1024;
+    }
+    PerfData = YoriLibMalloc((YORI_ALLOC_SIZE_T)BufferSize);
     if (PerfData == NULL) {
         return FALSE;
     }
@@ -312,12 +331,18 @@ CpuInfoLoadProcessorUtilization(
                 break;
             }
 
+            YoriLibFree(PerfData);
             if (BufferSize <= 16 * 1024 * 1024) {
-                BufferSize = BufferSize * 4;
+                if (YoriLibIsSizeAllocatable(BufferSize * 4)) {
+                    BufferSize = BufferSize * 4;
+                } else if (BufferSize < YORI_MAX_ALLOC_SIZE) {
+                    BufferSize = YORI_MAX_ALLOC_SIZE;
+                } else {
+                    return FALSE;
+                }
             }
 
-            YoriLibFree(PerfData);
-            PerfData = YoriLibMalloc(BufferSize);
+            PerfData = YoriLibMalloc((YORI_ALLOC_SIZE_T)BufferSize);
             if (PerfData == NULL) {
                 return FALSE;
             }
@@ -372,32 +397,35 @@ CpuInfoLoadProcessorUtilization(
 
  @param VariableName The variable name to expand.
 
- @param Context Pointer to a SYSTEMTIME structure containing the data to
-        populate.
+ @param Context Pointer to a structure containing the data to populate.
  
  @return The number of characters successfully populated, or the number of
          characters required in order to successfully populate, or zero
          on error.
  */
-DWORD
+YORI_ALLOC_SIZE_T
 CpuInfoExpandVariables(
     __inout PYORI_STRING OutputBuffer,
     __in PYORI_STRING VariableName,
     __in PVOID Context
     )
 {
-    DWORD CharsNeeded;
+    YORI_ALLOC_SIZE_T CharsNeeded;
     PCPUINFO_CONTEXT CpuInfoContext = (PCPUINFO_CONTEXT)Context;
 
-    if (YoriLibCompareStringWithLiteral(VariableName, _T("CORECOUNT")) == 0) {
+    if (YoriLibCompareStringLit(VariableName, _T("CORECOUNT")) == 0) {
         return CpuInfoOutputLargeInteger(CpuInfoContext->CoreCount, 10, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("GROUPCOUNT")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("EFFICIENCYCORECOUNT")) == 0) {
+        return CpuInfoOutputLargeInteger(CpuInfoContext->EfficiencyCoreCount, 10, OutputBuffer);
+    } else if (YoriLibCompareStringLit(VariableName, _T("GROUPCOUNT")) == 0) {
         return CpuInfoOutputLargeInteger(CpuInfoContext->GroupCount, 10, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("LOGICALCOUNT")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("LOGICALCOUNT")) == 0) {
         return CpuInfoOutputLargeInteger(CpuInfoContext->LogicalProcessorCount, 10, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("NUMANODECOUNT")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("NUMANODECOUNT")) == 0) {
         return CpuInfoOutputLargeInteger(CpuInfoContext->NumaNodeCount, 10, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("UTILIZATION")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("PERFORMANCECORECOUNT")) == 0) {
+        return CpuInfoOutputLargeInteger(CpuInfoContext->PerformanceCoreCount, 10, OutputBuffer);
+    } else if (YoriLibCompareStringLit(VariableName, _T("UTILIZATION")) == 0) {
         if (!CpuInfoContext->UtilizationLoaded) {
             CpuInfoLoadProcessorUtilization(CpuInfoContext);
         }
@@ -462,6 +490,11 @@ CpuInfoCountSummaries(
                     }
                 }
             }
+            if (Entry->u.Processor.EfficiencyClass == 0) {
+                CpuInfoContext->EfficiencyCoreCount.QuadPart++;
+            } else {
+                CpuInfoContext->PerformanceCoreCount.QuadPart++;
+            }
         } else if (Entry->Relationship == YoriProcessorRelationNumaNode) {
             CpuInfoContext->NumaNodeCount.QuadPart++;
         } else if (Entry->Relationship == YoriProcessorRelationGroup) {
@@ -473,6 +506,17 @@ CpuInfoCountSummaries(
             break;
         }
         Entry = YoriLibAddToPointer(CpuInfoContext->ProcInfo, CurrentOffset);
+    }
+
+    //
+    //  On homogenous systems, all cores will report efficiency class zero,
+    //  which is the most efficient class.  For human compatibility,
+    //  report these as performance cores instead.
+    //
+
+    if (CpuInfoContext->PerformanceCoreCount.QuadPart == 0) {
+        CpuInfoContext->PerformanceCoreCount.QuadPart = CpuInfoContext->EfficiencyCoreCount.QuadPart;
+        CpuInfoContext->EfficiencyCoreCount.QuadPart = 0;
     }
 
     return TRUE;
@@ -526,6 +570,15 @@ CpuInfoDisplayCores(
     DWORD CurrentOffset = 0;
     DWORD CoreIndex = 0;
     DWORD GroupIndex;
+    BOOLEAN DisplayPerformanceLabel;
+
+    DisplayPerformanceLabel = FALSE;
+
+    if (CpuInfoContext->PerformanceCoreCount.QuadPart != 0 && 
+        CpuInfoContext->EfficiencyCoreCount.QuadPart != 0) {
+
+        DisplayPerformanceLabel = TRUE;
+    }
 
     Entry = CpuInfoContext->ProcInfo;
 
@@ -535,7 +588,17 @@ CpuInfoDisplayCores(
             if (CoreIndex > 0) {
                 YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("\n"));
             }
-            YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("Core %i\n"), CoreIndex);
+
+            if (DisplayPerformanceLabel) {
+                if (Entry->u.Processor.EfficiencyClass) {
+                    YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("Core %i (performance)\n"), CoreIndex);
+                } else {
+                    YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("Core %i (efficiency)\n"), CoreIndex);
+                }
+            } else {
+                YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("Core %i\n"), CoreIndex);
+            }
+
             CoreIndex++;
             for (GroupIndex = 0; GroupIndex < Entry->u.Processor.GroupCount; GroupIndex++) {
                 CpuInfoDisplayProcessorMask(Entry->u.Processor.GroupMask[GroupIndex].Group, Entry->u.Processor.GroupMask[GroupIndex].Mask);
@@ -694,6 +757,7 @@ CpuInfoLoadProcessorInfo(
     )
 {
     DWORD Err;
+    DWORD BytesInBuffer;
 
     //
     //  Query processor information from the system.  This needs to allocate
@@ -702,8 +766,10 @@ CpuInfoLoadProcessorInfo(
     //
 
     Err = ERROR_SUCCESS;
+    BytesInBuffer = 0;
     while(TRUE) {
-        if (DllKernel32.pGetLogicalProcessorInformationEx(YoriProcessorRelationAll, CpuInfoContext->ProcInfo, &CpuInfoContext->BytesInBuffer)) {
+        if (DllKernel32.pGetLogicalProcessorInformationEx(YoriProcessorRelationAll, CpuInfoContext->ProcInfo, &BytesInBuffer)) {
+            CpuInfoContext->BytesInBuffer = (YORI_ALLOC_SIZE_T)BytesInBuffer;
             Err = ERROR_SUCCESS;
             break;
         }
@@ -715,6 +781,12 @@ CpuInfoLoadProcessorInfo(
                 CpuInfoContext->ProcInfo = NULL;
             }
 
+            if (!YoriLibIsSizeAllocatable(BytesInBuffer)) {
+                Err = ERROR_NOT_ENOUGH_MEMORY;
+                break;
+            }
+
+            CpuInfoContext->BytesInBuffer = (YORI_ALLOC_SIZE_T)BytesInBuffer;
             CpuInfoContext->ProcInfo = YoriLibMalloc(CpuInfoContext->BytesInBuffer);
             if (CpuInfoContext->ProcInfo == NULL) {
                 Err = ERROR_NOT_ENOUGH_MEMORY;
@@ -790,8 +862,13 @@ CpuInfoLoadAndUpconvertProcessorInfo(
                 YoriLibFree(ProcInfo);
                 ProcInfo = NULL;
             }
+            
+            if (!YoriLibIsSizeAllocatable(BytesInBuffer)) {
+                Err = ERROR_NOT_ENOUGH_MEMORY;
+                break;
+            }
 
-            ProcInfo = YoriLibMalloc(BytesInBuffer);
+            ProcInfo = YoriLibMalloc((YORI_ALLOC_SIZE_T)BytesInBuffer);
             if (ProcInfo == NULL) {
                 Err = ERROR_NOT_ENOUGH_MEMORY;
                 break;
@@ -854,8 +931,13 @@ CpuInfoLoadAndUpconvertProcessorInfo(
 
     BytesRequired += sizeof(YORI_SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX);
 
-    CpuInfoContext->BytesInBuffer = BytesRequired;
-    CpuInfoContext->ProcInfo = YoriLibMalloc(BytesRequired);
+    if (!YoriLibIsSizeAllocatable(BytesRequired)) {
+        YoriLibFree(ProcInfo);
+        return FALSE;
+    }
+
+    CpuInfoContext->BytesInBuffer = (YORI_ALLOC_SIZE_T)BytesRequired;
+    CpuInfoContext->ProcInfo = YoriLibMalloc((YORI_ALLOC_SIZE_T)BytesRequired);
     if (CpuInfoContext->ProcInfo == NULL) {
         YoriLibFree(ProcInfo);
         return FALSE;
@@ -891,6 +973,7 @@ CpuInfoLoadAndUpconvertProcessorInfo(
             NewEntry->Relationship = YoriProcessorRelationProcessorCore;
             NewEntry->SizeInBytes = sizeof(YORI_SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX);
             NewEntry->u.Processor.Flags = Entry->u.ProcessorCore.Flags;
+            NewEntry->u.Processor.EfficiencyClass = 0;
             NewEntry->u.Processor.GroupCount = 1;
             NewEntry->u.Processor.GroupMask[0].Mask = Entry->ProcessorMask;
             ProcessorsFound |= Entry->ProcessorMask;
@@ -909,6 +992,7 @@ CpuInfoLoadAndUpconvertProcessorInfo(
             NewEntry->Relationship = YoriProcessorRelationProcessorPackage;
             NewEntry->SizeInBytes = sizeof(YORI_SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX);
             NewEntry->u.Processor.Flags = Entry->u.ProcessorCore.Flags;
+            NewEntry->u.Processor.EfficiencyClass = 0;
             NewEntry->u.Processor.GroupCount = 1;
             NewEntry->u.Processor.GroupMask[0].Mask = Entry->ProcessorMask;
         }
@@ -967,29 +1051,30 @@ CpuInfoLoadAndUpconvertProcessorInfo(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     BOOLEAN DisplayCores = FALSE;
     BOOLEAN DisplayGroups = FALSE;
     BOOLEAN DisplayNuma = FALSE;
     BOOLEAN DisplaySockets = FALSE;
     BOOLEAN DisplayFormatString = TRUE;
     BOOLEAN InsertNewline = FALSE;
+    BOOLEAN DisplayGraph = TRUE;
     YORI_STRING Arg;
     CPUINFO_CONTEXT CpuInfoContext;
     YORI_STRING DisplayString;
     YORI_STRING AllocatedFormatString;
-    LPTSTR DefaultFormatString = _T("Utilization: $UTILIZATION$\n")
-                                 _T("Core count: $CORECOUNT$\n")
+    LPTSTR DefaultFormatString = _T("Core count: $CORECOUNT$\n")
+                                 _T("Performance core count: $PERFORMANCECORECOUNT$\n")
+                                 _T("Efficiency core count: $EFFICIENCYCORECOUNT$\n")
                                  _T("Group count: $GROUPCOUNT$\n")
                                  _T("Logical processors: $LOGICALCOUNT$\n")
                                  _T("Numa nodes: $NUMANODECOUNT$\n");
-    LPTSTR DefaultUtilizationFormatString = _T("Utilization: $UTILIZATION$\n");
 
     ZeroMemory(&CpuInfoContext, sizeof(CpuInfoContext));
     CpuInfoContext.WaitTime = 300;
@@ -1000,39 +1085,39 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 CpuInfoHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
-                YoriLibDisplayMitLicense(_T("2019-2021"));
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
+                YoriLibDisplayMitLicense(_T("2019-2023"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("a")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("a")) == 0) {
                 DisplayCores = TRUE;
                 DisplayGroups = TRUE;
                 DisplayNuma = TRUE;
                 DisplaySockets = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("c")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("c")) == 0) {
                 DisplayCores = TRUE;
                 DisplayFormatString = FALSE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("g")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("g")) == 0) {
                 DisplayGroups = TRUE;
                 DisplayFormatString = FALSE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("n")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("n")) == 0) {
                 DisplayNuma = TRUE;
                 DisplayFormatString = FALSE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("s")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("s")) == 0) {
                 DisplaySockets = TRUE;
                 DisplayFormatString = FALSE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("w")) == 0 &&
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("w")) == 0 &&
                        i + 1 < ArgC) {
 
-                LONGLONG llTemp;
-                DWORD CharsConsumed;
+                YORI_MAX_SIGNED_T llTemp;
+                YORI_ALLOC_SIZE_T CharsConsumed;
 
                 llTemp = 0;
                 if (YoriLibStringToNumber(&ArgV[i + 1], TRUE, &llTemp, &CharsConsumed) &&
@@ -1118,6 +1203,7 @@ ENTRYPOINT(
 
     YoriLibInitEmptyString(&AllocatedFormatString);
     if (StartArg > 0) {
+        DisplayGraph = FALSE;
         if (!YoriLibBuildCmdlineFromArgcArgv(ArgC - StartArg, &ArgV[StartArg], TRUE, FALSE, &AllocatedFormatString)) {
             YoriLibFree(CpuInfoContext.ProcInfo);
             return EXIT_FAILURE;
@@ -1126,22 +1212,36 @@ ENTRYPOINT(
         if (DisplayFormatString) {
             if (CpuInfoContext.TopologyLoaded) {
                 YoriLibConstantString(&AllocatedFormatString, DefaultFormatString);
-            } else {
-                YoriLibConstantString(&AllocatedFormatString, DefaultUtilizationFormatString);
             }
         }
     }
 
-    if (AllocatedFormatString.LengthInChars > 0) {
 
+    if (DisplayGraph) {
         if (InsertNewline) {
             YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("\n"));
         }
 
-        //
-        //  Output the format string with summary counts.
-        //
+        if (!CpuInfoContext.UtilizationLoaded) {
+            CpuInfoLoadProcessorUtilization(&CpuInfoContext);
+        }
 
+        if (CpuInfoContext.UtilizationLoaded) {
+            YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("Utilization: %i.%02i%%\n"), CpuInfoContext.Utilization / 100, CpuInfoContext.Utilization % 100);
+            YoriLibDisplayBarGraph(GetStdHandle(STD_OUTPUT_HANDLE), CpuInfoContext.Utilization / 10, 500, 750);
+        }
+
+        InsertNewline = FALSE;
+    }
+
+    //
+    //  Output the format string with summary counts.
+    //
+
+    if (AllocatedFormatString.LengthInChars > 0) {
+        if (InsertNewline) {
+            YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("\n"));
+        }
         YoriLibInitEmptyString(&DisplayString);
         YoriLibExpandCommandVariables(&AllocatedFormatString, '$', FALSE, CpuInfoExpandVariables, &CpuInfoContext, &DisplayString);
         if (DisplayString.StartOfString != NULL) {

@@ -91,7 +91,7 @@ AssocUpdateSingleAssociation(
     )
 {
     DWORD Error;
-    HANDLE ThisKey;
+    HKEY ThisKey;
     DWORD Disposition;
 
     Error = DllAdvApi32.pRegCreateKeyExW(RootKey, Extension->StartOfString, 0, NULL, 0, KEY_SET_VALUE, NULL, &ThisKey, &Disposition);
@@ -146,7 +146,7 @@ AssocUpdateSingleFileType(
     )
 {
     DWORD Error;
-    HANDLE ThisKey;
+    HKEY ThisKey;
     DWORD Disposition;
     YORI_STRING SubKeyName;
 
@@ -208,7 +208,7 @@ AssocDisplaySingleAssociation(
     DWORD Error;
     YORI_STRING KeyValue;
     DWORD KeyValueSize;
-    HANDLE ThisKey;
+    HKEY ThisKey;
     DWORD KeyType;
 
     KeyValueSize = 0;
@@ -238,7 +238,9 @@ AssocDisplaySingleAssociation(
         //
 
         YoriLibFreeStringContents(&KeyValue);
-        if (!YoriLibAllocateString(&KeyValue, KeyValueSize)) {
+        if (!YoriLibIsSizeAllocatable(KeyValueSize) ||
+            !YoriLibAllocateString(&KeyValue, (YORI_ALLOC_SIZE_T)KeyValueSize)) {
+
             break;
         }
     }
@@ -250,7 +252,7 @@ AssocDisplaySingleAssociation(
         return FALSE;
     }
 
-    KeyValue.LengthInChars = KeyValueSize / sizeof(TCHAR);
+    KeyValue.LengthInChars = (YORI_ALLOC_SIZE_T)(KeyValueSize / sizeof(TCHAR));
     if (KeyValue.LengthInChars > 0) {
         if (KeyValue.StartOfString[KeyValue.LengthInChars - 1] == '\0') {
             KeyValue.LengthInChars--;
@@ -285,7 +287,7 @@ AssocDisplaySingleFileType(
     YORI_STRING SubKeyName;
     YORI_STRING KeyValue;
     DWORD KeyValueSize;
-    HANDLE ThisKey;
+    HKEY ThisKey;
     DWORD KeyType;
 
     KeyValueSize = 0;
@@ -324,7 +326,8 @@ AssocDisplaySingleFileType(
         //
 
         YoriLibFreeStringContents(&KeyValue);
-        if (!YoriLibAllocateString(&KeyValue, KeyValueSize)) {
+        if (!YoriLibIsSizeAllocatable(KeyValueSize) ||
+            !YoriLibAllocateString(&KeyValue, (YORI_ALLOC_SIZE_T)KeyValueSize)) {
             break;
         }
     }
@@ -336,7 +339,7 @@ AssocDisplaySingleFileType(
         return FALSE;
     }
 
-    KeyValue.LengthInChars = KeyValueSize / sizeof(TCHAR);
+    KeyValue.LengthInChars = (YORI_ALLOC_SIZE_T)(KeyValueSize / sizeof(TCHAR));
     if (KeyValue.LengthInChars > 0) {
         if (KeyValue.StartOfString[KeyValue.LengthInChars - 1] == '\0') {
             KeyValue.LengthInChars--;
@@ -390,7 +393,8 @@ AssocEnumerateAssociations(
             if (KeyNameSize > 0x40000) {
                 break;
             }
-            if (!YoriLibAllocateString(&KeyName, KeyNameSize)) {
+            if (!YoriLibIsSizeAllocatable(KeyNameSize) ||
+                !YoriLibAllocateString(&KeyName, (YORI_ALLOC_SIZE_T)KeyNameSize)) {
                 break;
             }
             continue;
@@ -400,7 +404,7 @@ AssocEnumerateAssociations(
             break;
         }
 
-        KeyName.LengthInChars = KeyNameSize;
+        KeyName.LengthInChars = (YORI_ALLOC_SIZE_T)KeyNameSize;
         if (KeyName.LengthInChars >= 2 && KeyName.StartOfString[0] == '.') {
             AssocDisplaySingleAssociation(RootKey, &KeyName);
         }
@@ -450,7 +454,8 @@ AssocEnumerateFileTypes(
             if (KeyNameSize > 0x40000) {
                 break;
             }
-            if (!YoriLibAllocateString(&KeyName, KeyNameSize)) {
+            if (!YoriLibIsSizeAllocatable(KeyNameSize) ||
+                !YoriLibAllocateString(&KeyName, (YORI_ALLOC_SIZE_T)KeyNameSize)) {
                 break;
             }
             continue;
@@ -460,7 +465,7 @@ AssocEnumerateFileTypes(
             break;
         }
 
-        KeyName.LengthInChars = KeyNameSize;
+        KeyName.LengthInChars = (YORI_ALLOC_SIZE_T)KeyNameSize;
         if (KeyName.LengthInChars >= 1 && KeyName.StartOfString[0] != '.') {
             AssocDisplaySingleFileType(RootKey, &KeyName);
         }
@@ -803,13 +808,13 @@ AssocUpdateFileType(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     YORI_STRING Arg;
     ASSOC_SCOPE Scope;
     BOOLEAN FileTypeMode;
@@ -836,22 +841,22 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 AssocHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2020"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("m")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("m")) == 0) {
                 Scope = AssocScopeMerged;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("s")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("s")) == 0) {
                 Scope = AssocScopeSystem;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("t")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("t")) == 0) {
                 FileTypeMode = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("u")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("u")) == 0) {
                 Scope = AssocScopeUser;
                 ArgumentUnderstood = TRUE;
             }
@@ -890,7 +895,7 @@ ENTRYPOINT(
 #else
         {
             PYORI_STRING SubArgV;
-            DWORD SubArgC;
+            YORI_ALLOC_SIZE_T SubArgC;
             SubArgV = YoriLibCmdlineToArgcArgv(GetCommandLine(), StartArg + 1, FALSE, &SubArgC);
             if (SubArgV == NULL) {
                 return EXIT_FAILURE;
@@ -926,7 +931,7 @@ ENTRYPOINT(
         if (Value.StartOfString) {
             Value.StartOfString[0] = '\0';
             Value.StartOfString++;
-            Variable.LengthAllocated = (DWORD)(Value.StartOfString - CmdLine.StartOfString);
+            Variable.LengthAllocated = (YORI_ALLOC_SIZE_T)(Value.StartOfString - CmdLine.StartOfString);
             Variable.LengthInChars = Variable.LengthAllocated - 1;
             Value.LengthInChars = CmdLine.LengthInChars - Variable.LengthAllocated;
             Value.LengthAllocated = CmdLine.LengthAllocated - Variable.LengthAllocated;

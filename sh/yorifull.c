@@ -29,6 +29,11 @@
 /**
  Declaration for the builtin command.
  */
+YORI_CMD_BUILTIN YoriCmd_YAIRPLAN;
+
+/**
+ Declaration for the builtin command.
+ */
 YORI_CMD_BUILTIN YoriCmd_ALIAS;
 
 /**
@@ -44,7 +49,12 @@ YORI_CMD_BUILTIN YoriCmd_YATTRIB;
 /**
  Declaration for the builtin command.
  */
-YORI_CMD_BUILTIN YoriCmd_BUILTIN;
+YORI_CMD_BUILTIN YoriCmd_YBASE64;
+
+/**
+ Declaration for the builtin command.
+ */
+YORI_CMD_BUILTIN YoriCmd_YBATTERY;
 
 /**
  Declaration for the builtin command.
@@ -90,6 +100,11 @@ YORI_CMD_BUILTIN YoriCmd_YCO;
  Declaration for the builtin command.
  */
 YORI_CMD_BUILTIN YoriCmd_YCOMPACT;
+
+/**
+ Declaration for the builtin command.
+ */
+YORI_CMD_BUILTIN YoriCmd_CONTOOL;
 
 /**
  Declaration for the builtin command.
@@ -189,6 +204,11 @@ YORI_CMD_BUILTIN YoriCmd_YEXPR;
 /**
  Declaration for the builtin command.
  */
+YORI_CMD_BUILTIN YoriCmd_YEXTENTS;
+
+/**
+ Declaration for the builtin command.
+ */
 YORI_CMD_BUILTIN YoriCmd_FALSE;
 
 /**
@@ -239,6 +259,11 @@ YORI_CMD_BUILTIN YoriCmd_HEXDUMP;
 /**
  Declaration for the builtin command.
  */
+YORI_CMD_BUILTIN YoriCmd_YHEXEDIT;
+
+/**
+ Declaration for the builtin command.
+ */
 YORI_CMD_BUILTIN YoriCmd_HILITE;
 
 /**
@@ -284,7 +309,7 @@ YORI_CMD_BUILTIN YoriCmd_LINES;
 /**
  Declaration for the builtin command.
  */
-YORI_CMD_BUILTIN YoriCmd_LSOF;
+YORI_CMD_BUILTIN YoriCmd_YLSOF;
 
 /**
  Declaration for the builtin command.
@@ -320,6 +345,11 @@ YORI_CMD_BUILTIN YoriCmd_YMOVE;
  Declaration for the builtin command.
  */
 YORI_CMD_BUILTIN YoriCmd_NICE;
+
+/**
+ Declaration for the builtin command.
+ */
+YORI_CMD_BUILTIN YoriCmd_YOBJDIR;
 
 /**
  Declaration for the builtin command.
@@ -360,6 +390,11 @@ YORI_CMD_BUILTIN YoriCmd_PUSHD;
  Declaration for the builtin command.
  */
 YORI_CMD_BUILTIN YoriCmd_READLINE;
+
+/**
+ Declaration for the builtin command.
+ */
+YORI_CMD_BUILTIN YoriCmd_YREGEDIT;
 
 /**
  Declaration for the builtin command.
@@ -415,6 +450,11 @@ YORI_CMD_BUILTIN YoriCmd_SLEEP;
  Declaration for the builtin command.
  */
 YORI_CMD_BUILTIN YoriCmd_SLMENU;
+
+/**
+ Declaration for the builtin command.
+ */
+YORI_CMD_BUILTIN YoriCmd_YSPEAK;
 
 /**
  Declaration for the builtin command.
@@ -542,14 +582,15 @@ YORI_CMD_BUILTIN YoriCmd_Z;
 CONST YORI_SH_BUILTIN_NAME_MAPPING
 YoriShBuiltins[] = {
                     {_T("ALIAS"),     YoriCmd_ALIAS},
-                    {_T("BUILTIN"),   YoriCmd_BUILTIN},
                     {_T("CAB"),       YoriCmd_CAB},
                     {_T("CAL"),       YoriCmd_YCAL},
                     {_T("CHDIR"),     YoriCmd_CHDIR},
                     {_T("COLOR"),     YoriCmd_COLOR},
+                    {_T("CONTOOL"),   YoriCmd_CONTOOL},
                     {_T("CSHOT"),     YoriCmd_CSHOT},
                     {_T("CVTVT"),     YoriCmd_CVTVT},
                     {_T("DIRENV"),    YoriCmd_DIRENV},
+                    {_T("ECHO"),      YoriCmd_YECHO},
                     {_T("ENVDIFF"),   YoriCmd_ENVDIFF},
                     {_T("EXIT"),      YoriCmd_EXIT},
                     {_T("FALSE"),     YoriCmd_FALSE},
@@ -567,7 +608,6 @@ YoriShBuiltins[] = {
                     {_T("INTCMP"),    YoriCmd_INTCMP},
                     {_T("JOB"),       YoriCmd_JOB},
                     {_T("LINES"),     YoriCmd_LINES},
-                    {_T("LSOF"),      YoriCmd_LSOF},
                     {_T("NICE"),      YoriCmd_NICE},
                     {_T("OSVER"),     YoriCmd_OSVER},
                     {_T("PETOOL"),    YoriCmd_PETOOL},
@@ -596,8 +636,11 @@ YoriShBuiltins[] = {
                     {_T("WHICH"),     YoriCmd_WHICH},
                     {_T("WININFO"),   YoriCmd_WININFO},
                     {_T("WINPOS"),    YoriCmd_WINPOS},
+                    {_T("YAIRPLAN"),  YoriCmd_YAIRPLAN},
                     {_T("YASSOC"),    YoriCmd_YASSOC},
                     {_T("YATTRIB"),   YoriCmd_YATTRIB},
+                    {_T("YBASE64"),   YoriCmd_YBASE64},
+                    {_T("YBATTERY"),  YoriCmd_YBATTERY},
                     {_T("YCAL"),      YoriCmd_YCAL},
                     {_T("YCHARMAP"),  YoriCmd_YCHARMAP},
                     {_T("YCLIP"),     YoriCmd_YCLIP},
@@ -613,29 +656,34 @@ YoriShBuiltins[] = {
                     {_T("YDIR"),      YoriCmd_YDIR},
                     {_T("YDIRCASE"),  YoriCmd_YDIRCASE},
                     {_T("YDU"),       YoriCmd_YDU},
-                    {_T("YECHO"),     YoriCmd_YECHO},
                     {_T("YEDIT"),     YoriCmd_YEDIT},
                     {_T("YENV"),      YoriCmd_YENV},
                     {_T("YERASE"),    YoriCmd_YERASE},
                     {_T("YERR"),      YoriCmd_YERR},
                     {_T("YEXPR"),     YoriCmd_YEXPR},
+                    {_T("YEXTENTS"),  YoriCmd_YEXTENTS},
                     {_T("YGET"),      YoriCmd_YGET},
                     {_T("YHASH"),     YoriCmd_YHASH},
                     {_T("YHELP"),     YoriCmd_YHELP},
+                    {_T("YHEXEDIT"),  YoriCmd_YHEXEDIT},
                     {_T("YKILL"),     YoriCmd_YKILL},
+                    {_T("YLSOF"),     YoriCmd_YLSOF},
                     {_T("YMEM"),      YoriCmd_YMEM},
                     {_T("YMKDIR"),    YoriCmd_YMKDIR},
                     {_T("YMKLINK"),   YoriCmd_YMKLINK},
                     {_T("YMORE"),     YoriCmd_YMORE},
                     {_T("YMOUNT"),    YoriCmd_YMOUNT},
                     {_T("YMOVE"),     YoriCmd_YMOVE},
+                    {_T("YOBJDIR"),   YoriCmd_YOBJDIR},
                     {_T("YPATH"),     YoriCmd_YPATH},
                     {_T("YPAUSE"),    YoriCmd_YPAUSE},
                     {_T("YPM"),       YoriCmd_YPM},
                     {_T("YPS"),       YoriCmd_YPS},
+                    {_T("YREGEDIT"),  YoriCmd_YREGEDIT},
                     {_T("YRMDIR"),    YoriCmd_YRMDIR},
                     {_T("YS"),        YoriCmd_YS},
                     {_T("YSHUTDN"),   YoriCmd_YSHUTDN},
+                    {_T("YSPEAK"),    YoriCmd_YSPEAK},
                     {_T("YSPLIT"),    YoriCmd_YSPLIT},
                     {_T("YSPONGE"),   YoriCmd_YSPONGE},
                     {_T("YSTART"),    YoriCmd_YSTART},
@@ -653,8 +701,11 @@ YoriShBuiltins[] = {
 CONST YORI_SH_DEFAULT_ALIAS_ENTRY
 YoriShDefaultAliasEntries[] = {
     {_T("F7"),       _T("history -u")},
+    {_T("airplan"),  _T("yairplan $*$")},
     {_T("assoc"),    _T("yassoc $*$")},
     {_T("attrib"),   _T("yattrib $*$")},
+    {_T("base64"),   _T("ybase64 $*$")},
+    {_T("battery"),  _T("ybattery $*$")},
     {_T("cal"),      _T("ycal $*$")},
     {_T("cd"),       _T("chdir $*$")},
     {_T("clip"),     _T("yclip $*$")},
@@ -671,18 +722,20 @@ YoriShDefaultAliasEntries[] = {
     {_T("dircase"),  _T("ydircase $*$")},
     {_T("dos2unix"), _T("iconv -u $*$")},
     {_T("du"),       _T("ydu $*$")},
-    {_T("echo"),     _T("yecho $*$")},
     {_T("edit"),     _T("yedit $*$")},
     {_T("env"),      _T("yenv $*$")},
     {_T("erase"),    _T("yerase $*$")},
     {_T("err"),      _T("yerr $*$")},
     {_T("expr"),     _T("yexpr $*$")},
+    {_T("extents"),  _T("yextents $*$")},
     {_T("ftype"),    _T("yassoc -t $*$")},
     {_T("hash"),     _T("yhash $*$")},
     {_T("head"),     _T("ytype -h $*$")},
     {_T("help"),     _T("yhelp $*$")},
+    {_T("hexedit"),  _T("yhexedit $*$")},
     {_T("htmlclip"), _T("yclip -h $*$")},
     {_T("kill"),     _T("ykill $*$")},
+    {_T("lsof"),     _T("ylsof $*$")},
     {_T("md"),       _T("ymkdir $*$")},
     {_T("md5sum"),   _T("yhash -a md5 $*$")},
     {_T("mem"),      _T("ymem $*$")},
@@ -691,6 +744,7 @@ YoriShDefaultAliasEntries[] = {
     {_T("more"),     _T("ymore $*$")},
     {_T("mount"),    _T("ymount $*$")},
     {_T("move"),     _T("ymove $*$")},
+    {_T("objdir"),   _T("yobjdir $*$")},
     {_T("paste"),    _T("yclip -p $*$")},
     {_T("path"),     _T("ypath $*$")},
     {_T("pause"),    _T("ypause $*$")},
@@ -705,6 +759,7 @@ YoriShDefaultAliasEntries[] = {
     {_T("sha384sum"),_T("yhash -a sha384 $*$")},
     {_T("sha512sum"),_T("yhash -a sha512 $*$")},
     {_T("shutdn"),   _T("yshutdn $*$")},
+    {_T("speak"),    _T("yspeak $*$")},
     {_T("split"),    _T("ysplit $*$")},
     {_T("sponge"),   _T("ysponge $*$")},
     {_T("start"),    _T("ystart $*$")},

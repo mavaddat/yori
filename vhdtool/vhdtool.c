@@ -118,7 +118,7 @@ VhdToolCloneIso(
     YORI_STRING FullPath;
     YORI_STRING FullSourcePath;
     PVOID Buffer;
-    DWORD BufferSize;
+    YORI_ALLOC_SIZE_T BufferSize;
     DWORD BytesRead;
     DWORD SectorsPerCluster;
     DWORD BytesPerSector;
@@ -179,7 +179,7 @@ VhdToolCloneIso(
         YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("BytesPerSector could not be detected, using default %i\n"), BytesPerSector);
     }
 
-    BufferSize = 1024 * 1024;
+    BufferSize = YoriLibMaximumAllocationInRange(32 * 1024, 1024 * 1024);
     Buffer = YoriLibMalloc(BufferSize);
     if (Buffer == NULL) {
         YoriLibFreeStringContents(&FullPath);
@@ -199,7 +199,7 @@ VhdToolCloneIso(
             Err = GetLastError();
             if (Err == ERROR_INVALID_FUNCTION) {
                 if (BufferSize != BytesPerSector) {
-                    BufferSize = BytesPerSector;
+                    BufferSize = (YORI_ALLOC_SIZE_T)BytesPerSector;
                     continue;
                 }
             }
@@ -978,13 +978,13 @@ typedef enum _VHDTOOL_OP {
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg;
     YORI_STRING Arg;
     PYORI_STRING FileName = NULL;
     PYORI_STRING FileParent = NULL;
@@ -1004,77 +1004,77 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 VhdToolHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2019"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("clonedynamic")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("clonedynamic")) == 0) {
                 if (ArgC > i + 2) {
                     FileName = &ArgV[i + 1];
                     FileParent = &ArgV[i + 2];
                     Op = VhdToolOpCloneDynamic;
                     ArgumentUnderstood = TRUE;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("clonefixed")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("clonefixed")) == 0) {
                 if (ArgC > i + 2) {
                     FileName = &ArgV[i + 1];
                     FileParent = &ArgV[i + 2];
                     Op = VhdToolOpCloneFixed;
                     ArgumentUnderstood = TRUE;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("compact")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("compact")) == 0) {
                 if (ArgC > i + 1) {
                     FileName = &ArgV[i + 1];
                     Op = VhdToolOpCompact;
                     ArgumentUnderstood = TRUE;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("creatediff")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("creatediff")) == 0) {
                 if (ArgC > i + 2) {
                     FileName = &ArgV[i + 1];
                     FileParent = &ArgV[i + 2];
                     Op = VhdToolOpCreateDiffVhd;
                     ArgumentUnderstood = TRUE;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("createdynamic")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("createdynamic")) == 0) {
                 if (ArgC > i + 2) {
                     FileName = &ArgV[i + 1];
                     FileSize = &ArgV[i + 2];
                     Op = VhdToolOpCreateDynamicVhd;
                     ArgumentUnderstood = TRUE;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("createfixed")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("createfixed")) == 0) {
                 if (ArgC > i + 2) {
                     FileName = &ArgV[i + 1];
                     FileSize = &ArgV[i + 2];
                     Op = VhdToolOpCreateFixedVhd;
                     ArgumentUnderstood = TRUE;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("expand")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("expand")) == 0) {
                 if (ArgC > i + 2) {
                     FileName = &ArgV[i + 1];
                     FileSize = &ArgV[i + 2];
                     Op = VhdToolOpExpand;
                     ArgumentUnderstood = TRUE;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("sector:512")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("sector:512")) == 0) {
                 SectorSize = VhdToolSector512Native;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("sector:512e")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("sector:512e")) == 0) {
                 SectorSize = VhdToolSector512e;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("sector:4k")) == 0 ||
-                       YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("sector:4096")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("sector:4k")) == 0 ||
+                       YoriLibCompareStringLitIns(&Arg, _T("sector:4096")) == 0) {
                 SectorSize = VhdToolSector4kNative;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("merge")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("merge")) == 0) {
                 if (ArgC > i + 1) {
                     FileName = &ArgV[i + 1];
                     Op = VhdToolOpMerge;
                     ArgumentUnderstood = TRUE;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("shrink")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("shrink")) == 0) {
                 if (ArgC > i + 2) {
                     FileName = &ArgV[i + 1];
                     FileSize = &ArgV[i + 2];
@@ -1106,12 +1106,12 @@ ENTRYPOINT(
         if (Period != NULL) {
             YoriLibInitEmptyString(&Ext);
             Ext.StartOfString = Period + 1;
-            Ext.LengthInChars = FileName->LengthInChars - (DWORD)(Period - FileName->StartOfString) - 1;
-            if (YoriLibCompareStringWithLiteralInsensitive(&Ext, _T("vhdx")) == 0) {
+            Ext.LengthInChars = FileName->LengthInChars - (YORI_ALLOC_SIZE_T)(Period - FileName->StartOfString) - 1;
+            if (YoriLibCompareStringLitIns(&Ext, _T("vhdx")) == 0) {
                 ExtType = VhdToolExtVhdx;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Ext, _T("vhd")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Ext, _T("vhd")) == 0) {
                 ExtType = VhdToolExtVhd;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Ext, _T("iso")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Ext, _T("iso")) == 0) {
                 ExtType = VhdToolExtIso;
             } 
         }

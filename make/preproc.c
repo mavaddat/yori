@@ -41,7 +41,7 @@ MakeTruncateComments(
     __inout PYORI_STRING Line
     )
 {
-    DWORD Index;
+    YORI_ALLOC_SIZE_T Index;
 
     for (Index = 0; Index < Line->LengthInChars; Index++) {
         if (Line->StartOfString[Index] == '#') {
@@ -49,6 +49,26 @@ MakeTruncateComments(
             break;
         }
     }
+}
+
+/**
+ Return TRUE if a single character is a whitespace character, FALSE if it is
+ not.
+
+ @param Char The character to check.
+ 
+ @return TRUE to indicate a character is whitespace, FALSE if it is not.
+ */
+BOOLEAN
+MakeIsCharWhitespace(
+    __in TCHAR Char
+    )
+{
+    if (Char == ' ' || Char == '\t') {
+        return TRUE;
+    }
+
+    return FALSE;
 }
 
 /**
@@ -64,7 +84,7 @@ MakeTrimWhitespace(
     )
 {
     while (String->LengthInChars > 0) {
-        if (String->StartOfString[0] == ' ' || String->StartOfString[0] == '\t') {
+        if (MakeIsCharWhitespace(String->StartOfString[0])) {
             String->StartOfString++;
             String->LengthInChars--;
         } else {
@@ -73,13 +93,35 @@ MakeTrimWhitespace(
     }
 
     while (String->LengthInChars > 0) {
-        if (String->StartOfString[String->LengthInChars - 1] == ' ' ||
-            String->StartOfString[String->LengthInChars - 1] == '\t') {
+        if (MakeIsCharWhitespace(String->StartOfString[String->LengthInChars - 1])) {
             String->LengthInChars--;
         } else {
             break;
         }
     }
+}
+
+/**
+ Indicate if the string consists entirely of whitespace characters.
+
+ @param String Pointer to the string.
+
+ @return TRUE if every character in the string is whitespace, FALSE if a non-
+         whitespace character is found.
+ */
+BOOLEAN
+MakeIsStringWhitespace(
+    __in PCYORI_STRING String
+    )
+{
+    DWORD Index;
+    for (Index = 0; Index < String->LengthInChars; Index++) {
+        if (!MakeIsCharWhitespace(String->StartOfString[Index])) {
+            return FALSE;
+        }
+    }
+
+    return TRUE;
 }
 
 /**
@@ -143,8 +185,8 @@ MakeJoinLines(
     __in PYORI_STRING NewEnd
     )
 {
-    DWORD CharsToCopy;
-    DWORD AllocationNeeded;
+    YORI_ALLOC_SIZE_T CharsToCopy;
+    YORI_ALLOC_SIZE_T AllocationNeeded;
 
     CharsToCopy = NewEnd->LengthInChars;
     if (CharsToCopy == 0) {
@@ -154,8 +196,7 @@ MakeJoinLines(
     if (NewEnd->StartOfString[CharsToCopy - 1] == '\\') {
         CharsToCopy--;
         while (CharsToCopy > 0) {
-            if (NewEnd->StartOfString[CharsToCopy - 1] == ' ' || 
-                NewEnd->StartOfString[CharsToCopy - 1] == '\t') {
+            if (MakeIsCharWhitespace(NewEnd->StartOfString[CharsToCopy - 1])) {
 
                 CharsToCopy--;
             } else {
@@ -175,13 +216,13 @@ MakeJoinLines(
 
     AllocationNeeded = CombinedLine->LengthInChars + 1 + CharsToCopy + 1;
     if (AllocationNeeded > CombinedLine->LengthAllocated) {
-        DWORD NewLength;
+        YORI_ALLOC_SIZE_T NewLength;
         NewLength = CombinedLine->LengthInChars * 2;
         if (NewLength < AllocationNeeded) {
             NewLength = AllocationNeeded;
         }
 
-        if (!YoriLibReallocateString(CombinedLine, NewLength)) {
+        if (!YoriLibReallocString(CombinedLine, NewLength)) {
             return FALSE;
         }
     }
@@ -229,37 +270,34 @@ MakeDetermineLineType(
 {
     DWORD Index;
     DWORD BraceDepth;
+    DWORD WhitespaceChars;
 
     if (Line->LengthInChars == 0) {
         return MakeLineTypeEmpty;
     }
 
-    //
-    //  MSFIX NMAKE uses '!' at the start of the line to indicate a
-    //  preprocessor command.  Any whitespace means it's not a preprocessor
-    //  command.  And '!' after whitespace in a recipe means the line should
-    //  be executed for each dependent.  This can't be evaluated here because
-    //  whitespace was trimmed prior to calling this function.
-    //
-
     if (Line->StartOfString[0] == '!') {
         return MakeLineTypePreprocessor;
     }
 
-    //
-    //  MSFIX NMAKE requires whitespace before anything to consider it a
-    //  recipe.  This can't be evaluated here because whitespace was trimmed
-    //  prior to calling this function.
-    //
-
     if (ScopeContext->ParserState == MakeParserRecipeActive) {
-        return MakeLineTypeRecipe;
+        if (MakeIsCharWhitespace(Line->StartOfString[0])) {
+            if (MakeIsStringWhitespace(Line)) {
+                return MakeLineTypeEmpty;
+            }
+            return MakeLineTypeRecipe;
+        }
     } else if (ScopeContext->ParserState == MakeParserInlineFileActive) {
         return MakeLineTypeInlineFile;
     }
 
     BraceDepth = 0;
+    WhitespaceChars = 0;
     for (Index = 0; Index < Line->LengthInChars; Index++) {
+        if (MakeIsCharWhitespace(Line->StartOfString[Index])) {
+            WhitespaceChars++;
+            continue;
+        }
         if (Line->StartOfString[Index] == '[') {
             BraceDepth++;
         } else if (Line->StartOfString[Index] == ']' && BraceDepth > 0) {
@@ -270,13 +308,16 @@ MakeDetermineLineType(
             if (Line->StartOfString[Index] == '=') {
                 return MakeLineTypeSetVariable;
             } else if (Line->StartOfString[Index] == ':') {
-                ASSERT(ScopeContext->ParserState == MakeParserDefault);
                 return MakeLineTypeRule;
             }
         }
     }
 
-    if (YoriLibCompareStringWithLiteralInsensitive(Line, _T("DebugBreak")) == 0) {
+    if (WhitespaceChars == Line->LengthInChars) {
+        return MakeLineTypeEmpty;
+    }
+
+    if (YoriLibCompareStringLitIns(Line, _T("DebugBreak")) == 0) {
         return MakeLineTypeDebugBreak;
     }
 
@@ -350,13 +391,13 @@ CONST MAKE_PREPROCESSOR_LINE_TYPE_MAP MakePreprocessorLineTypeMap[] = {
 MAKE_PREPROCESSOR_LINE_TYPE
 MakeDeterminePreprocessorLineType(
     __in PYORI_STRING Line,
-    __out_opt PDWORD ArgumentOffset
+    __out_opt PYORI_ALLOC_SIZE_T ArgumentOffset
     )
 {
     YORI_STRING Substring;
     MAKE_PREPROCESSOR_LINE_TYPE FoundType;
-    DWORD SubstringOffset;
-    DWORD Index;
+    YORI_ALLOC_SIZE_T SubstringOffset;
+    YORI_ALLOC_SIZE_T Index;
 
     //
     //  We shouldn't ever hit this condition because the line has already been
@@ -396,10 +437,10 @@ MakeDeterminePreprocessorLineType(
 
     FoundType = MakePreprocessorLineTypeUnknown;
     for (Index = 0; Index < sizeof(MakePreprocessorLineTypeMap)/sizeof(MakePreprocessorLineTypeMap[0]); Index++) {
-        if (YoriLibCompareStringWithLiteralInsensitiveCount(&Substring, MakePreprocessorLineTypeMap[Index].String, _tcslen(MakePreprocessorLineTypeMap[Index].String)) == 0) {
+        if (YoriLibCompareStringLitInsCnt(&Substring, MakePreprocessorLineTypeMap[Index].String, (YORI_ALLOC_SIZE_T)_tcslen(MakePreprocessorLineTypeMap[Index].String)) == 0) {
             FoundType = MakePreprocessorLineTypeMap[Index].Type;
             if (ArgumentOffset != NULL) {
-                *ArgumentOffset = SubstringOffset + _tcslen(MakePreprocessorLineTypeMap[Index].String);
+                *ArgumentOffset = SubstringOffset + (YORI_ALLOC_SIZE_T)_tcslen(MakePreprocessorLineTypeMap[Index].String);
             }
             break;
         }
@@ -429,13 +470,13 @@ MakeDeterminePreprocessorLineType(
     Substring.StartOfString = &Line->StartOfString[SubstringOffset];
     Substring.LengthInChars = Line->LengthInChars - SubstringOffset;
 
-    if (YoriLibCompareStringWithLiteralInsensitiveCount(&Substring, _T("IFNDEF"), sizeof("IFNDEF") - 1) == 0) {
+    if (YoriLibCompareStringLitInsCnt(&Substring, _T("IFNDEF"), sizeof("IFNDEF") - 1) == 0) {
         FoundType = MakePreprocessorLineTypeElseIfNDef;
         SubstringOffset = SubstringOffset + sizeof("IFNDEF") - 1;
-    } else if (YoriLibCompareStringWithLiteralInsensitiveCount(&Substring, _T("IFDEF"), sizeof("IFDEF") - 1) == 0) {
+    } else if (YoriLibCompareStringLitInsCnt(&Substring, _T("IFDEF"), sizeof("IFDEF") - 1) == 0) {
         FoundType = MakePreprocessorLineTypeElseIfDef;
         SubstringOffset = SubstringOffset + sizeof("IFDEF") - 1;
-    } else if (YoriLibCompareStringWithLiteralInsensitiveCount(&Substring, _T("IF"), sizeof("IF") - 1) == 0) {
+    } else if (YoriLibCompareStringLitInsCnt(&Substring, _T("IF"), sizeof("IF") - 1) == 0) {
         FoundType = MakePreprocessorLineTypeElseIf;
         SubstringOffset = SubstringOffset + sizeof("IF") - 1;
     }
@@ -677,8 +718,8 @@ MakeLoadPreprocessorCacheEntries(
     YORI_STRING CacheFileName;
     YORI_STRING Key;
     YORI_STRING LineString;
-    DWORD CharsConsumed;
-    LONGLONG llTemp;
+    YORI_ALLOC_SIZE_T CharsConsumed;
+    YORI_MAX_SIGNED_T llTemp;
     HANDLE hCache;
     PVOID LineContext = NULL;
 
@@ -873,7 +914,7 @@ MakeBuildKeyForCacheCmd(
     Substring.LengthAllocated = Key->LengthAllocated;
     YoriLibHexBufferToString((PUCHAR)&EnvHash, sizeof(EnvHash), &Substring);
 
-#if defined(_MSC_VER) && (_MSC_VER >= 1700)
+#if defined(_MSC_VER) && (_MSC_VER >= 1500)
 
     //
     //  "Potential" mismatch between sizeof and countof.  I meant sizeof.
@@ -894,7 +935,7 @@ MakeBuildKeyForCacheCmd(
     memcpy(Substring.StartOfString, Cmd->StartOfString, Cmd->LengthInChars * sizeof(TCHAR));
     Key->LengthInChars = (sizeof(EnvHash) + sizeof(VarHash)) * 2 + Cmd->LengthInChars;
 
-#if defined(_MSC_VER) && (_MSC_VER >= 1700)
+#if defined(_MSC_VER) && (_MSC_VER >= 1500)
 #pragma warning(pop)
 #endif
 
@@ -1077,13 +1118,13 @@ Complete:
 PYORI_STRING
 MakeFindFirstMatchingSubstringSkipQuotes(
     __in PYORI_STRING String,
-    __in DWORD NumberMatches,
+    __in YORI_ALLOC_SIZE_T NumberMatches,
     __in PYORI_STRING MatchArray,
-    __out_opt PDWORD StringOffsetOfMatch
+    __out_opt PYORI_ALLOC_SIZE_T StringOffsetOfMatch
     )
 {
     YORI_STRING RemainingString;
-    DWORD CheckCount;
+    YORI_ALLOC_SIZE_T CheckCount;
     BOOLEAN QuoteOpen;
     BOOLEAN BraceOpen;
 
@@ -1124,7 +1165,7 @@ MakeFindFirstMatchingSubstringSkipQuotes(
         }
 
         for (CheckCount = 0; CheckCount < NumberMatches; CheckCount++) {
-            if (YoriLibCompareStringCount(&RemainingString, &MatchArray[CheckCount], MatchArray[CheckCount].LengthInChars) == 0) {
+            if (YoriLibCompareStringCnt(&RemainingString, &MatchArray[CheckCount], MatchArray[CheckCount].LengthInChars) == 0) {
                 if (StringOffsetOfMatch != NULL) {
                     *StringOffsetOfMatch = String->LengthInChars - RemainingString.LengthInChars;
                 }
@@ -1201,7 +1242,7 @@ MakePreprocessorEvaluateSingleCondition(
     PYORI_STRING MatchingOperator;
     YORI_STRING FirstPart;
     YORI_STRING SecondPart;
-    DWORD OperatorIndex;
+    YORI_ALLOC_SIZE_T OperatorIndex;
     BOOLEAN FirstPartIsString;
     BOOLEAN SecondPartIsString;
 
@@ -1271,9 +1312,9 @@ MakePreprocessorEvaluateSingleCondition(
         }
 
     } else {
-        LONGLONG FirstNumber;
-        LONGLONG SecondNumber;
-        DWORD CharsConsumed;
+        YORI_MAX_SIGNED_T FirstNumber;
+        YORI_MAX_SIGNED_T SecondNumber;
+        YORI_ALLOC_SIZE_T CharsConsumed;
 
         //
         //  If nothing is specified, they're deemed to be zero.  If something
@@ -1414,7 +1455,7 @@ MakePreprocessorEvaluateCondition(
     PYORI_STRING PreviousMatchingOperator;
     YORI_STRING Current;
     YORI_STRING Remaining;
-    DWORD OperatorIndex;
+    YORI_ALLOC_SIZE_T OperatorIndex;
     BOOLEAN CumulativeResult;
     BOOLEAN CurrentResult;
 
@@ -1523,7 +1564,7 @@ MakeInclude(
 
     memcpy(&SavedCurrentIncludeDirectory, &ScopeContext->CurrentIncludeDirectory, sizeof(YORI_STRING));
     YoriLibCloneString(&ScopeContext->CurrentIncludeDirectory, &FullPath);
-    ScopeContext->CurrentIncludeDirectory.LengthInChars = (DWORD)((FilePart - ScopeContext->CurrentIncludeDirectory.StartOfString) - 1);
+    ScopeContext->CurrentIncludeDirectory.LengthInChars = (YORI_ALLOC_SIZE_T)((FilePart - ScopeContext->CurrentIncludeDirectory.StartOfString) - 1);
 
     if (!MakeProcessStream(hStream, ScopeContext->MakeContext, &FullPath)) {
 #if MAKE_DEBUG_PREPROCESSOR
@@ -1555,7 +1596,7 @@ MakePreprocessor(
     )
 {
     MAKE_PREPROCESSOR_LINE_TYPE PreprocessorLineType;
-    DWORD ArgOffset;
+    YORI_ALLOC_SIZE_T ArgOffset;
     YORI_STRING Arg;
     PMAKE_CONTEXT MakeContext;
 
@@ -1690,7 +1731,7 @@ MakeIsTargetInferenceRule(
     __out_opt PYORI_STRING ToExt
     )
 {
-    DWORD Index;
+    YORI_ALLOC_SIZE_T Index;
     BOOLEAN FoundFirstExt;
     YORI_STRING LocalFromDir;
     YORI_STRING LocalFromExt;
@@ -1849,8 +1890,8 @@ MakeFindMakefileInDirectory(
     )
 {
     YORI_STRING ProbeName;
-    DWORD Index;
-    DWORD LongestName;
+    YORI_ALLOC_SIZE_T Index;
+    YORI_ALLOC_SIZE_T LongestName;
 
     LongestName = 0;
     for (Index = 0; Index < sizeof(MakefileNameCandidates)/sizeof(MakefileNameCandidates[0]); Index++) {
@@ -1917,7 +1958,7 @@ MakeDetermineTargetOptions(
 
     YoriLibInitEmptyString(&OptionString);
     OptionString.StartOfString = &FirstBrace[1];
-    OptionString.LengthInChars = TargetName->LengthInChars - (DWORD)(FirstBrace - TargetName->StartOfString) - 1;
+    OptionString.LengthInChars = TargetName->LengthInChars - (YORI_ALLOC_SIZE_T)(FirstBrace - TargetName->StartOfString) - 1;
 
     LastBrace = YoriLibFindLeftMostCharacter(&OptionString, ']');
     if (LastBrace == NULL) {
@@ -1929,31 +1970,31 @@ MakeDetermineTargetOptions(
     }
     OptionString.LengthInChars = OptionString.LengthInChars - 1;
 
-    TargetName->LengthInChars = (DWORD)(FirstBrace - TargetName->StartOfString);
+    TargetName->LengthInChars = (YORI_ALLOC_SIZE_T)(FirstBrace - TargetName->StartOfString);
 
     Space = YoriLibFindLeftMostCharacter(&OptionString, ' ');
     while (TRUE) {
 
         Component.StartOfString = OptionString.StartOfString;
         if (Space != NULL) {
-            Component.LengthInChars = (DWORD)(Space - OptionString.StartOfString);
+            Component.LengthInChars = (YORI_ALLOC_SIZE_T)(Space - OptionString.StartOfString);
             OptionString.StartOfString = OptionString.StartOfString + Component.LengthInChars + 1;
             OptionString.LengthInChars = OptionString.LengthInChars - Component.LengthInChars - 1;
         } else {
             Component.LengthInChars = OptionString.LengthInChars;
         }
 
-        if (YoriLibCompareStringWithLiteralInsensitive(&Component, _T("dirs")) == 0) {
+        if (YoriLibCompareStringLitIns(&Component, _T("dirs")) == 0) {
             *DependenciesAreDirectories = TRUE;
         } else {
             Equals = YoriLibFindLeftMostCharacter(&Component, '=');
             if (Equals != NULL) {
                 YoriLibInitEmptyString(&ValueString);
                 ValueString.StartOfString = Equals + 1;
-                ValueString.LengthInChars = Component.LengthInChars - (DWORD)(Equals - Component.StartOfString) - 1;
-                Component.LengthInChars = (DWORD)(Equals - Component.StartOfString);
+                ValueString.LengthInChars = Component.LengthInChars - (YORI_ALLOC_SIZE_T)(Equals - Component.StartOfString) - 1;
+                Component.LengthInChars = (YORI_ALLOC_SIZE_T)(Equals - Component.StartOfString);
 
-                if (YoriLibCompareStringWithLiteralInsensitive(&Component, _T("target")) == 0) {
+                if (YoriLibCompareStringLitIns(&Component, _T("target")) == 0) {
                     ChildTargetName->StartOfString = ValueString.StartOfString;
                     ChildTargetName->LengthInChars = ValueString.LengthInChars;
                 }
@@ -1967,7 +2008,7 @@ MakeDetermineTargetOptions(
         Space = YoriLibFindLeftMostCharacter(&OptionString, ' ');
     }
 
-    if (YoriLibCompareStringWithLiteralInsensitive(&OptionString, _T("dirs")) == 0) {
+    if (YoriLibCompareStringLitIns(&OptionString, _T("dirs")) == 0) {
         *DependenciesAreDirectories = TRUE;
     }
 
@@ -2039,7 +2080,7 @@ MakeCreateFileListDependency(
     YORI_STRING LineString;
     PVOID LineContext;
     HANDLE hStream;
-    DWORD Index;
+    YORI_ALLOC_SIZE_T Index;
     BOOLEAN Result;
 
     ScopeContext = MakeContext->ActiveScope;
@@ -2192,7 +2233,7 @@ MakeAddRule(
 {
     YORI_STRING Substring;
     LPTSTR Colon;
-    DWORD ReadIndex;
+    YORI_ALLOC_SIZE_T ReadIndex;
     BOOLEAN SwallowingWhitespace;
     PMAKE_CONTEXT MakeContext;
     PMAKE_TARGET Target;
@@ -2210,7 +2251,7 @@ MakeAddRule(
 
     Substring.StartOfString = Line->StartOfString;
     Colon = YoriLibFindLeftMostCharacter(Line, ':');
-    Substring.LengthInChars = (DWORD)(Colon - Line->StartOfString);
+    Substring.LengthInChars = (YORI_ALLOC_SIZE_T)(Colon - Line->StartOfString);
     ReadIndex = Substring.LengthInChars + 2;
 
     MakeTrimWhitespace(&Substring);
@@ -2234,16 +2275,16 @@ MakeAddRule(
     //  order is.
     //
 
-    if (YoriLibCompareStringWithLiteralInsensitive(&Substring, _T(".SUFFIXES")) == 0) {
+    if (YoriLibCompareStringLitIns(&Substring, _T(".SUFFIXES")) == 0) {
         ScopeContext->ParserState = MakeParserDefault;
         return NULL;
     }
 
     //
-    //  MSFIX: If a target is found, discard its recipe and start over?
-    //  NMAKE seems to have some more strange logic in this case.  For
-    //  inference rules it seems fairly important to discard whatever
-    //  already exists.
+    //  If a target is found, NMAKE preserves any existing recipe, to support
+    //  having lines specify dependencies that are different to the ones
+    //  providing recipes.  Here any recipes are effectively concatenated,
+    //  except for inference rules.
     //
 
     if (MakeIsTargetInferenceRule(Line, &FromDir, &FromExt, &ToDir, &ToExt)) {
@@ -2530,9 +2571,9 @@ MakeAddInlineFileLine(
         return TRUE;
     }
 
-    YoriLibOutputTextToMultibyteDevice(InlineFile->FileHandle, Line);
+    YoriLibOutputTextToMbyteDev(InlineFile->FileHandle, Line);
     YoriLibConstantString(&Newline, _T("\r\n"));
-    YoriLibOutputTextToMultibyteDevice(InlineFile->FileHandle, &Newline);
+    YoriLibOutputTextToMbyteDev(InlineFile->FileHandle, &Newline);
     return TRUE;
 }
 
@@ -2555,10 +2596,9 @@ MakeAddRecipeCommand(
     __in PYORI_STRING Line
     )
 {
-
     PMAKE_INLINE_FILE InlineFile;
-    DWORD CharsNeeded;
-    DWORD Index;
+    YORI_ALLOC_SIZE_T CharsNeeded;
+    YORI_ALLOC_SIZE_T Index;
     YORI_STRING LineSubset;
 
     //
@@ -2609,7 +2649,7 @@ MakeAddRecipeCommand(
     }
 
     if (CharsNeeded > Target->Recipe.LengthAllocated) {
-        if (!YoriLibReallocateString(&Target->Recipe, CharsNeeded * 2)) {
+        if (!YoriLibReallocString(&Target->Recipe, CharsNeeded * 2)) {
             return FALSE;
         }
     }
@@ -2696,7 +2736,6 @@ MakeProcessStream(
         LineToProcess.StartOfString = LineString.StartOfString;
         LineToProcess.LengthInChars = LineString.LengthInChars;
         MakeTruncateComments(&LineToProcess);
-        MakeTrimWhitespace(&LineToProcess);
 
         MoreLinesNeeded = FALSE;
 
@@ -2705,6 +2744,7 @@ MakeProcessStream(
         }
 
         if (JoinedLine.LengthInChars > 0 || MoreLinesNeeded) {
+            MakeTrimWhitespace(&LineToProcess);
             MakeJoinLines(&JoinedLine, &LineToProcess);
             if (MoreLinesNeeded) {
                 continue;
@@ -2714,6 +2754,7 @@ MakeProcessStream(
         }
 
         LineType = MakeDetermineLineType(&LineToProcess, ScopeContext);
+        MakeTrimWhitespace(&LineToProcess);
 
         switch(LineType) {
             case MakeLineTypeEmpty:

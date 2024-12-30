@@ -152,7 +152,7 @@ YoriShSetWindowState(
     }
 
     if (YoriShTaskbarList == NULL) {
-        hr = DllOle32.pCoCreateInstance(&CLSID_TaskbarList, NULL, CLSCTX_INPROC_SERVER, &IID_ITaskbarList3, &YoriShTaskbarList);
+        hr = DllOle32.pCoCreateInstance(&CLSID_TaskbarList, NULL, CLSCTX_INPROC_SERVER, &IID_ITaskbarList3, (PVOID *)&YoriShTaskbarList);
         if (!SUCCEEDED(hr)) {
             return FALSE;
         }
@@ -216,7 +216,7 @@ BOOLEAN
 YoriShCloseWindow(VOID)
 {
     LPDWORD PidList = NULL;
-    DWORD PidListSize = 0;
+    YORI_ALLOC_SIZE_T PidListSize = 0;
     DWORD PidCountReturned;
     DWORD Index;
     DWORD CurrentPid;
@@ -248,8 +248,12 @@ YoriShCloseWindow(VOID)
         if (PidList) {
             YoriLibFree(PidList);
         }
+        
+        if (!YoriLibIsSizeAllocatable(PidCountReturned + 4)) {
+            return FALSE;
+        }
 
-        PidListSize = PidCountReturned + 4;
+        PidListSize = (YORI_ALLOC_SIZE_T)PidCountReturned + 4;
         PidList = YoriLibMalloc(PidListSize * sizeof(DWORD));
         if (PidList == NULL) {
             return FALSE;

@@ -3,7 +3,7 @@
  *
  * Yori shell display memory usage
  *
- * Copyright (c) 2019 Malcolm J. Smith
+ * Copyright (c) 2019-2023 Malcolm J. Smith
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -52,6 +52,8 @@ CHAR strMemHelpText[] =
         "                          in human friendly format\n"
         "   $COMMITLIMITBYTES$     The maximum amount of memory the system can allocate\n"
         "                          in raw bytes\n"
+        "   $MEMORYLOAD$           The percentage of memory usage.  Note modern systems\n"
+        "                          use memory opportunistically\n"
         "   $TOTALMEM$             The amount of physical memory in human friendly\n"
         "                          format\n"
         "   $TOTALMEMBYTES$        The amount of physical memory in raw bytes\n";
@@ -85,21 +87,23 @@ MemHelp(VOID)
          of characters required to successfully populate the contents into
          the variable.
  */
-DWORD
+YORI_ALLOC_SIZE_T
 MemOutputLargeInteger(
     __in LARGE_INTEGER LargeInt,
-    __in DWORD NumberBase,
+    __in WORD NumberBase,
     __inout PYORI_STRING OutputString
     )
 {
     YORI_STRING String;
     TCHAR StringBuffer[32];
+    YORI_MAX_SIGNED_T Value;
 
     YoriLibInitEmptyString(&String);
     String.StartOfString = StringBuffer;
     String.LengthAllocated = sizeof(StringBuffer)/sizeof(StringBuffer[0]);
 
-    YoriLibNumberToString(&String, LargeInt.QuadPart, NumberBase, 0, ' ');
+    Value = (YORI_MAX_SIGNED_T)LargeInt.QuadPart;
+    YoriLibNumberToString(&String, Value, NumberBase, 0, ' ');
 
     if (OutputString->LengthAllocated >= String.LengthInChars) {
         memcpy(OutputString->StartOfString, String.StartOfString, String.LengthInChars * sizeof(TCHAR));
@@ -147,6 +151,13 @@ typedef struct _MEM_CONTEXT {
      process concept.
      */
     LARGE_INTEGER AvailableVirtual;
+
+    /**
+     The percentage of memory that is in use.  This uses an excessively
+     large integer for consistency.
+     */
+    LARGE_INTEGER MemoryLoad;
+
 } MEM_CONTEXT, *PMEM_CONTEXT;
 
 /**
@@ -165,32 +176,34 @@ typedef struct _MEM_CONTEXT {
          characters required in order to successfully populate, or zero
          on error.
  */
-DWORD
+YORI_ALLOC_SIZE_T
 MemExpandVariables(
     __inout PYORI_STRING OutputBuffer,
     __in PYORI_STRING VariableName,
     __in PVOID Context
     )
 {
-    DWORD CharsNeeded;
+    YORI_ALLOC_SIZE_T CharsNeeded;
     PMEM_CONTEXT MemContext = (PMEM_CONTEXT)Context;
 
-    if (YoriLibCompareStringWithLiteral(VariableName, _T("TOTALMEM")) == 0) {
+    if (YoriLibCompareStringLit(VariableName, _T("TOTALMEM")) == 0) {
         CharsNeeded = 5;
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("AVAILABLEMEM")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("AVAILABLEMEM")) == 0) {
         CharsNeeded = 5;
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("COMMITLIMIT")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("COMMITLIMIT")) == 0) {
         CharsNeeded = 5;
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("AVAILABLECOMMIT")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("AVAILABLECOMMIT")) == 0) {
         CharsNeeded = 5;
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("TOTALMEMBYTES")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("TOTALMEMBYTES")) == 0) {
         return MemOutputLargeInteger(MemContext->TotalPhysical, 10, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("AVAILABLEMEMBYTES")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("AVAILABLEMEMBYTES")) == 0) {
         return MemOutputLargeInteger(MemContext->AvailablePhysical, 10, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("COMMITLIMITBYTES")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("COMMITLIMITBYTES")) == 0) {
         return MemOutputLargeInteger(MemContext->TotalCommit, 10, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("AVAILABLECOMMITBYTES")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("AVAILABLECOMMITBYTES")) == 0) {
         return MemOutputLargeInteger(MemContext->AvailableCommit, 10, OutputBuffer);
+    } else if (YoriLibCompareStringLit(VariableName, _T("MEMORYLOAD")) == 0) {
+        return MemOutputLargeInteger(MemContext->MemoryLoad, 10, OutputBuffer);
     } else {
         return 0;
     }
@@ -199,19 +212,19 @@ MemExpandVariables(
         return CharsNeeded;
     }
 
-    if (YoriLibCompareStringWithLiteral(VariableName, _T("TOTALMEM")) == 0) {
+    if (YoriLibCompareStringLit(VariableName, _T("TOTALMEM")) == 0) {
         if (YoriLibFileSizeToString(OutputBuffer, &MemContext->TotalPhysical)) {
             CharsNeeded = 5;
         }
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("AVAILABLEMEM")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("AVAILABLEMEM")) == 0) {
         if (YoriLibFileSizeToString(OutputBuffer, &MemContext->AvailablePhysical)) {
             CharsNeeded = 5;
         }
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("COMMITLIMIT")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("COMMITLIMIT")) == 0) {
         if (YoriLibFileSizeToString(OutputBuffer, &MemContext->TotalCommit)) {
             CharsNeeded = 5;
         }
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("AVAILABLECOMMIT")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("AVAILABLECOMMIT")) == 0) {
         if (YoriLibFileSizeToString(OutputBuffer, &MemContext->AvailableCommit)) {
             CharsNeeded = 5;
         }
@@ -235,13 +248,13 @@ MemExpandVariables(
 BOOL
 MemGroupProcessNames(
     __inout PYORI_SYSTEM_PROCESS_INFORMATION ProcessInfo,
-    __inout PDWORD NumberOfProcesses
+    __inout PYORI_ALLOC_SIZE_T NumberOfProcesses
     )
 {
     PYORI_SYSTEM_PROCESS_INFORMATION FirstEntryWithName;
     PYORI_SYSTEM_PROCESS_INFORMATION CurrentEntry;
     PYORI_SYSTEM_PROCESS_INFORMATION PreviousEntry;
-    DWORD ProcessCount;
+    YORI_ALLOC_SIZE_T ProcessCount;
     YORI_STRING PrimaryName;
     YORI_STRING FoundName;
 
@@ -265,7 +278,7 @@ MemGroupProcessNames(
             FoundName.StartOfString = CurrentEntry->ImageName;
             FoundName.LengthInChars = CurrentEntry->ImageNameLengthInBytes / sizeof(WCHAR);
 
-            if (YoriLibCompareStringInsensitive(&PrimaryName, &FoundName) == 0) {
+            if (YoriLibCompareStringIns(&PrimaryName, &FoundName) == 0) {
                 FirstEntryWithName->WorkingSetSize += CurrentEntry->WorkingSetSize;
                 FirstEntryWithName->CommitSize += CurrentEntry->CommitSize;
                 FirstEntryWithName->ProcessId++;
@@ -307,8 +320,8 @@ MemDisplayProcessMemoryUsage(
     PYORI_SYSTEM_PROCESS_INFORMATION ProcessInfo = NULL;
     PYORI_SYSTEM_PROCESS_INFORMATION CurrentEntry;
     DWORD BytesReturned;
-    DWORD BytesAllocated;
-    DWORD NumberOfProcesses;
+    YORI_ALLOC_SIZE_T BytesAllocated;
+    YORI_ALLOC_SIZE_T NumberOfProcesses;
     DWORD CurrentProcessIndex;
     PYORI_SYSTEM_PROCESS_INFORMATION *SortedProcesses;
     LONG Status;
@@ -344,10 +357,14 @@ MemDisplayProcessMemoryUsage(
         }
 
         if (BytesAllocated == 0) {
-            BytesAllocated = 64 * 1024;
+            BytesAllocated = YoriLibMaximumAllocationInRange(16 * 1024, 64 * 1024);
         } else if (BytesAllocated <= 1024 * 1024) {
-            BytesAllocated = BytesAllocated * 4;
+            BytesAllocated = YoriLibMaximumAllocationInRange(BytesAllocated * 2, BytesAllocated * 4);
         } else {
+            return FALSE;
+        }
+
+        if (BytesAllocated == 0) {
             return FALSE;
         }
 
@@ -357,7 +374,7 @@ MemDisplayProcessMemoryUsage(
         }
 
         Status = DllNtDll.pNtQuerySystemInformation(SystemProcessInformation, ProcessInfo, BytesAllocated, &BytesReturned);
-    } while (Status == (LONG)0xc0000004);
+    } while (Status == STATUS_INFO_LENGTH_MISMATCH);
 
 
     if (Status != 0) {
@@ -494,15 +511,16 @@ MemDisplayProcessMemoryUsage(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     BOOLEAN DisplayProcesses = FALSE;
     BOOLEAN GroupProcesses = FALSE;
+    BOOLEAN DisplayGraph = TRUE;
     YORI_STRING Arg;
     MEM_CONTEXT MemContext;
     YORI_STRING DisplayString;
@@ -512,6 +530,8 @@ ENTRYPOINT(
                                  _T("Commit Limit: $COMMITLIMIT$\n")
                                  _T("Available Commit: $AVAILABLECOMMIT$\n");
 
+    ZeroMemory(&MemContext, sizeof(MemContext));
+
     for (i = 1; i < ArgC; i++) {
 
         ArgumentUnderstood = FALSE;
@@ -519,16 +539,16 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 MemHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2019"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("c")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("c")) == 0) {
                 DisplayProcesses = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("g")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("g")) == 0) {
                 GroupProcesses = TRUE;
                 ArgumentUnderstood = TRUE;
             }
@@ -544,6 +564,7 @@ ENTRYPOINT(
     }
 
     if (StartArg > 0) {
+        DisplayGraph = FALSE;
         if (!YoriLibBuildCmdlineFromArgcArgv(ArgC - StartArg, &ArgV[StartArg], TRUE, FALSE, &AllocatedFormatString)) {
             return EXIT_FAILURE;
         }
@@ -555,7 +576,7 @@ ENTRYPOINT(
         MemDisplayProcessMemoryUsage(GroupProcesses);
     }
 
-    if (DllKernel32.pGlobalMemoryStatusEx) {
+    if (DllKernel32.pGlobalMemoryStatusEx != NULL) {
         YORI_MEMORYSTATUSEX MemStatusEx;
         MemStatusEx.dwLength = sizeof(MemStatusEx);
         if (!DllKernel32.pGlobalMemoryStatusEx(&MemStatusEx)) {
@@ -567,23 +588,19 @@ ENTRYPOINT(
             return EXIT_FAILURE;
         }
 
+        MemContext.MemoryLoad.HighPart = 0;
+        MemContext.MemoryLoad.LowPart = MemStatusEx.dwMemoryLoad;
         MemContext.TotalPhysical.QuadPart = MemStatusEx.ullTotalPhys;
         MemContext.AvailablePhysical.QuadPart = MemStatusEx.ullAvailPhys;
         MemContext.TotalCommit.QuadPart = MemStatusEx.ullTotalPageFile;
         MemContext.AvailableCommit.QuadPart = MemStatusEx.ullAvailPageFile;
         MemContext.TotalVirtual.QuadPart = MemStatusEx.ullTotalVirtual;
         MemContext.AvailableVirtual.QuadPart = MemStatusEx.ullAvailVirtual;
-    } else {
+    } else if (DllKernel32.pGlobalMemoryStatus != NULL) {
         MEMORYSTATUS MemStatus;
-        //
-        //  Warning about using a deprecated function and how we should use
-        //  GlobalMemoryStatusEx instead.  The analyzer isn't smart enough to
-        //  notice that when it's available, that's what we do.
-        //
-#if defined(_MSC_VER) && (_MSC_VER >= 1700)
-#pragma warning(suppress: 28159)
-#endif
-        GlobalMemoryStatus(&MemStatus);
+        DllKernel32.pGlobalMemoryStatus(&MemStatus);
+        MemContext.MemoryLoad.HighPart = 0;
+        MemContext.MemoryLoad.LowPart = MemStatus.dwMemoryLoad;
         MemContext.TotalPhysical.QuadPart = MemStatus.dwTotalPhys;
         MemContext.AvailablePhysical.QuadPart = MemStatus.dwAvailPhys;
         MemContext.TotalCommit.QuadPart = MemStatus.dwTotalPageFile;
@@ -592,6 +609,10 @@ ENTRYPOINT(
         MemContext.AvailableVirtual.QuadPart = MemStatus.dwAvailVirtual;
     }
 
+    if (DisplayGraph) {
+        YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("Memory load: %i%%\n"), MemContext.MemoryLoad.LowPart);
+        YoriLibDisplayBarGraph(GetStdHandle(STD_OUTPUT_HANDLE), MemContext.MemoryLoad.LowPart * 10, 650, 800);
+    }
 
     YoriLibInitEmptyString(&DisplayString);
     YoriLibExpandCommandVariables(&AllocatedFormatString, '$', FALSE, MemExpandVariables, &MemContext, &DisplayString);
