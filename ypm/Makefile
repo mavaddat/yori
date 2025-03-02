@@ -5,9 +5,7 @@ BINARIES=ypm.exe
 
 CFLAGS=$(CFLAGS) -I..\pkglib
 
-!IF $(PDB)==1
 LINKPDB=/Pdb:ypm.pdb
-!ENDIF
 
 BIN_OBJS=\
 	 download.obj    \
@@ -17,6 +15,7 @@ BIN_OBJS=\
 	 uninst.obj      \
 	 upgrade.obj     \
 	 ypm.obj         \
+	 ypmconf.obj     \
 	 ypmcreat.obj    \
 	 ypminst.obj     \
 
@@ -27,17 +26,18 @@ MOD_OBJS=\
 	 rsource.obj     \
 	 uninst.obj      \
 	 upgrade.obj     \
-	 mod_ypm.obj     \
+	 mypm.obj        \
+	 ypmconf.obj     \
 	 ypmcreat.obj    \
 	 ypminst.obj     \
 
 compile: $(BIN_OBJS) builtins.lib
 
-ypm.exe: $(BIN_OBJS) $(YORILIB) $(YORICRT) $(YORIPKG) $(YORIVER)
+ypm.exe: $(BIN_OBJS) $(YORILIBS) $(YORIPKG) $(YORIVER)
 	@echo $@
-	@$(LINK) $(LDFLAGS) -entry:$(YENTRY) $(BIN_OBJS) $(LIBS) $(CRTLIB) $(YORILIB) $(YORIPKG) $(FDILIB) $(YORIVER) -version:$(YORI_VER_MAJOR).$(YORI_VER_MINOR) $(LINKPDB) -out:$@
+	@$(LINK) $(LDFLAGS) -entry:$(YENTRY) $(BIN_OBJS) $(YORILIBS) $(EXTERNLIBS) $(YORIPKG) $(FDILIB) $(YORIVER) -version:$(YORI_VER_MAJOR).$(YORI_VER_MINOR) $(LINKPDB) -out:$@
 
-mod_ypm.obj: ypm.c
+mypm.obj: ypm.c
 	@echo $@
 	@$(CC) -c -DYORI_BUILTIN=1 $(CFLAGS) -Fo$@ ypm.c
 

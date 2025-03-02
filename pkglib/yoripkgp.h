@@ -202,6 +202,13 @@ typedef struct _YORIPKG_PACKAGE_PENDING_INSTALL {
     YORI_LIST_ENTRY PackageList;
 
     /**
+     A string containing the original URL or path used to locate the package.
+     This can be used to avoid downloading the same path repeatedly.  The
+     rest of the fields are only known once the download has occurred.
+     */
+    YORI_STRING OriginalUrlOrPath;
+
+    /**
      A string for the human readable package name.
      */
     YORI_STRING PackageName;
@@ -269,7 +276,7 @@ typedef struct _YORIPKG_PACKAGE_PENDING_INSTALL {
      occurs if the package has been downloaded from a remote path and is
      stored in a temporary location.
      */
-    BOOL DeleteLocalPackagePath;
+    BOOLEAN DeleteLocalPackagePath;
 } YORIPKG_PACKAGE_PENDING_INSTALL, *PYORIPKG_PACKAGE_PENDING_INSTALL;
 
 /**
@@ -279,12 +286,21 @@ typedef struct _YORIPKG_PACKAGE_PENDING_INSTALL {
  */
 #define YORIPKG_MAX_FIELD_LENGTH (256)
 
+#if YORI_MAX_ALLOC_SIZE >= (64 * 1024)
 /**
  The maximum length of a section in an INI file.  The APIs aren't very good
  about telling us how much space we need, so this is the size we allocate
  and the effective limit.
  */
 #define YORIPKG_MAX_SECTION_LENGTH (64 * 1024)
+#else
+/**
+ The maximum length of a section in an INI file.  The APIs aren't very good
+ about telling us how much space we need, so this is the size we allocate
+ and the effective limit.
+ */
+#define YORIPKG_MAX_SECTION_LENGTH (32 * 1024)
+#endif
 
 __success(return)
 BOOL
@@ -357,7 +373,7 @@ YoriPkgPackagePathToLocalPath(
     __in PYORI_STRING PackagePath,
     __in_opt PCYORI_STRING IniFilePath,
     __out PYORI_STRING LocalPath,
-    __out PBOOL DeleteWhenFinished
+    __out PBOOLEAN DeleteWhenFinished
     );
 
 __success(return)
@@ -501,5 +517,32 @@ YoriPkgIsFileToBeDeletedOnReboot(
 
 BOOL
 YoriPkgRemoveUninstallEntry(VOID);
+
+BOOL
+YoriPkgUpdateRegistryShell(
+    __in PCYORI_STRING KeyName,
+    __in PCYORI_STRING ValueName,
+    __in PCYORI_STRING NewShellFullPath
+    );
+
+BOOL
+YoriPkgUpdateLogonShell(
+    __in PYORI_STRING NewShellFullPath
+    );
+
+__success(return)
+BOOL
+YoriPkgRestoreRegistryLoginShell(
+    VOID
+    );
+
+BOOL
+YoriPkgSetConsoleDefaults(
+    __in_opt PCYORI_STRING ConsoleTitle,
+    __in_ecount(16) COLORREF* ColorTable,
+    __in UCHAR WindowColor,
+    __in UCHAR PopupColor
+    );
+
 
 // vim:sw=4:ts=4:et:

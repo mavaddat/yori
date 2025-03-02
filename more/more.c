@@ -79,18 +79,18 @@ MoreHelp(VOID)
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     DWORD CurrentMode;
     DWORD Result;
     BOOLEAN Recursive = FALSE;
     BOOLEAN BasicEnumeration = FALSE;
-    BOOL InitComplete;
+    BOOLEAN InitComplete;
     BOOLEAN DebugDisplay = FALSE;
     BOOLEAN SuspendPagination = FALSE;
     BOOLEAN WaitForMore = FALSE;
@@ -105,28 +105,28 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 MoreHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2021"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("b")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("b")) == 0) {
                 BasicEnumeration = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("dd")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("dd")) == 0) {
                 DebugDisplay = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("f")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("f")) == 0) {
                 WaitForMore = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("l")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("l")) == 0) {
                 SuspendPagination = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("s")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("s")) == 0) {
                 Recursive = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 StartArg = i + 1;
                 ArgumentUnderstood = TRUE;
                 break;
@@ -160,7 +160,7 @@ ENTRYPOINT(
     //  exit.  This is needed for both builtin and non-builtin forms.
     //
 
-    YoriLibCancelEnable();
+    YoriLibCancelEnable(FALSE);
 
     if (StartArg == 0 || StartArg == ArgC) {
         InitComplete = MoreInitContext(&MoreContext, 0, NULL, Recursive, BasicEnumeration, DebugDisplay, SuspendPagination, WaitForMore);

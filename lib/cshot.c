@@ -125,7 +125,7 @@ YoriLibRewriteConsoleContents(
         }
     }
 
-    YoriLibVtSetConsoleTextAttributeOnDevice(hTarget, 0, 0, ReadBuffer[0].Attributes);
+    YoriLibVtSetConsoleTextAttrDev(hTarget, 0, 0, ReadBuffer[0].Attributes);
     LastAttribute = ReadBuffer[0].Attributes;
 
     for (ReadBufferOffset.Y = 0; ReadBufferOffset.Y < ReadBufferSize.Y; ReadBufferOffset.Y++) {
@@ -137,7 +137,7 @@ YoriLibRewriteConsoleContents(
             CellIndex = ReadBufferOffset.Y * ReadBufferSize.X + ReadBufferOffset.X;
 
             if (ReadBuffer[CellIndex].Attributes != LastAttribute) {
-                YoriLibVtSetConsoleTextAttributeOnDevice(hTarget, 0, 0, ReadBuffer[CellIndex].Attributes);
+                YoriLibVtSetConsoleTextAttrDev(hTarget, 0, 0, ReadBuffer[CellIndex].Attributes);
                 LastAttribute = ReadBuffer[CellIndex].Attributes;
             }
             YoriLibOutputToDevice(hTarget, 0, _T("%c"), ReadBuffer[CellIndex].Char.UnicodeChar);
@@ -179,7 +179,7 @@ YoriLibGenerateVtStringFromConsoleBuffers(
     SHORT LineIndex;
     SHORT CharIndex;
     WORD LastAttribute;
-    TCHAR EscapeStringBuffer[YORI_MAX_INTERNAL_VT_ESCAPE_CHARS];
+    TCHAR EscapeStringBuffer[YORI_MAX_VT_ESCAPE_CHARS];
     YORI_STRING EscapeString;
 
     //
@@ -220,9 +220,13 @@ YoriLibGenerateVtStringFromConsoleBuffers(
     //  Allocate a buffer of sufficient size if it's not allocated already
     //
 
-    if (String->LengthAllocated < BufferSizeNeeded) {
+    if (!YoriLibIsSizeAllocatable(BufferSizeNeeded)) {
+        return FALSE;
+    }
+
+    if (String->LengthAllocated < (YORI_ALLOC_SIZE_T)BufferSizeNeeded) {
         YoriLibFreeStringContents(String);
-        if (!YoriLibAllocateString(String, BufferSizeNeeded)) {
+        if (!YoriLibAllocateString(String, (YORI_ALLOC_SIZE_T)BufferSizeNeeded)) {
             return FALSE;
         }
     }
@@ -237,7 +241,7 @@ YoriLibGenerateVtStringFromConsoleBuffers(
     YoriLibVtStringForTextAttribute(&EscapeString, 0, LastAttribute);
 
     memcpy(&String->StartOfString[String->LengthInChars], EscapeString.StartOfString, EscapeString.LengthInChars * sizeof(TCHAR));
-    String->LengthInChars += EscapeString.LengthInChars;
+    String->LengthInChars = String->LengthInChars + EscapeString.LengthInChars;
 
     for (LineIndex = 0; LineIndex < BufferSize.Y; LineIndex++) {
         for (CharIndex = 0; CharIndex < BufferSize.X; CharIndex++) {
@@ -245,7 +249,7 @@ YoriLibGenerateVtStringFromConsoleBuffers(
                 LastAttribute = AttrBuffer[LineIndex * BufferSize.X + CharIndex];
                 YoriLibVtStringForTextAttribute(&EscapeString, 0, LastAttribute);
                 memcpy(&String->StartOfString[String->LengthInChars], EscapeString.StartOfString, EscapeString.LengthInChars * sizeof(TCHAR));
-                String->LengthInChars += EscapeString.LengthInChars;
+                String->LengthInChars = String->LengthInChars + EscapeString.LengthInChars;
             }
             String->StartOfString[String->LengthInChars] = CharBuffer[LineIndex * BufferSize.X + CharIndex];
             String->LengthInChars++;

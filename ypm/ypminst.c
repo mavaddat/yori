@@ -143,13 +143,13 @@ YpmInstallSymbolsHelp(VOID)
  */
 DWORD
 YpmInstall(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     YORI_STRING Arg;
 
     for (i = 1; i < ArgC; i++) {
@@ -159,13 +159,13 @@ YpmInstall(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 YpmInstallHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2021"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 ArgumentUnderstood = TRUE;
                 StartArg = i + 1;
                 break;
@@ -204,13 +204,13 @@ YpmInstall(
  */
 DWORD
 YpmInstallSource(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     YORI_STRING Arg;
 
     for (i = 1; i < ArgC; i++) {
@@ -220,13 +220,13 @@ YpmInstallSource(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 YpmInstallSourceHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2021"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 ArgumentUnderstood = TRUE;
                 StartArg = i + 1;
                 break;
@@ -264,13 +264,13 @@ YpmInstallSource(
  */
 DWORD
 YpmInstallSymbols(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     YORI_STRING Arg;
 
     for (i = 1; i < ArgC; i++) {
@@ -280,13 +280,13 @@ YpmInstallSymbols(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 YpmInstallSymbolsHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2021"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 ArgumentUnderstood = TRUE;
                 StartArg = i + 1;
                 break;
@@ -324,13 +324,13 @@ YpmInstallSymbols(
  */
 DWORD
 YpmInstallRemote(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     YORI_STRING Arg;
     PYORI_STRING NewVersion = NULL;
     PYORI_STRING NewArch = NULL;
@@ -343,25 +343,25 @@ YpmInstallRemote(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 YpmInstallRemoteHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2021"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("a")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("a")) == 0) {
                 if (i + 1 < ArgC) {
                     NewArch = &ArgV[i + 1];
                     i++;
                     ArgumentUnderstood = TRUE;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("v")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("v")) == 0) {
                 if (i + 1 < ArgC) {
                     NewVersion = &ArgV[i + 1];
                     i++;
                     ArgumentUnderstood = TRUE;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 ArgumentUnderstood = TRUE;
                 StartArg = i + 1;
                 break;

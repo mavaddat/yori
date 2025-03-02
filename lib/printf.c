@@ -39,6 +39,17 @@
 #include "yoripch.h"
 #include "yorilib.h"
 
+#ifdef __WATCOMC__
+#pragma disable_message(201)
+#pragma disable_message(302)
+#endif
+
+/**
+ Indicate to the printf code that whether we're compiling for unicode or not,
+ the system supports unicode, so conversions should be included.
+ */
+#define PRINTF_UNICODE_SUPPORTED 1
+
 #include "printf.inc"
 
 /**
@@ -60,16 +71,16 @@
  @return The number of characters successfully populated into the buffer, or
          -1 on error.
  */
-int
+YORI_SIGNED_ALLOC_SIZE_T
 YoriLibSPrintfS(
     __out_ecount(len) LPTSTR szDest,
-    __in DWORD len,
+    __in YORI_ALLOC_SIZE_T len,
     __in LPCTSTR szFmt,
     ...
     )
 {
     va_list marker;
-    int out_len;
+    YORI_SIGNED_ALLOC_SIZE_T out_len;
 
     va_start( marker, szFmt );
     out_len = YoriLibVSPrintf(szDest, len, szFmt, marker);
@@ -93,7 +104,7 @@ YoriLibSPrintfS(
  @return The number of characters successfully populated into the buffer, or
          -1 on error.
  */
-int
+YORI_SIGNED_ALLOC_SIZE_T
 YoriLibSPrintf(
     __out LPTSTR szDest,
     __in LPCTSTR szFmt,
@@ -101,10 +112,10 @@ YoriLibSPrintf(
     )
 {
     va_list marker;
-    int out_len;
+    YORI_SIGNED_ALLOC_SIZE_T out_len;
 
     va_start( marker, szFmt );
-    out_len = YoriLibVSPrintf(szDest, (DWORD)-1, szFmt, marker);
+    out_len = YoriLibVSPrintf(szDest, YORI_MAX_ALLOC_SIZE, szFmt, marker);
     va_end( marker );
     return out_len;
 }
@@ -128,21 +139,21 @@ YoriLibSPrintf(
          -1 on error.
  */
 __success(return >= 0)
-int
+YORI_SIGNED_ALLOC_SIZE_T
 YoriLibYPrintfInternal(
     __inout PYORI_STRING Dest,
     __in LPCTSTR szFmt,
     __in va_list marker
     )
 {
-    int required_len;
-    int out_len;
+    YORI_SIGNED_ALLOC_SIZE_T required_len;
+    YORI_SIGNED_ALLOC_SIZE_T out_len;
 
     required_len = YoriLibVSPrintfSize(szFmt, marker);
     if (required_len < 0) {
         return required_len;
     }
-    if ((DWORD)required_len > Dest->LengthAllocated) {
+    if ((YORI_ALLOC_SIZE_T)required_len > Dest->LengthAllocated) {
         YoriLibFreeStringContents(Dest);
 
         Dest->MemoryToFree = YoriLibReferencedMalloc(required_len * sizeof(TCHAR));
@@ -174,7 +185,7 @@ YoriLibYPrintfInternal(
          -1 on error.
  */
 __success(return >= 0)
-int
+YORI_SIGNED_ALLOC_SIZE_T
 YoriLibYPrintf(
     __inout PYORI_STRING Dest,
     __in LPCTSTR szFmt,
@@ -182,7 +193,7 @@ YoriLibYPrintf(
     )
 {
     va_list marker;
-    int out_len;
+    YORI_SIGNED_ALLOC_SIZE_T out_len;
 
     va_start( marker, szFmt );
     out_len = YoriLibYPrintfInternal(Dest, szFmt, marker);
@@ -199,14 +210,14 @@ YoriLibYPrintf(
  @return The number of characters that could be populated into the buffer, or
          -1 on error.
  */
-int
+YORI_SIGNED_ALLOC_SIZE_T
 YoriLibSPrintfSize(
     __in LPCTSTR szFmt,
     ...
     )
 {
     va_list marker;
-    int out_len;
+    YORI_SIGNED_ALLOC_SIZE_T out_len;
 
     va_start( marker, szFmt );
     out_len = YoriLibVSPrintfSize(szFmt, marker);

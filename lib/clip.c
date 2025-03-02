@@ -34,7 +34,7 @@
  strings.  The zero padding helps keep computation sane.
  Dummy because it is only used to count its size, not used as a string.
  */
-static const CHAR DummyHeader[] = 
+const CHAR YoriLibClipDummyHeader[] = 
                   "Version:0.9\n"
                   "StartHTML:12345678\n"
                   "EndHTML:12345678\n"
@@ -44,31 +44,59 @@ static const CHAR DummyHeader[] =
 /**
  The length of the header, in bytes.
  */
-#define HTMLCLIP_HDR_SIZE (sizeof(DummyHeader)-1)
+#define HTMLCLIP_HDR_SIZE (sizeof(YoriLibClipDummyHeader)-1)
 
 /**
  A string indicating the start of a fragment.
  Dummy because it is only used to count its size, not used as a string.
  */
-static const CHAR DummyFragStart[] = 
+const CHAR YoriLibClipDummyFragStart[] = 
                   "<!--StartFragment-->";
 
 /**
  The length of the fragment start string, in bytes.
  */
-#define HTMLCLIP_FRAGSTART_SIZE (sizeof(DummyFragStart)-1)
+#define HTMLCLIP_FRAGSTART_SIZE (sizeof(YoriLibClipDummyFragStart)-1)
 
 /**
  A string indicating the end of a fragment.
  Dummy because it is only used to count its size, not used as a string.
  */
-static const CHAR DummyFragEnd[] = 
+static const CHAR YoriLibClipDummyFragEnd[] = 
                   "<!--EndFragment-->";
 
 /**
  The length of the fragment end string, in bytes.
  */
-#define HTMLCLIP_FRAGEND_SIZE (sizeof(DummyFragEnd)-1)
+#define HTMLCLIP_FRAGEND_SIZE (sizeof(YoriLibClipDummyFragEnd)-1)
+
+/**
+ Attempt to open the clipboard with some retries in case it is currently in
+ use.
+
+ @return TRUE to indicate success, FALSE to indicate failure.
+ */
+BOOLEAN
+YoriLibOpenClipboard(VOID)
+{
+    DWORD Attempt;
+
+    if (DllUser32.pOpenClipboard == NULL) {
+        return FALSE;
+    }
+
+    for (Attempt = 0; Attempt < 6; Attempt++) {
+        if (Attempt > 0) {
+            Sleep(1<<Attempt);
+        }
+
+        if (DllUser32.pOpenClipboard(NULL)) {
+            return TRUE;
+        }
+    }
+
+    return FALSE;
+}
 
 //
 //  Older versions of the analysis engine don't understand that a buffer
@@ -113,6 +141,12 @@ YoriLibBuildHtmlClipboardBuffer(
     DWORD WinMinorVer;
     DWORD BuildNumber;
 
+    if (DllKernel32.pGlobalLock == NULL ||
+        DllKernel32.pGlobalUnlock == NULL) {
+
+        return FALSE;
+    }
+
     YoriLibGetOsVersion(&WinMajorVer, &WinMinorVer, &BuildNumber);
 
     if (WinMajorVer < 4) {
@@ -127,6 +161,9 @@ YoriLibBuildHtmlClipboardBuffer(
     }
 
     BytesNeeded = UserBytes + HTMLCLIP_HDR_SIZE + HTMLCLIP_FRAGSTART_SIZE + HTMLCLIP_FRAGEND_SIZE + 2;
+    if (!YoriLibIsSizeAllocatable(BytesNeeded)) {
+        return FALSE;
+    }
 
     //
     //  Allocate space to copy the text contents.
@@ -137,7 +174,7 @@ YoriLibBuildHtmlClipboardBuffer(
         return FALSE;
     }
 
-    pMem = GlobalLock(hMem);
+    pMem = DllKernel32.pGlobalLock(hMem);
     if (pMem == NULL) {
         GlobalFree(hMem);
         return FALSE;
@@ -151,7 +188,7 @@ YoriLibBuildHtmlClipboardBuffer(
     //
 
     YoriLibSPrintfSA((PCHAR)pMem,
-                     BytesNeeded,
+                     (YORI_ALLOC_SIZE_T)BytesNeeded,
                      "Version:0.9\n"
                      "StartHTML:%08i\n"
                      "EndHTML:%08i\n"
@@ -166,7 +203,7 @@ YoriLibBuildHtmlClipboardBuffer(
 
     Return = WideCharToMultiByte(EncodingToUse, 0, TextToCopy->StartOfString, TextToCopy->LengthInChars, (LPSTR)(pMem + HTMLCLIP_HDR_SIZE + HTMLCLIP_FRAGSTART_SIZE), UserBytes, NULL, NULL);
     if (Return == 0) {
-        GlobalUnlock(hMem);
+        DllKernel32.pGlobalUnlock(hMem);
         GlobalFree(hMem);
         return FALSE;
     }
@@ -177,9 +214,9 @@ YoriLibBuildHtmlClipboardBuffer(
 
     YoriLibSPrintfA((PCHAR)(pMem + UserBytes + HTMLCLIP_HDR_SIZE + HTMLCLIP_FRAGSTART_SIZE + 1),
                     "%s",
-                    DummyFragEnd);
+                    YoriLibClipDummyFragEnd);
 
-    GlobalUnlock(hMem);
+    DllKernel32.pGlobalUnlock(hMem);
 
     *HandleForClipboard = hMem;
 
@@ -203,13 +240,16 @@ YoriLibPasteText(
 {
     HANDLE hMem;
     LPWSTR pMem;
-    DWORD StringLength;
+    YORI_ALLOC_SIZE_T StringLength;
 
     YoriLibLoadUser32Functions();
 
-    if (DllUser32.pOpenClipboard == NULL ||
+    if (DllKernel32.pGlobalLock == NULL ||
+        DllKernel32.pGlobalUnlock == NULL ||
+        DllUser32.pOpenClipboard == NULL ||
         DllUser32.pGetClipboardData == NULL ||
         DllUser32.pCloseClipboard == NULL) {
+
         return FALSE;
     }
 
@@ -217,7 +257,7 @@ YoriLibPasteText(
     //  Open the clipboard and fetch its contents.
     //
 
-    if (!DllUser32.pOpenClipboard(NULL)) {
+    if (!YoriLibOpenClipboard()) {
         return FALSE;
     }
 
@@ -227,23 +267,23 @@ YoriLibPasteText(
         return FALSE;
     }
 
-    pMem = GlobalLock(hMem);
+    pMem = DllKernel32.pGlobalLock(hMem);
     if (pMem == NULL) {
         DllUser32.pCloseClipboard();
         return FALSE;
     }
-    StringLength = _tcslen(pMem);
+    StringLength = (YORI_ALLOC_SIZE_T)_tcslen(pMem);
 
     if (StringLength >= Buffer->LengthAllocated) {
-        if (!YoriLibReallocateStringWithoutPreservingContents(Buffer, StringLength + 1)) {
-            GlobalUnlock(hMem);
+        if (!YoriLibReallocStringNoContents(Buffer, (YORI_ALLOC_SIZE_T)(StringLength + 1))) {
+            DllKernel32.pGlobalUnlock(hMem);
             DllUser32.pCloseClipboard();
             return FALSE;
         }
     }
     memcpy(Buffer->StartOfString, pMem, (StringLength + 1) * sizeof(WCHAR));
     Buffer->LengthInChars = StringLength;
-    GlobalUnlock(hMem);
+    DllKernel32.pGlobalUnlock(hMem);
 
     //
     //  Truncate any newlines which are not normally intended when pasting
@@ -283,7 +323,9 @@ YoriLibCopyText(
 
     YoriLibLoadUser32Functions();
 
-    if (DllUser32.pOpenClipboard == NULL ||
+    if (DllKernel32.pGlobalLock == NULL ||
+        DllKernel32.pGlobalUnlock == NULL ||
+        DllUser32.pOpenClipboard == NULL ||
         DllUser32.pEmptyClipboard == NULL ||
         DllUser32.pSetClipboardData == NULL ||
         DllUser32.pCloseClipboard == NULL) {
@@ -294,7 +336,7 @@ YoriLibCopyText(
     //  Open the clipboard and empty its contents.
     //
 
-    if (!DllUser32.pOpenClipboard(NULL)) {
+    if (!YoriLibOpenClipboard()) {
         return FALSE;
     }
 
@@ -306,7 +348,7 @@ YoriLibCopyText(
         return FALSE;
     }
 
-    pMem = GlobalLock(hMem);
+    pMem = DllKernel32.pGlobalLock(hMem);
     if (pMem == NULL) {
         GlobalFree(hMem);
         DllUser32.pCloseClipboard();
@@ -315,7 +357,7 @@ YoriLibCopyText(
 
     memcpy(pMem, Buffer->StartOfString, Buffer->LengthInChars * sizeof(TCHAR));
     pMem[Buffer->LengthInChars] = '\0';
-    GlobalUnlock(hMem);
+    DllKernel32.pGlobalUnlock(hMem);
     pMem = NULL;
 
     hClip = DllUser32.pSetClipboardData(CF_UNICODETEXT, hMem);
@@ -362,7 +404,9 @@ YoriLibCopyTextRtfAndHtml(
 
     YoriLibLoadUser32Functions();
 
-    if (DllUser32.pOpenClipboard == NULL ||
+    if (DllKernel32.pGlobalLock == NULL ||
+        DllKernel32.pGlobalUnlock == NULL ||
+        DllUser32.pOpenClipboard == NULL ||
         DllUser32.pEmptyClipboard == NULL ||
         DllUser32.pRegisterClipboardFormatW == NULL ||
         DllUser32.pSetClipboardData == NULL ||
@@ -374,7 +418,7 @@ YoriLibCopyTextRtfAndHtml(
     //  Open the clipboard and empty its contents.
     //
 
-    if (!DllUser32.pOpenClipboard(NULL)) {
+    if (!YoriLibOpenClipboard()) {
         return FALSE;
     }
 
@@ -389,7 +433,7 @@ YoriLibCopyTextRtfAndHtml(
         return FALSE;
     }
 
-    pWideMem = GlobalLock(hText);
+    pWideMem = DllKernel32.pGlobalLock(hText);
     if (pWideMem == NULL) {
         GlobalFree(hText);
         DllUser32.pCloseClipboard();
@@ -398,7 +442,7 @@ YoriLibCopyTextRtfAndHtml(
 
     memcpy(pWideMem, TextVersion->StartOfString, TextVersion->LengthInChars * sizeof(TCHAR));
     pWideMem[TextVersion->LengthInChars] = '\0';
-    GlobalUnlock(hText);
+    DllKernel32.pGlobalUnlock(hText);
     pWideMem = NULL;
 
     //
@@ -415,7 +459,7 @@ YoriLibCopyTextRtfAndHtml(
         return FALSE;
     }
 
-    pNarrowMem = GlobalLock(hRtf);
+    pNarrowMem = DllKernel32.pGlobalLock(hRtf);
     if (pNarrowMem == NULL) {
         GlobalFree(hText);
         GlobalFree(hRtf);
@@ -428,7 +472,7 @@ YoriLibCopyTextRtfAndHtml(
     }
     pNarrowMem[RtfVersion->LengthInChars] = '\0';
 
-    GlobalUnlock(hRtf);
+    DllKernel32.pGlobalUnlock(hRtf);
     pNarrowMem = NULL;
 
     //
@@ -497,6 +541,194 @@ YoriLibCopyTextRtfAndHtml(
     return TRUE;
 }
 
+/**
+ Copy binary data into the clipboard.
+
+ @param Buffer The data to populate into the clipboard.
+ 
+ @param BufferLength The length of the data to populate into the clipboard, in
+        bytes.
+
+ @return TRUE to indicate success, FALSE to indicate failure.
+ */
+__success(return)
+BOOL
+YoriLibCopyBinaryData(
+    __in PUCHAR Buffer,
+    __in YORI_ALLOC_SIZE_T BufferLength
+    )
+{
+    HANDLE hMem;
+    HANDLE hClip;
+    PUCHAR pMem;
+    SIZE_T ClipboardBufferLength;
+    PDWORD InternalBufferLength;
+    DWORD BinFmt;
+
+    YoriLibLoadUser32Functions();
+
+    if (DllKernel32.pGlobalLock == NULL ||
+        DllKernel32.pGlobalUnlock == NULL ||
+        DllUser32.pOpenClipboard == NULL ||
+        DllUser32.pEmptyClipboard == NULL ||
+        DllUser32.pRegisterClipboardFormatW == NULL ||
+        DllUser32.pSetClipboardData == NULL ||
+        DllUser32.pCloseClipboard == NULL) {
+        return FALSE;
+    }
+
+    ClipboardBufferLength = BufferLength;
+    ClipboardBufferLength = ClipboardBufferLength + sizeof(DWORD);
+    if (!YoriLibIsSizeAllocatable(ClipboardBufferLength)) {
+        return FALSE;
+    }
+
+    BinFmt = DllUser32.pRegisterClipboardFormatW(_T("BinaryData"));
+    if (BinFmt == 0) {
+        return FALSE;
+    }
+
+    //
+    //  Open the clipboard and empty its contents.
+    //
+
+    if (!YoriLibOpenClipboard()) {
+        return FALSE;
+    }
+
+    DllUser32.pEmptyClipboard();
+
+    hMem = GlobalAlloc(GMEM_MOVEABLE, ClipboardBufferLength);
+    if (hMem == NULL) {
+        DllUser32.pCloseClipboard();
+        return FALSE;
+    }
+
+    pMem = DllKernel32.pGlobalLock(hMem);
+    if (pMem == NULL) {
+        GlobalFree(hMem);
+        DllUser32.pCloseClipboard();
+        return FALSE;
+    }
+
+    InternalBufferLength = (PDWORD)pMem;
+    *InternalBufferLength = BufferLength;
+
+    pMem = pMem + sizeof(DWORD);
+    memcpy(pMem, Buffer, BufferLength);
+    DllKernel32.pGlobalUnlock(hMem);
+    pMem = NULL;
+
+    hClip = DllUser32.pSetClipboardData(BinFmt, hMem);
+    if (hClip == NULL) {
+        DllUser32.pCloseClipboard();
+        GlobalFree(hMem);
+        return FALSE;
+    }
+
+    DllUser32.pCloseClipboard();
+    GlobalFree(hMem);
+    return TRUE;
+}
+
+
+/**
+ Retrieve any binary data from the clipboard.
+
+ @return TRUE to indicate success, FALSE to indicate failure.
+ */
+__success(return)
+BOOL
+YoriLibPasteBinaryData(
+    __out PUCHAR *Buffer,
+    __out PYORI_ALLOC_SIZE_T BufferLength
+    )
+{
+    HANDLE hMem;
+    PUCHAR pMem;
+    SIZE_T ClipboardBufferLength;
+    YORI_ALLOC_SIZE_T LocalBufferLength;
+    PUCHAR LocalBuffer;
+    PDWORD InternalBufferLength;
+    DWORD BinFmt;
+
+    YoriLibLoadUser32Functions();
+
+    if (DllKernel32.pGlobalLock == NULL ||
+        DllKernel32.pGlobalUnlock == NULL ||
+        DllUser32.pOpenClipboard == NULL ||
+        DllUser32.pRegisterClipboardFormatW == NULL ||
+        DllUser32.pGetClipboardData == NULL ||
+        DllUser32.pCloseClipboard == NULL) {
+
+        return FALSE;
+    }
+
+    BinFmt = DllUser32.pRegisterClipboardFormatW(_T("BinaryData"));
+    if (BinFmt == 0) {
+        return FALSE;
+    }
+
+    //
+    //  Open the clipboard and fetch its contents.
+    //
+
+    if (!YoriLibOpenClipboard()) {
+        return FALSE;
+    }
+
+    hMem = DllUser32.pGetClipboardData(BinFmt);
+    if (hMem == NULL) {
+        DllUser32.pCloseClipboard();
+        return FALSE;
+    }
+
+    ClipboardBufferLength = DllKernel32.pGlobalSize(hMem);
+    if (ClipboardBufferLength < sizeof(DWORD)) {
+        DllUser32.pCloseClipboard();
+        return FALSE;
+    }
+
+    pMem = DllKernel32.pGlobalLock(hMem);
+    if (pMem == NULL) {
+        DllUser32.pCloseClipboard();
+        return FALSE;
+    }
+
+    InternalBufferLength = (PDWORD)pMem;
+    if (*InternalBufferLength > ClipboardBufferLength - sizeof(DWORD)) {
+        DllKernel32.pGlobalUnlock(hMem);
+        DllUser32.pCloseClipboard();
+        return FALSE;
+    }
+
+    ClipboardBufferLength = *InternalBufferLength;
+    if (!YoriLibIsSizeAllocatable(ClipboardBufferLength)) {
+        DllKernel32.pGlobalUnlock(hMem);
+        DllUser32.pCloseClipboard();
+        return FALSE;
+    }
+
+
+    LocalBufferLength = (YORI_ALLOC_SIZE_T)ClipboardBufferLength;
+    LocalBuffer = YoriLibReferencedMalloc(LocalBufferLength);
+    if (LocalBuffer == NULL) {
+        DllKernel32.pGlobalUnlock(hMem);
+        DllUser32.pCloseClipboard();
+        return FALSE;
+    }
+
+    pMem = pMem + sizeof(DWORD);
+    memcpy(LocalBuffer, pMem, LocalBufferLength);
+    DllKernel32.pGlobalUnlock(hMem);
+    DllUser32.pCloseClipboard();
+
+    *Buffer = LocalBuffer;
+    *BufferLength = LocalBufferLength;
+
+    return TRUE;
+}
+
 #if defined(_MSC_VER) && (_MSC_VER >= 1500) && (_MSC_VER <= 1600)
 #pragma warning(pop)
 #endif
@@ -562,7 +794,7 @@ YoriLibCopyTextWithProcessFallback(
     }
 
     if (Buffer->LengthInChars > YoriLibProcessClipboard.LengthAllocated) {
-        if (!YoriLibReallocateStringWithoutPreservingContents(&YoriLibProcessClipboard, Buffer->LengthInChars)) {
+        if (!YoriLibReallocStringNoContents(&YoriLibProcessClipboard, Buffer->LengthInChars)) {
             return FALSE;
         }
     }
@@ -594,7 +826,7 @@ YoriLibPasteTextWithProcessFallback(
     }
 
     if (YoriLibProcessClipboard.LengthInChars + 1 > Buffer->LengthAllocated) {
-        if (!YoriLibReallocateStringWithoutPreservingContents(Buffer, YoriLibProcessClipboard.LengthInChars + 1)) {
+        if (!YoriLibReallocStringNoContents(Buffer, (YORI_ALLOC_SIZE_T)(YoriLibProcessClipboard.LengthInChars + 1))) {
             return FALSE;
         }
     }
@@ -604,7 +836,7 @@ YoriLibPasteTextWithProcessFallback(
 
     Buffer->LengthInChars = YoriLibProcessClipboard.LengthInChars;
     Buffer->StartOfString[Buffer->LengthInChars] = '\0';
-    
+
     //
     //  Truncate any newlines which are not normally intended when pasting
     //  into the shell

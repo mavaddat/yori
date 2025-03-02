@@ -113,11 +113,11 @@ ReplProcessStream(
     YORI_STRING InitialPortion;
     YORI_STRING TrailingPortion;
     PYORI_STRING SourceString;
-    DWORD SearchOffset;
+    YORI_ALLOC_SIZE_T SearchOffset;
     YORI_STRING SearchSubset;
-    DWORD MatchOffset;
-    DWORD NextAlternate;
-    DWORD LengthRequired;
+    YORI_ALLOC_SIZE_T MatchOffset;
+    YORI_ALLOC_SIZE_T NextAlternate;
+    YORI_ALLOC_SIZE_T LengthRequired;
 
     YoriLibInitEmptyString(&LineString);
     YoriLibInitEmptyString(&AlternateStrings[0]);
@@ -154,11 +154,11 @@ ReplProcessStream(
             //
 
             if (ReplContext->Insensitive) {
-                if (YoriLibFindFirstMatchingSubstringInsensitive(&SearchSubset, 1, ReplContext->MatchString, &MatchOffset) == NULL) {
+                if (YoriLibFindFirstMatchSubstrIns(&SearchSubset, 1, ReplContext->MatchString, &MatchOffset) == NULL) {
                     break;
                 }
             } else {
-                if (YoriLibFindFirstMatchingSubstring(&SearchSubset, 1, ReplContext->MatchString, &MatchOffset) == NULL) {
+                if (YoriLibFindFirstMatchSubstr(&SearchSubset, 1, ReplContext->MatchString, &MatchOffset) == NULL) {
                     break;
                 }
             }
@@ -321,7 +321,7 @@ ReplFileEnumerateErrorCallback(
         DirName.StartOfString = UnescapedFilePath.StartOfString;
         FilePart = YoriLibFindRightMostCharacter(&UnescapedFilePath, '\\');
         if (FilePart != NULL) {
-            DirName.LengthInChars = (DWORD)(FilePart - DirName.StartOfString);
+            DirName.LengthInChars = (YORI_ALLOC_SIZE_T)(FilePart - DirName.StartOfString);
         } else {
             DirName.LengthInChars = UnescapedFilePath.LengthInChars;
         }
@@ -357,15 +357,15 @@ ReplFileEnumerateErrorCallback(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
-    DWORD MatchFlags;
-    BOOL BasicEnumeration = FALSE;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
+    WORD MatchFlags;
+    BOOLEAN BasicEnumeration = FALSE;
     REPL_CONTEXT ReplContext;
     YORI_STRING Arg;
     YORI_STRING EmptyString;
@@ -379,22 +379,22 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 ReplHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2018-2021"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("b")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("b")) == 0) {
                 BasicEnumeration = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("i")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("i")) == 0) {
                 ReplContext.Insensitive = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("s")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("s")) == 0) {
                 ReplContext.Recursive = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 StartArg = i + 1;
                 ArgumentUnderstood = TRUE;
                 break;
@@ -435,7 +435,7 @@ ENTRYPOINT(
     StartArg += 2;
 
 #if YORI_BUILTIN
-    YoriLibCancelEnable();
+    YoriLibCancelEnable(FALSE);
 #endif
 
     //

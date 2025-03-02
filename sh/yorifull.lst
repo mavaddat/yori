@@ -1,5 +1,8 @@
+..\airplan\builtins.lib
 ..\assoc\builtins.lib
 ..\attrib\builtins.lib
+..\base64\builtins.lib
+..\battery\builtins.lib
 ..\cab\builtins.lib
 ..\cal\builtins.lib
 ..\charmap\builtins.lib
@@ -7,6 +10,7 @@
 ..\cls\builtins.lib
 ..\co\builtins.lib
 ..\compact\builtins.lib
+..\contool\builtins.lib
 ..\copy\builtins.lib
 ..\cpuinfo\builtins.lib
 ..\cshot\builtins.lib
@@ -24,6 +28,7 @@
 ..\erase\builtins.lib
 ..\err\builtins.lib
 ..\expr\builtins.lib
+..\extents\builtins.lib
 ..\finfo\builtins.lib
 ..\fscmp\builtins.lib
 ..\get\builtins.lib
@@ -31,6 +36,7 @@
 ..\hash\builtins.lib
 ..\help\builtins.lib
 ..\hexdump\builtins.lib
+..\hexedit\builtins.lib
 ..\hilite\builtins.lib
 ..\iconv\builtins.lib
 ..\initool\builtins.lib
@@ -46,6 +52,7 @@
 ..\mount\builtins.lib
 ..\move\builtins.lib
 ..\nice\builtins.lib
+..\objdir\builtins.lib
 ..\osver\builtins.lib
 ..\path\builtins.lib
 ..\pause\builtins.lib
@@ -54,6 +61,7 @@
 ..\procinfo\builtins.lib
 ..\ps\builtins.lib
 ..\readline\builtins.lib
+..\regedit\builtins.lib
 ..\repl\builtins.lib
 ..\rmdir\builtins.lib
 ..\scut\builtins.lib
@@ -62,6 +70,7 @@
 ..\shutdn\builtins.lib
 ..\sleep\builtins.lib
 ..\slmenu\builtins.lib
+..\speak\builtins.lib
 ..\split\builtins.lib
 ..\sponge\builtins.lib
 ..\start\builtins.lib

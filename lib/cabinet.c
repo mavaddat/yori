@@ -3,7 +3,7 @@
  *
  * Yori shell extract .cab files
  *
- * Copyright (c) 2018-2021 Malcolm J. Smith
+ * Copyright (c) 2018-2022 Malcolm J. Smith
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -92,6 +92,231 @@ typedef struct _YORI_LIB_CAB_EXPAND_CONTEXT {
 } YORI_LIB_CAB_EXPAND_CONTEXT, *PYORI_LIB_CAB_EXPAND_CONTEXT;
 
 /**
+ Context passed when adding files during compression operations.  Used here
+ to indicate which encoding to use to interpret file names.
+ */
+typedef struct _YORI_CAB_ADD_CONTEXT {
+
+    /**
+     TRUE if the narrow string specifying a file name is encoded in UTF-8.
+     If FALSE, the narrow string is encoded as the active code page.  UTF-8
+     is used for on disk names wherever support is present.
+     */
+    BOOLEAN OnDiskNameIsUtf;
+
+    /**
+     TRUE if the narrow string specifying a directory entry in a CAB should
+     be interpreted as UTF-8, FALSE if it should be interpreted as the active
+     code page.  This is only set to TRUE if the file name contains extended
+     characters, since files can be extracted without UTF-8 decoding if no
+     extended characters are present.  UTF-8 decoding doesn't exist in NT 3.x
+     either.
+     */
+    BOOLEAN InCabNameIsUtf;
+} YORI_CAB_ADD_CONTEXT, *PYORI_CAB_ADD_CONTEXT;
+
+/**
+ Allocate and convert a wide string into a narrow string in a specified
+ encoding.
+
+ @param WideString Pointer to the wide string to convert.
+
+ @param Encoding Specifies the encoding to use in the narrow string.
+
+ @param NarrowString On successful completion, populated with an allocated
+        string containing the narrow encoded string.  This should be freed
+        with @ref YoriLibFree .
+
+ @return Win32 error code indicating the result of the operation, including
+         ERROR_SUCCESS to indicate success.
+ */
+__success(return == ERROR_SUCCESS)
+DWORD
+YoriLibCabWideToNarrow(
+     __in PYORI_STRING WideString,
+     __in DWORD Encoding,
+     __out LPSTR * NarrowString
+     )
+{
+    BOOL DefaultUsed;
+    YORI_ALLOC_SIZE_T LengthNeeded;
+    LPSTR LocalNarrowString;
+    DWORD Error;
+    PBOOL DefaultPtr;
+
+    DefaultUsed = FALSE;
+
+    LengthNeeded = (YORI_ALLOC_SIZE_T)WideCharToMultiByte(Encoding, 0, WideString->StartOfString, WideString->LengthInChars, NULL, 0, NULL, NULL);
+
+    LocalNarrowString = YoriLibMalloc((YORI_ALLOC_SIZE_T)(LengthNeeded + 1));
+    if (LocalNarrowString == NULL) {
+        return ERROR_NOT_ENOUGH_MEMORY;
+    }
+
+    //
+    //  WideCharToMultiByte fails if DefaultUsed is specified with an encoding
+    //  that doesn't support default characters, like UTF8
+    //
+
+    DefaultPtr = &DefaultUsed;
+    if (Encoding == CP_UTF8) {
+        DefaultPtr = NULL;
+    }
+
+    if (WideCharToMultiByte(Encoding, 0, WideString->StartOfString, WideString->LengthInChars, LocalNarrowString, LengthNeeded, NULL, DefaultPtr) != (INT)(LengthNeeded)) {
+        Error = GetLastError();
+        YoriLibFree(LocalNarrowString);
+        return Error;
+    }
+
+    if (DefaultUsed) {
+        YoriLibFree(LocalNarrowString);
+        return ERROR_NO_UNICODE_TRANSLATION;
+    }
+
+    LocalNarrowString[LengthNeeded] = '\0';
+    *NarrowString = LocalNarrowString;
+    return ERROR_SUCCESS;
+}
+
+/**
+ Convert a narrow string with a specified encoding into a newly allocated
+ wide string.
+
+ @param NarrowString Pointer to the source narrow string.
+
+ @param Encoding Specifies the encoding of the narrow string.
+
+ @param WideString On successful completion, populated with a newly allocated
+        wide string.  The caller should free this with
+        @ref YoriLibFreeStringContents .
+
+ @return Win32 error code, including ERROR_SUCCESS to indicate successful
+         completion.
+ */
+__success(return == ERROR_SUCCESS)
+DWORD
+YoriLibCabNarrowToWide(
+    __in LPSTR NarrowString,
+    __in DWORD Encoding,
+    __out PYORI_STRING WideString
+    )
+{
+    YORI_ALLOC_SIZE_T LengthNeeded;
+    YORI_STRING LocalString;
+    DWORD Error;
+
+    LengthNeeded = (YORI_ALLOC_SIZE_T)MultiByteToWideChar(Encoding, 0, NarrowString, -1, NULL, 0);
+    if (!YoriLibAllocateString(&LocalString, (YORI_ALLOC_SIZE_T)(LengthNeeded + 1))) {
+        return ERROR_NOT_ENOUGH_MEMORY;
+    }
+
+    if (MultiByteToWideChar(Encoding, 0, NarrowString, -1, LocalString.StartOfString, LengthNeeded) != (INT)(LengthNeeded)) {
+        Error = GetLastError();
+        YoriLibFreeStringContents(&LocalString);
+        return Error;
+    }
+
+    LocalString.StartOfString[LengthNeeded] = '\0';
+    LocalString.LengthInChars = (YORI_ALLOC_SIZE_T)(LengthNeeded - 1);
+    memcpy(WideString, &LocalString, sizeof(YORI_STRING));
+    return ERROR_SUCCESS;
+}
+
+/**
+ Bits indicating a file should be opened read only.
+ */
+#define YORI_LIB_CAB_OPEN_READONLY   (0x0000)
+
+/**
+ Bits indicating a file should be opened write only.
+ */
+#define YORI_LIB_CAB_OPEN_WRITEONLY  (0x0001)
+
+/**
+ Bits indicating a file should be opened read and write.
+ */
+#define YORI_LIB_CAB_OPEN_READWRITE  (0x0002)
+
+/**
+ The set of bits to compare when trying to discover the open mode.
+ */
+#define YORI_LIB_CAB_OPEN_MASK       (0x0003)
+
+/**
+ A callback invoked during FCI to open a file.  Note that this is used
+ on the same file multiple times and thus requires sharing with previous
+ opens.
+ 
+ @param FileName A NULL terminated narrow string indicating the file name.
+
+ @param Encoding Specifies the character encoding of the FileName string.
+
+ @param OFlag The open flags, apparently modelled on the CRT but don't
+        really match those values.
+
+ @param PMode No idea (per MSDN.)
+
+ @return File handle.
+ */
+DWORD_PTR 
+YoriLibCabFileOpen(
+    __in LPSTR FileName,
+    __in DWORD Encoding,
+    __in INT OFlag,
+    __in INT PMode
+    )
+{
+    HANDLE hFile;
+    DWORD DesiredAccess;
+    DWORD ShareMode;
+    DWORD Disposition;
+    DWORD OpenType = ((DWORD)OFlag & YORI_LIB_CAB_OPEN_MASK);
+    YORI_STRING WideFileName;
+    DWORD Error;
+
+    UNREFERENCED_PARAMETER(PMode);
+
+    switch(OpenType) {
+        case YORI_LIB_CAB_OPEN_READONLY:
+            DesiredAccess = GENERIC_READ;
+            Disposition = OPEN_EXISTING;
+            ShareMode = FILE_SHARE_READ | FILE_SHARE_DELETE;
+            break;
+        case YORI_LIB_CAB_OPEN_WRITEONLY:
+            DesiredAccess = GENERIC_WRITE;
+            Disposition = CREATE_ALWAYS;
+            ShareMode = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+            break;
+        case YORI_LIB_CAB_OPEN_READWRITE:
+            DesiredAccess = GENERIC_READ | GENERIC_WRITE;
+            Disposition = OPEN_ALWAYS;
+            ShareMode = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+            break;
+        default:
+            return (DWORD_PTR)INVALID_HANDLE_VALUE;
+    }
+
+    Error = YoriLibCabNarrowToWide(FileName, Encoding, &WideFileName);
+    if (Error != ERROR_SUCCESS) {
+        SetLastError(Error);
+        return (DWORD_PTR)INVALID_HANDLE_VALUE;
+    }
+
+    hFile = CreateFile(WideFileName.StartOfString,
+                       DesiredAccess,
+                       ShareMode,
+                       NULL,
+                       Disposition,
+                       FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS,
+                       NULL);
+
+    YoriLibFreeStringContents(&WideFileName);
+
+    return (DWORD_PTR)hFile;
+}
+
+/**
  A callback invoked during FDICopy to allocate memory.
 
  @param Bytes The number of bytes to allocate.
@@ -104,7 +329,25 @@ YoriLibCabAlloc(
     )
 {
     LPVOID Alloc;
-    Alloc = YoriLibMalloc(Bytes);
+    YORI_ALLOC_SIZE_T ExtraBytes;
+    ExtraBytes = 0;
+
+    if (Bytes > YORI_MAX_ALLOC_SIZE) {
+        return NULL;
+    }
+
+    //
+    //  Alpha cabinet appears to access bytes beyond its buffer.  Fudge a bit.
+    //
+#if _M_ALPHA
+    ExtraBytes = 0x1000;
+#endif
+
+    if (Bytes + ExtraBytes > YORI_MAX_ALLOC_SIZE) {
+        return NULL;
+    }
+
+    Alloc = YoriLibMalloc((YORI_ALLOC_SIZE_T)(Bytes + ExtraBytes));
     return Alloc;
 }
 
@@ -128,7 +371,7 @@ YoriLibCabFree(
  @param CabContext Pointer to the cabinet structure which can be populated
         with new information.
 
- @param FileNameInCab Pointer to an ANSI NULL terminated string indicating
+ @param FileNameInCab Pointer to an narrow NULL terminated string indicating
         the file that was placed in the CAB.
 
  @param FileLength Indicates the length of the file placed into the CAB,
@@ -183,9 +426,9 @@ YoriLibCabFciFilePlaced(
  A callback invoked during FCI to open a file.  Note that this is used
  on the same file multiple times and thus requires sharing with previous
  opens.
- 
- @param FileName A NULL terminated ANSI (sigh) string indicating the file
-        name.
+
+ @param FileName A NULL terminated narrow string indicating the file name.
+        The encoding is specified in the Context parameter.
 
  @param OFlag The open flags, apparently modelled on the CRT but don't
         really match those values.
@@ -195,7 +438,8 @@ YoriLibCabFciFilePlaced(
  @param Err Optionally points to an integer which could be populated with
         extra error information.
 
- @param Context Optionally points to user context, which is currently unused.
+ @param Context Points to user context, which indicates the character encoding
+        to apply.
 
  @return File handle.
  */
@@ -205,47 +449,20 @@ YoriLibCabFciFileOpen(
     __in INT OFlag,
     __in INT PMode,
     __inout_opt PINT Err,
-    __inout_opt PVOID Context
+    __inout PVOID Context
     )
 {
-    HANDLE hFile;
-    DWORD DesiredAccess;
-    DWORD ShareMode;
-    DWORD Disposition;
-    DWORD OpenType = ((DWORD)OFlag & YORI_LIB_CAB_OPEN_MASK);
+    PYORI_CAB_ADD_CONTEXT AddContext = (PYORI_CAB_ADD_CONTEXT)Context;
+    DWORD Encoding;
 
-    UNREFERENCED_PARAMETER(PMode);
     UNREFERENCED_PARAMETER(Err);
-    UNREFERENCED_PARAMETER(Context);
 
-    switch(OpenType) {
-        case YORI_LIB_CAB_OPEN_READONLY:
-            DesiredAccess = GENERIC_READ;
-            Disposition = OPEN_EXISTING;
-            ShareMode = FILE_SHARE_READ | FILE_SHARE_DELETE;
-            break;
-        case YORI_LIB_CAB_OPEN_WRITEONLY:
-            DesiredAccess = GENERIC_WRITE;
-            Disposition = CREATE_ALWAYS;
-            ShareMode = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
-            break;
-        case YORI_LIB_CAB_OPEN_READWRITE:
-            DesiredAccess = GENERIC_READ | GENERIC_WRITE;
-            Disposition = OPEN_ALWAYS;
-            ShareMode = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
-            break;
-        default:
-            return (DWORD_PTR)INVALID_HANDLE_VALUE;
+    Encoding = CP_ACP;
+    if (AddContext->OnDiskNameIsUtf) {
+        Encoding = CP_UTF8;
     }
 
-    hFile = CreateFileA(FileName,
-                        DesiredAccess,
-                        ShareMode,
-                        NULL,
-                        Disposition,
-                        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS,
-                        NULL);
-    return (DWORD_PTR)hFile;
+    return YoriLibCabFileOpen(FileName, Encoding, OFlag, PMode);
 }
 
 /**
@@ -253,8 +470,7 @@ YoriLibCabFciFileOpen(
  on the same file multiple times and thus requires sharing with previous
  opens.
  
- @param FileName A NULL terminated ANSI (sigh) string indicating the file
-        name.
+ @param FileName A NULL terminated narrow string indicating the file name.
 
  @param OFlag The open flags, apparently modelled on the CRT but don't
         really match those values.
@@ -270,18 +486,33 @@ YoriLibCabFdiFileOpen(
     __in INT PMode
     )
 {
-    return YoriLibCabFciFileOpen(FileName, OFlag, PMode, NULL, NULL);
+    DWORD Encoding;
+
+    //
+    //  From observation, this callback is only invoked to open the cab
+    //  itself, so the encoding here needs to match the encoding used to
+    //  specify the cab.
+    //
+
+    Encoding = CP_ACP;
+    if (YoriLibIsUtf8Supported()) {
+        Encoding = CP_UTF8;
+    }
+
+    return YoriLibCabFileOpen(FileName, Encoding, OFlag, PMode);
 }
 
 
 /**
- Combine a parent directory with the CAB's ANSI relative file name (sigh) and
- output the combined path and Unicode form of the relative file name.
+ Combine a parent directory with the CAB's relative file name and output the
+ combined path and Unicode form of the relative file name.
 
  @param ParentDirectory Pointer to the parent directory to place files.
 
- @param FileName Pointer to a NULL terminated ANSI string for the name of the
-        object within the CAB.
+ @param FileName Pointer to a NULL terminated narrow string for the name of
+        the object within the CAB.
+
+ @param Encoding Specifies the character encoding of the FileName string.
 
  @param FullPathName If specified, points to a Yori string to receive the
         full path name.  The memory is allocated in this routine and returned
@@ -298,27 +529,46 @@ BOOL
 YoriLibCabBuildFileNames(
     __in PYORI_STRING ParentDirectory,
     __in LPSTR FileName,
+    __in DWORD Encoding,
     __out_opt PYORI_STRING FullPathName,
     __out_opt PYORI_STRING FileNameOnly
     )
 {
-    DWORD NameLengthInChars = strlen(FileName);
     YORI_STRING FullPath;
-    DWORD ExtraChars;
+    YORI_STRING WideFileName;
+    YORI_ALLOC_SIZE_T ExtraChars;
+    DWORD CharsRequired;
+    DWORD Error;
 
-    if (!YoriLibAllocateString(&FullPath, ParentDirectory->LengthInChars + 1 + NameLengthInChars + 1)) {
+    Error = YoriLibCabNarrowToWide(FileName, Encoding, &WideFileName);
+    if (Error != ERROR_SUCCESS) {
+        return FALSE;
+    }
+
+    CharsRequired = ParentDirectory->LengthInChars;
+    CharsRequired = CharsRequired + 1 + WideFileName.LengthInChars + 1;
+
+    if (!YoriLibIsSizeAllocatable(CharsRequired)) {
+        YoriLibFreeStringContents(&WideFileName);
+        return FALSE;
+    }
+
+    if (!YoriLibAllocateString(&FullPath, (YORI_ALLOC_SIZE_T)CharsRequired)) {
+        YoriLibFreeStringContents(&WideFileName);
         return FALSE;
     }
 
     if (ParentDirectory->LengthInChars >= 1 &&
         ParentDirectory->StartOfString[ParentDirectory->LengthInChars - 1] == '\\') {
 
-        FullPath.LengthInChars = YoriLibSPrintf(FullPath.StartOfString, _T("%y%hs"), ParentDirectory, FileName);
+        FullPath.LengthInChars = YoriLibSPrintf(FullPath.StartOfString, _T("%y%y"), ParentDirectory, &WideFileName);
         ExtraChars = 0;
     } else {
-        FullPath.LengthInChars = YoriLibSPrintf(FullPath.StartOfString, _T("%y\\%hs"), ParentDirectory, FileName);
+        FullPath.LengthInChars = YoriLibSPrintf(FullPath.StartOfString, _T("%y\\%y"), ParentDirectory, &WideFileName);
         ExtraChars = 1;
     }
+
+    YoriLibFreeStringContents(&WideFileName);
 
     if (FullPathName != NULL) {
         YoriLibCloneString(FullPathName, &FullPath);
@@ -327,7 +577,7 @@ YoriLibCabBuildFileNames(
     if (FileNameOnly != NULL) {
         YoriLibCloneString(FileNameOnly, &FullPath);
         FileNameOnly->StartOfString += ParentDirectory->LengthInChars + ExtraChars;
-        FileNameOnly->LengthInChars -= ParentDirectory->LengthInChars + ExtraChars;
+        FileNameOnly->LengthInChars = (YORI_ALLOC_SIZE_T)(FileNameOnly->LengthInChars - ParentDirectory->LengthInChars - ExtraChars);
     }
 
     YoriLibFreeStringContents(&FullPath);
@@ -359,7 +609,7 @@ YoriLibCabShouldIncludeFile(
 
     if (IncludeFile) {
         for (Count = 0; Count < ExpandContext->NumberFilesToExclude; Count++) {
-            if (YoriLibCompareStringInsensitive(FileName, &ExpandContext->FilesToExclude[Count]) == 0) {
+            if (YoriLibCompareStringIns(FileName, &ExpandContext->FilesToExclude[Count]) == 0) {
                 IncludeFile = FALSE;
                 break;
             }
@@ -368,7 +618,7 @@ YoriLibCabShouldIncludeFile(
 
     if (!IncludeFile) {
         for (Count = 0; Count < ExpandContext->NumberFilesToInclude; Count++) {
-            if (YoriLibCompareStringInsensitive(FileName, &ExpandContext->FilesToInclude[Count]) == 0) {
+            if (YoriLibCompareStringIns(FileName, &ExpandContext->FilesToInclude[Count]) == 0) {
                 IncludeFile = TRUE;
                 break;
             }
@@ -433,7 +683,7 @@ YoriLibCabFileOpenForExtract(
 
         if (Err == ERROR_PATH_NOT_FOUND) {
             LPTSTR LastSep;
-            DWORD OldLength = FullPath->LengthInChars;
+            YORI_ALLOC_SIZE_T OldLength = FullPath->LengthInChars;
 
             LastSep = YoriLibFindRightMostCharacter(FullPath, '\\');
             if (LastSep == NULL) {
@@ -441,7 +691,7 @@ YoriLibCabFileOpenForExtract(
             }
 
             *LastSep = '\0';
-            FullPath->LengthInChars = (DWORD)(LastSep - FullPath->StartOfString);
+            FullPath->LengthInChars = (YORI_ALLOC_SIZE_T)(LastSep - FullPath->StartOfString);
 
             if (!YoriLibCreateDirectoryAndParents(FullPath)) {
                 Err = GetLastError();
@@ -465,6 +715,26 @@ YoriLibCabFileOpenForExtract(
             }
 
             break;
+
+        //
+        //  If the file returns access denied, check if it's due to the
+        //  hidden, system or read only bits.  If they're set and can be
+        //  cleared, retry.  If not, fail.
+        //
+
+        } else if (Err == ERROR_ACCESS_DENIED) {
+            DWORD Attributes;
+            Attributes = GetFileAttributes(FullPath->StartOfString);
+            if (Attributes != (DWORD)-1 &&
+                ((Attributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_READONLY))) != 0) {
+
+                Attributes = Attributes & ~(FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_READONLY);
+                if (!SetFileAttributes(FullPath->StartOfString, Attributes)) {
+                    break;
+                }
+            } else {
+                break;
+            }
         } else {
             break;
         }
@@ -728,12 +998,30 @@ DWORD DIAMONDAPI
 YoriLibCabFciFileDelete(
     __in LPSTR FileName,
     __inout_opt PINT Err,
-    __inout_opt PVOID Context
+    __inout PVOID Context
     )
 {
+    PYORI_CAB_ADD_CONTEXT AddContext = (PYORI_CAB_ADD_CONTEXT)Context;
+    DWORD Encoding;
+    DWORD Error;
+    BOOL Result;
+    YORI_STRING WideFileName;
+
     UNREFERENCED_PARAMETER(Err);
-    UNREFERENCED_PARAMETER(Context);
-    DeleteFileA(FileName);
+
+    Encoding = CP_ACP;
+    if (AddContext->OnDiskNameIsUtf) {
+        Encoding = CP_UTF8;
+    }
+
+    Error = YoriLibCabNarrowToWide(FileName, Encoding, &WideFileName);
+    if (Error != ERROR_SUCCESS) {
+        return 0;
+    }
+
+    Result = DeleteFileW(WideFileName.StartOfString);
+    ASSERT(Result);
+    YoriLibFreeStringContents(&WideFileName);
     return 0;
 }
 
@@ -756,21 +1044,44 @@ BOOL DIAMONDAPI
 YoriLibCabFciGetTempFile(
     __in LPSTR FileName,
     __in INT FileNameLength,
-    __inout_opt PVOID Context
+    __inout PVOID Context
     )
 {
-    CHAR TempPath[MAX_PATH];
-    CHAR LocalTempFile[MAX_PATH];
+    TCHAR TempPath[MAX_PATH];
+    TCHAR LocalTempFile[MAX_PATH];
+    LPSTR NarrowTempFile;
     DWORD BytesToCopy = MAX_PATH;
+    PYORI_CAB_ADD_CONTEXT AddContext = (PYORI_CAB_ADD_CONTEXT)Context;
+    DWORD Error;
+    DWORD Encoding;
+    YORI_STRING WideTempFile;
 
-    UNREFERENCED_PARAMETER(Context);
-
-    GetTempPathA(sizeof(TempPath), TempPath);
-    GetTempFileNameA(TempPath, "YRI", 0, LocalTempFile);
-    if (FileNameLength < MAX_PATH) {
-        BytesToCopy = FileNameLength;
+    Encoding = CP_ACP;
+    if (AddContext->OnDiskNameIsUtf) {
+        Encoding = CP_UTF8;
     }
-    memcpy(FileName, LocalTempFile, BytesToCopy);
+
+    if (GetTempPath(sizeof(TempPath)/sizeof(TempPath[0]), TempPath) == 0) {
+        return FALSE;
+    }
+    if (GetTempFileName(TempPath, _T("YRI"), 0, LocalTempFile) == 0) {
+        return FALSE;
+    }
+
+    YoriLibConstantString(&WideTempFile, LocalTempFile);
+
+    Error = YoriLibCabWideToNarrow(&WideTempFile, Encoding, &NarrowTempFile);
+    if (Error != ERROR_SUCCESS) {
+        return FALSE;
+    }
+
+    BytesToCopy = strlen(NarrowTempFile) + 1;
+
+    if (FileNameLength < (INT)BytesToCopy) {
+        BytesToCopy = FileNameLength - 1;
+    }
+    memcpy(FileName, NarrowTempFile, BytesToCopy);
+    YoriLibFree(NarrowTempFile);
     FileName[FileNameLength - 1] = '\0';
     return TRUE;
 }
@@ -870,23 +1181,35 @@ YoriLibCabFciGetOpenInfo(
     __out PWORD Time,
     __out PWORD Attributes,
     __inout_opt PINT Err,
-    __inout_opt PVOID Context
+    __inout PVOID Context
     )
 {
     DWORD_PTR Handle;
     BY_HANDLE_FILE_INFORMATION FileInfo;
+    PYORI_CAB_ADD_CONTEXT AddContext;
+    WORD NewAttributes;
+    DWORD Encoding;
 
     UNREFERENCED_PARAMETER(Err);
-    UNREFERENCED_PARAMETER(Context);
 
-    Handle = YoriLibCabFdiFileOpen(FileName, YORI_LIB_CAB_OPEN_READONLY, 0);
+    AddContext = (PYORI_CAB_ADD_CONTEXT)Context;
+    Encoding = CP_ACP;
+    if (AddContext->OnDiskNameIsUtf) {
+        Encoding = CP_UTF8;
+    }
+
+    Handle = YoriLibCabFileOpen(FileName, Encoding, YORI_LIB_CAB_OPEN_READONLY, 0);
     if (Handle == (DWORD_PTR)INVALID_HANDLE_VALUE) {
         return Handle;
     }
 
     GetFileInformationByHandle((HANDLE)Handle, &FileInfo);
-    *Attributes = (WORD)(FileInfo.dwFileAttributes & 0xFFFF);
-    FileTimeToDosDateTime(&FileInfo.ftLastWriteTime, Date, Time);
+    NewAttributes = (WORD)(FileInfo.dwFileAttributes & 0x3F);
+    if (AddContext->InCabNameIsUtf) {
+        NewAttributes = (WORD)(NewAttributes | YORI_CAB_NAME_IS_UTF);
+    }
+    *Attributes = NewAttributes;
+    YoriLibFileTimeToDosDateTime(&FileInfo.ftLastWriteTime, Date, Time);
 
     return Handle;
 }
@@ -921,11 +1244,18 @@ YoriLibCabNotify(
     YORI_STRING FullPath;
     YORI_STRING FileName;
     DWORD_PTR Handle;
+    DWORD Encoding;
 
     switch(NotifyType) {
         case YoriLibCabNotifyCopyFile:
             ExpandContext = (PYORI_LIB_CAB_EXPAND_CONTEXT)Notification->Context;
-            if (!YoriLibCabBuildFileNames(ExpandContext->TargetDirectory, Notification->String1, &FullPath, &FileName)) {
+
+            Encoding = CP_ACP;
+            if (Notification->HalfAttributes & YORI_CAB_NAME_IS_UTF) {
+                Encoding = CP_UTF8;
+            }
+
+            if (!YoriLibCabBuildFileNames(ExpandContext->TargetDirectory, Notification->String1, Encoding, &FullPath, &FileName)) {
                 ExpandContext->ErrorCode = ERROR_NOT_ENOUGH_MEMORY;
                 if (ExpandContext->ErrorString != NULL) {
                     YoriLibYPrintf(ExpandContext->ErrorString, _T("Could not build file name for directory %y CAB name %hs"), ExpandContext->TargetDirectory, Notification->String1);
@@ -955,7 +1285,7 @@ YoriLibCabNotify(
             //  Convert the DOS time into a local time zone relative NT time
             //
 
-            DosDateTimeToFileTime(Notification->TinyDate, Notification->TinyTime, &TimeToSet);
+            YoriLibDosDateTimeToFileTime(Notification->TinyDate, Notification->TinyTime, &TimeToSet);
 
             //
             //  Apply the time zone bias adjustment to the NT time
@@ -974,8 +1304,13 @@ YoriLibCabNotify(
             SetFileTime((HANDLE)Notification->FileHandle, &TimeToSet, &TimeToSet, &TimeToSet);
             YoriLibCabFdiFileClose(Notification->FileHandle);
 
+            Encoding = CP_ACP;
+            if (Notification->HalfAttributes & YORI_CAB_NAME_IS_UTF) {
+                Encoding = CP_UTF8;
+            }
+
             ExpandContext = (PYORI_LIB_CAB_EXPAND_CONTEXT)Notification->Context;
-            if (YoriLibCabBuildFileNames(ExpandContext->TargetDirectory, Notification->String1, &FullPath, &FileName)) {
+            if (YoriLibCabBuildFileNames(ExpandContext->TargetDirectory, Notification->String1, Encoding, &FullPath, &FileName)) {
                 SetFileAttributes(FullPath.StartOfString, Notification->HalfAttributes);
 
                 if (ExpandContext->CompleteExtractCallback != NULL) {
@@ -1061,9 +1396,10 @@ YoriLibExtractCab(
     CAB_CB_ERROR CabErrors;
     LPSTR AnsiCabFileName;
     LPSTR AnsiCabParentDirectory;
-    BOOL DefaultUsed = FALSE;
     BOOL Result = FALSE;
     YORI_LIB_CAB_EXPAND_CONTEXT ExpandContext;
+    DWORD Encoding;
+    DWORD Error;
 
     YoriLibLoadCabinetFunctions();
     if (DllCabinet.pFdiCreate == NULL ||
@@ -1081,6 +1417,7 @@ YoriLibExtractCab(
     YoriLibInitEmptyString(&FullCabFileName);
     YoriLibInitEmptyString(&FullTargetDirectory);
     AnsiCabParentDirectory = NULL;
+    AnsiCabFileName = NULL;
     hFdi = NULL;
     ZeroMemory(&ExpandContext, sizeof(ExpandContext));
     ExpandContext.DefaultInclude = IncludeAllByDefault;
@@ -1132,70 +1469,45 @@ YoriLibExtractCab(
     YoriLibInitEmptyString(&CabParentDirectory);
     YoriLibInitEmptyString(&CabFileNameOnly);
 
+    Encoding = CP_ACP;
+    if (YoriLibIsUtf8Supported()) {
+        Encoding = CP_UTF8;
+    }
+
     CabParentDirectory.StartOfString = FullCabFileName.StartOfString;
-    CabParentDirectory.LengthInChars = (DWORD)(FinalBackslash - FullCabFileName.StartOfString + 1);
+    CabParentDirectory.LengthInChars = (YORI_ALLOC_SIZE_T)(FinalBackslash - FullCabFileName.StartOfString + 1);
 
     CabFileNameOnly.StartOfString = &FullCabFileName.StartOfString[CabParentDirectory.LengthInChars];
-    CabFileNameOnly.LengthInChars = FullCabFileName.LengthInChars - CabParentDirectory.LengthInChars;
+    CabFileNameOnly.LengthInChars = (YORI_ALLOC_SIZE_T)(FullCabFileName.LengthInChars - CabParentDirectory.LengthInChars);
 
-    AnsiCabParentDirectory = YoriLibMalloc(CabParentDirectory.LengthInChars + 1 + CabFileNameOnly.LengthInChars + 1);
-    if (AnsiCabParentDirectory == NULL) {
-        if (ErrorCode != NULL) {
-            *ErrorCode = ERROR_NOT_ENOUGH_MEMORY;
-        }
-        if (ErrorString != NULL) {
-            YoriLibYPrintf(ErrorString, _T("Allocation failure"));
-        }
-        goto Exit;
-    }
+    Error = YoriLibCabWideToNarrow(&CabParentDirectory, Encoding, &AnsiCabParentDirectory);
 
-    AnsiCabFileName = AnsiCabParentDirectory + CabParentDirectory.LengthInChars + 1;
-
-    if (WideCharToMultiByte(CP_ACP, 0, CabParentDirectory.StartOfString, CabParentDirectory.LengthInChars, AnsiCabParentDirectory, CabParentDirectory.LengthInChars + 1, NULL, &DefaultUsed) != (INT)(CabParentDirectory.LengthInChars)) {
-        if (ErrorCode != NULL) {
-            *ErrorCode = GetLastError();
-        }
+    if (Error != ERROR_SUCCESS) {
+        *ErrorCode = Error;
         if (ErrorString != NULL) {
             YoriLibYPrintf(ErrorString, _T("Error converting %y to ANSI"), &CabParentDirectory);
         }
         goto Exit;
     }
 
-    if (DefaultUsed) {
-        if (ErrorCode != NULL) {
-            *ErrorCode = ERROR_NO_UNICODE_TRANSLATION;
-        }
-        if (ErrorString != NULL) {
-            YoriLibYPrintf(ErrorString, _T("Error converting %y to ANSI"), &CabParentDirectory);
-        }
-        goto Exit;
-    }
-
-    AnsiCabParentDirectory[CabParentDirectory.LengthInChars] = '\0';
-
-    if (WideCharToMultiByte(CP_ACP, 0, CabFileNameOnly.StartOfString, CabFileNameOnly.LengthInChars, AnsiCabFileName, CabFileNameOnly.LengthInChars + 1, NULL, &DefaultUsed) != (INT)(CabFileNameOnly.LengthInChars)) {
-        if (ErrorCode != NULL) {
-            *ErrorCode = GetLastError();
-        }
+    Error = YoriLibCabWideToNarrow(&CabFileNameOnly, Encoding, &AnsiCabFileName);
+    if (Error != ERROR_SUCCESS) {
+        *ErrorCode = Error;
         if (ErrorString != NULL) {
             YoriLibYPrintf(ErrorString, _T("Error converting %y to ANSI"), &CabFileNameOnly);
         }
         goto Exit;
     }
 
-    if (DefaultUsed) {
-        if (ErrorCode != NULL) {
-            *ErrorCode = ERROR_NO_UNICODE_TRANSLATION;
-        }
-        if (ErrorString != NULL) {
-            YoriLibYPrintf(ErrorString, _T("Error converting %y to ANSI"), &CabFileNameOnly);
-        }
-        goto Exit;
-    }
-
-    AnsiCabFileName[CabFileNameOnly.LengthInChars] = '\0';
-
-    hFdi = DllCabinet.pFdiCreate(YoriLibCabAlloc, YoriLibCabFree, YoriLibCabFdiFileOpen, YoriLibCabFdiFileRead, YoriLibCabFdiFileWrite, YoriLibCabFdiFileClose, YoriLibCabFdiFileSeek, -1, &CabErrors);
+    hFdi = DllCabinet.pFdiCreate(YoriLibCabAlloc,
+                                 YoriLibCabFree,
+                                 YoriLibCabFdiFileOpen,
+                                 YoriLibCabFdiFileRead,
+                                 YoriLibCabFdiFileWrite,
+                                 YoriLibCabFdiFileClose,
+                                 YoriLibCabFdiFileSeek,
+                                 -1,
+                                 &CabErrors);
 
     if (hFdi == NULL) {
         if (ErrorCode != NULL && *ErrorCode == ERROR_SUCCESS) {
@@ -1237,6 +1549,9 @@ Exit:
     if (AnsiCabParentDirectory != NULL) {
         YoriLibFree(AnsiCabParentDirectory);
     }
+    if (AnsiCabFileName != NULL) {
+        YoriLibFree(AnsiCabFileName);
+    }
     return Result;
 }
 
@@ -1261,6 +1576,14 @@ typedef struct _YORI_CAB_HANDLE {
      future operations on the CAB.
      */
     PVOID FciHandle;
+
+    /**
+     Context passed to FciCreate which is passed to other functions.  For
+     this purpose, GET_OPEN_INFO needs to know which encoding to apply to
+     the file name.
+     */
+    YORI_CAB_ADD_CONTEXT AddContext;
+
 } YORI_CAB_HANDLE, *PYORI_CAB_HANDLE;
 
 /**
@@ -1285,7 +1608,10 @@ YoriLibCreateCab(
     )
 {
     PYORI_CAB_HANDLE CabHandle;
+    DWORD Encoding;
     BOOL DefaultUsed = FALSE;
+    PBOOL DefaultPtr;
+    int CharsCopied;
 
     YoriLibLoadCabinetFunctions();
     if (DllCabinet.pFciCreate == NULL ||
@@ -1310,7 +1636,33 @@ YoriLibCreateCab(
     CabHandle->CompressContext.SizeAvailable = 0x7FFFF000;
     CabHandle->CompressContext.ThresholdForNextFolder = 0x7FFFF000;
 
-    if (WideCharToMultiByte(CP_ACP, 0, CabFileName->StartOfString, CabFileName->LengthInChars, CabHandle->CompressContext.CabPath, sizeof(CabHandle->CompressContext.CabPath), NULL, &DefaultUsed) != (INT)(CabFileName->LengthInChars)) {
+    CabHandle->AddContext.OnDiskNameIsUtf = FALSE;
+    Encoding = CP_ACP;
+    if (YoriLibIsUtf8Supported()) {
+        CabHandle->AddContext.OnDiskNameIsUtf = TRUE;
+        Encoding = CP_UTF8;
+    }
+
+    //
+    //  WideCharToMultiByte fails if DefaultUsed is specified with an encoding
+    //  that doesn't support default characters, like UTF8
+    //
+
+    DefaultPtr = &DefaultUsed;
+    if (Encoding == CP_UTF8) {
+        DefaultPtr = NULL;
+    }
+
+    CharsCopied = WideCharToMultiByte(Encoding,
+                                      0,
+                                      CabFileName->StartOfString,
+                                      CabFileName->LengthInChars,
+                                      CabHandle->CompressContext.CabPath,
+                                      sizeof(CabHandle->CompressContext.CabPath),
+                                      NULL,
+                                      DefaultPtr);
+
+    if (CharsCopied <= 0 || (DWORD)CharsCopied >= sizeof(CabHandle->CompressContext.CabPath)) {
         YoriLibDereference(CabHandle);
         return FALSE;
     }
@@ -1320,7 +1672,19 @@ YoriLibCreateCab(
         return FALSE;
     }
 
-    CabHandle->FciHandle = DllCabinet.pFciCreate(&CabHandle->Err, YoriLibCabFciFilePlaced, YoriLibCabAlloc, YoriLibCabFree, YoriLibCabFciFileOpen, YoriLibCabFciFileRead, YoriLibCabFciFileWrite, YoriLibCabFciFileClose, YoriLibCabFciFileSeek, YoriLibCabFciFileDelete, YoriLibCabFciGetTempFile, &CabHandle->CompressContext, NULL);
+    CabHandle->FciHandle = DllCabinet.pFciCreate(&CabHandle->Err,
+                                                 YoriLibCabFciFilePlaced,
+                                                 YoriLibCabAlloc,
+                                                 YoriLibCabFree,
+                                                 YoriLibCabFciFileOpen,
+                                                 YoriLibCabFciFileRead,
+                                                 YoriLibCabFciFileWrite,
+                                                 YoriLibCabFciFileClose,
+                                                 YoriLibCabFciFileSeek,
+                                                 YoriLibCabFciFileDelete,
+                                                 YoriLibCabFciGetTempFile,
+                                                 &CabHandle->CompressContext,
+                                                 &CabHandle->AddContext);
 
     if (CabHandle->FciHandle == NULL) {
         YoriLibDereference(CabHandle);
@@ -1358,47 +1722,48 @@ YoriLibAddFileToCab(
 
     LPSTR FileNameOnDiskAnsi;
     LPSTR FileNameInCabAnsi;
-    BOOL DefaultUsed;
     BOOL Result;
+    DWORD Encoding;
+    DWORD Index;
+    DWORD Error;
 
-    FileNameOnDiskAnsi = YoriLibMalloc(FileNameOnDisk->LengthInChars + 1);
-    if (FileNameOnDiskAnsi == NULL) {
+    CabHandle->AddContext.InCabNameIsUtf = FALSE;
+
+    Encoding = CP_ACP;
+    if (CabHandle->AddContext.OnDiskNameIsUtf) {
+        Encoding = CP_UTF8;
+    }
+
+    Error = YoriLibCabWideToNarrow(FileNameOnDisk, Encoding, &FileNameOnDiskAnsi);
+    if (Error != ERROR_SUCCESS) {
         return FALSE;
     }
 
-    if (WideCharToMultiByte(CP_ACP, 0, FileNameOnDisk->StartOfString, FileNameOnDisk->LengthInChars, FileNameOnDiskAnsi, FileNameOnDisk->LengthInChars, NULL, &DefaultUsed) != (INT)(FileNameOnDisk->LengthInChars)) {
+    Encoding = CP_ACP;
+    if (CabHandle->AddContext.OnDiskNameIsUtf) {
+        for (Index = 0; Index < FileNameInCab->LengthInChars; Index++) {
+            if (FileNameInCab->StartOfString[Index] >= 128) {
+                Encoding = CP_UTF8;
+                CabHandle->AddContext.InCabNameIsUtf = TRUE;
+                break;
+            }
+        }
+    }
+
+    Error = YoriLibCabWideToNarrow(FileNameInCab, Encoding, &FileNameInCabAnsi);
+    if (Error != ERROR_SUCCESS) {
         YoriLibFree(FileNameOnDiskAnsi);
         return FALSE;
     }
 
-    if (DefaultUsed) {
-        YoriLibFree(FileNameOnDiskAnsi);
-        return FALSE;
-    }
-
-    FileNameOnDiskAnsi[FileNameOnDisk->LengthInChars] = '\0';
-
-    FileNameInCabAnsi = YoriLibMalloc(FileNameInCab->LengthInChars + 1);
-    if (FileNameInCabAnsi == NULL) {
-        YoriLibFree(FileNameOnDiskAnsi);
-        return FALSE;
-    }
-
-    if (WideCharToMultiByte(CP_ACP, 0, FileNameInCab->StartOfString, FileNameInCab->LengthInChars, FileNameInCabAnsi, FileNameInCab->LengthInChars, NULL, &DefaultUsed) != (INT)(FileNameInCab->LengthInChars)) {
-        YoriLibFree(FileNameOnDiskAnsi);
-        YoriLibFree(FileNameInCabAnsi);
-        return FALSE;
-    }
-
-    if (DefaultUsed) {
-        YoriLibFree(FileNameOnDiskAnsi);
-        YoriLibFree(FileNameInCabAnsi);
-        return FALSE;
-    }
-
-    FileNameInCabAnsi[FileNameInCab->LengthInChars] = '\0';
-
-    Result = DllCabinet.pFciAddFile(CabHandle->FciHandle, FileNameOnDiskAnsi, FileNameInCabAnsi, FALSE, YoriLibCabFciGetNextCabinet, YoriLibCabFciStatus, YoriLibCabFciGetOpenInfo, CAB_FCI_ALGORITHM_MSZIP);
+    Result = DllCabinet.pFciAddFile(CabHandle->FciHandle,
+                                    FileNameOnDiskAnsi,
+                                    FileNameInCabAnsi,
+                                    FALSE,
+                                    YoriLibCabFciGetNextCabinet,
+                                    YoriLibCabFciStatus,
+                                    YoriLibCabFciGetOpenInfo,
+                                    CAB_FCI_ALGORITHM_MSZIP);
 
     YoriLibFree(FileNameOnDiskAnsi);
     YoriLibFree(FileNameInCabAnsi);

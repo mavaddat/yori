@@ -92,7 +92,7 @@ __success(return)
 BOOLEAN
 YoriWinItemArrayReallocateArrayForNewItems(
     __inout PYORI_WIN_ITEM_ARRAY ItemArray,
-    __in DWORD NumNewItems
+    __in YORI_ALLOC_SIZE_T NumNewItems
     )
 {
     //
@@ -103,8 +103,9 @@ YoriWinItemArrayReallocateArrayForNewItems(
     //
 
     if (NumNewItems > ItemArray->CountAllocated - ItemArray->Count) {
-        DWORD ItemsToAllocate;
         PYORI_WIN_ITEM_ENTRY CombinedOptions;
+        DWORD BytesRequired;
+        DWORD ItemsToAllocate;
 
         ItemsToAllocate = (ItemArray->CountAllocated / 5);
 
@@ -118,7 +119,13 @@ YoriWinItemArrayReallocateArrayForNewItems(
 
         ItemsToAllocate = ItemsToAllocate + ItemArray->CountAllocated;
 
-        CombinedOptions = YoriLibReferencedMalloc(ItemsToAllocate * sizeof(YORI_WIN_ITEM_ENTRY));
+        BytesRequired = ItemsToAllocate * sizeof(YORI_WIN_ITEM_ENTRY);
+
+        if (!YoriLibIsSizeAllocatable(BytesRequired)) {
+            return FALSE;
+        }
+
+        CombinedOptions = YoriLibReferencedMalloc(BytesRequired);
         if (CombinedOptions == NULL) {
             return FALSE;
         }
@@ -128,7 +135,7 @@ YoriWinItemArrayReallocateArrayForNewItems(
         }
 
         ItemArray->Items = CombinedOptions;
-        ItemArray->CountAllocated = ItemsToAllocate;
+        ItemArray->CountAllocated = (YORI_ALLOC_SIZE_T)ItemsToAllocate;
     }
 
     return TRUE;
@@ -154,11 +161,11 @@ __success(return)
 BOOLEAN
 YoriWinItemArrayEnsureSpaceForStrings(
     __inout PYORI_WIN_ITEM_ARRAY ItemArray,
-    __in DWORD CharsRequired
+    __in YORI_ALLOC_SIZE_T CharsRequired
     )
 {
     LPTSTR NewStringBase;
-    DWORD CharsToAllocate;
+    YORI_ALLOC_SIZE_T CharsToAllocate;
 
     if (ItemArray->StringAllocationRemaining >= CharsRequired) {
         return TRUE;
@@ -200,14 +207,14 @@ __success(return)
 BOOLEAN
 YoriWinItemArrayAddItems(
     __inout PYORI_WIN_ITEM_ARRAY ItemArray,
-    __in PYORI_STRING NewItems,
-    __in DWORD NumNewItems
+    __in PCYORI_STRING NewItems,
+    __in YORI_ALLOC_SIZE_T NumNewItems
     )
 {
     LPTSTR StringAllocation;
     LPTSTR WritePtr;
-    DWORD LengthInChars;
-    DWORD Index;
+    YORI_ALLOC_SIZE_T LengthInChars;
+    YORI_ALLOC_SIZE_T Index;
 
     if (!YoriWinItemArrayReallocateArrayForNewItems(ItemArray, NumNewItems)) {
         return FALSE;
@@ -246,7 +253,7 @@ YoriWinItemArrayAddItems(
     }
 
     ItemArray->StringAllocationCurrent = WritePtr;
-    ItemArray->Count += NumNewItems;
+    ItemArray->Count = ItemArray->Count + NumNewItems;
     return TRUE;
 }
 
@@ -268,8 +275,8 @@ YoriWinItemArrayAddItemArray(
 {
     LPTSTR StringAllocation;
     LPTSTR WritePtr;
-    DWORD LengthInChars;
-    DWORD Index;
+    YORI_ALLOC_SIZE_T LengthInChars;
+    YORI_ALLOC_SIZE_T Index;
 
     if (!YoriWinItemArrayReallocateArrayForNewItems(ItemArray, NewItems->Count)) {
         return FALSE;
@@ -307,7 +314,7 @@ YoriWinItemArrayAddItemArray(
     }
 
     ItemArray->StringAllocationCurrent = WritePtr;
-    ItemArray->Count += NewItems->Count;
+    ItemArray->Count = ItemArray->Count + NewItems->Count;
     return TRUE;
 }
 

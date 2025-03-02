@@ -28,21 +28,8 @@ __success(return)
 BOOLEAN
 EditOpts(
     __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
-    __in DWORD InitialTabWidth,
-    __out PDWORD NewTabWidth
-    );
-
-__success(return)
-DWORD
-EditAboutDialog(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
-    __in PYORI_STRING Title,
-    __in PYORI_STRING CenteredText,
-    __in PYORI_STRING LeftText,
-    __in DWORD NumButtons,
-    __in PYORI_STRING ButtonTexts,
-    __in DWORD DefaultIndex,
-    __in DWORD CancelIndex
+    __in YORI_ALLOC_SIZE_T InitialTabWidth,
+    __out PYORI_ALLOC_SIZE_T NewTabWidth
     );
 
 // vim:sw=4:ts=4:et:

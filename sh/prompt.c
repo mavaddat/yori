@@ -45,13 +45,9 @@ BOOL YoriShPromptAdminPresent;
 BOOL
 YoriShPromptIsAdmin(VOID)
 {
-    YORI_STRING AdminName;
-
     if (YoriShPromptAdminDetermined) {
         return YoriShPromptAdminPresent;
     }
-
-    YoriLibConstantString(&AdminName, _T("Administrators"));
 
     if (!YoriLibIsCurrentUserInWellKnownGroup(DOMAIN_ALIAS_RID_ADMINS, &YoriShPromptAdminPresent)) {
         YoriShPromptAdminPresent = FALSE;
@@ -74,48 +70,48 @@ YoriShPromptIsAdmin(VOID)
  @return The number of characters populated or the number of characters
          required if the buffer is too small.
  */
-DWORD
+YORI_ALLOC_SIZE_T
 YoriShExpandPrompt(
     __inout PYORI_STRING OutputString,
     __in PYORI_STRING VariableName,
     __in PVOID Context
     )
 {
-    DWORD CharsNeeded = 0;
+    YORI_ALLOC_SIZE_T CharsNeeded = 0;
 
     UNREFERENCED_PARAMETER(Context);
 
-    if (YoriLibCompareStringWithLiteralInsensitive(VariableName, _T("A")) == 0) {
+    if (YoriLibCompareStringLitIns(VariableName, _T("A")) == 0) {
         CharsNeeded = 1;
         if (OutputString->LengthAllocated > CharsNeeded) {
             OutputString->StartOfString[0] = '&';
         }
-    } else if (YoriLibCompareStringWithLiteralInsensitive(VariableName, _T("B")) == 0) {
+    } else if (YoriLibCompareStringLitIns(VariableName, _T("B")) == 0) {
         CharsNeeded = 1;
         if (OutputString->LengthAllocated > CharsNeeded) {
             OutputString->StartOfString[0] = '|';
         }
-    } else if (YoriLibCompareStringWithLiteralInsensitive(VariableName, _T("C")) == 0) {
+    } else if (YoriLibCompareStringLitIns(VariableName, _T("C")) == 0) {
         CharsNeeded = 1;
         if (OutputString->LengthAllocated > CharsNeeded) {
             OutputString->StartOfString[0] = '(';
         }
-    } else if (YoriLibCompareStringWithLiteralInsensitive(VariableName, _T("E")) == 0) {
+    } else if (YoriLibCompareStringLitIns(VariableName, _T("E")) == 0) {
         CharsNeeded = 1;
         if (OutputString->LengthAllocated > CharsNeeded) {
             OutputString->StartOfString[0] = 27;
         }
-    } else if (YoriLibCompareStringWithLiteralInsensitive(VariableName, _T("F")) == 0) {
+    } else if (YoriLibCompareStringLitIns(VariableName, _T("F")) == 0) {
         CharsNeeded = 1;
         if (OutputString->LengthAllocated > CharsNeeded) {
             OutputString->StartOfString[0] = ')';
         }
-    } else if (YoriLibCompareStringWithLiteralInsensitive(VariableName, _T("G")) == 0) {
+    } else if (YoriLibCompareStringLitIns(VariableName, _T("G")) == 0) {
         CharsNeeded = 1;
         if (OutputString->LengthAllocated > CharsNeeded) {
             OutputString->StartOfString[0] = '>';
         }
-    } else if (YoriLibCompareStringWithLiteralInsensitive(VariableName, _T("G_OR_ADMIN_G")) == 0) {
+    } else if (YoriLibCompareStringLitIns(VariableName, _T("G_OR_ADMIN_G")) == 0) {
         CharsNeeded = 1;
         if (OutputString->LengthAllocated > CharsNeeded) {
             if (YoriShPromptIsAdmin()) {
@@ -124,52 +120,48 @@ YoriShExpandPrompt(
                 OutputString->StartOfString[0] = '>';
             }
         }
-    } else if (YoriLibCompareStringWithLiteralInsensitive(VariableName, _T("L")) == 0) {
+    } else if (YoriLibCompareStringLitIns(VariableName, _T("L")) == 0) {
         CharsNeeded = 1;
         if (OutputString->LengthAllocated > CharsNeeded) {
             OutputString->StartOfString[0] = '<';
         }
-    } else if (YoriLibCompareStringWithLiteralInsensitive(VariableName, _T("P")) == 0) {
+    } else if (YoriLibCompareStringLitIns(VariableName, _T("P")) == 0) {
         YORI_STRING CurrentDirectory;
-        /*
-        CurrentDirectory = &YoriShGlobal.CurrentDirectoryBuffers[YoriShGlobal.ActiveCurrentDirectory];
-        */
         YoriLibGetCurrentDirectoryForDisplay(&CurrentDirectory);
         CharsNeeded = CurrentDirectory.LengthInChars;
-        if (OutputString->LengthAllocated > CharsNeeded) {
+        if (OutputString->LengthAllocated >= CharsNeeded) {
             memcpy(OutputString->StartOfString, CurrentDirectory.StartOfString, CharsNeeded * sizeof(TCHAR));
-            OutputString->StartOfString[CharsNeeded] = '\0';
         }
         YoriLibFreeStringContents(&CurrentDirectory);
-    } else if (YoriLibCompareStringWithLiteralInsensitive(VariableName, _T("PID")) == 0) {
+    } else if (YoriLibCompareStringLitIns(VariableName, _T("PID")) == 0) {
         CharsNeeded = 10;
         if (OutputString->LengthAllocated > CharsNeeded) {
             CharsNeeded = YoriLibSPrintf(OutputString->StartOfString, _T("%x"), GetCurrentProcessId());
         }
-    } else if (YoriLibCompareStringWithLiteralInsensitive(VariableName, _T("Q")) == 0) {
+    } else if (YoriLibCompareStringLitIns(VariableName, _T("Q")) == 0) {
         CharsNeeded = 1;
         if (OutputString->LengthAllocated > CharsNeeded) {
             OutputString->StartOfString[0] = '=';
         }
-    } else if (YoriLibCompareStringWithLiteralInsensitive(VariableName, _T("S")) == 0) {
+    } else if (YoriLibCompareStringLitIns(VariableName, _T("S")) == 0) {
         CharsNeeded = 1;
         if (OutputString->LengthAllocated > CharsNeeded) {
             OutputString->StartOfString[0] = ' ';
         }
-    } else if (YoriLibCompareStringWithLiteralInsensitive(VariableName, _T("_")) == 0) {
+    } else if (YoriLibCompareStringLitIns(VariableName, _T("_")) == 0) {
         CharsNeeded = 1;
         if (OutputString->LengthAllocated > CharsNeeded) {
             OutputString->StartOfString[0] = '\n';
         }
-    } else if (YoriLibCompareStringWithLiteralInsensitive(VariableName, _T("$")) == 0) {
+    } else if (YoriLibCompareStringLitIns(VariableName, _T("$")) == 0) {
         CharsNeeded = 1;
         if (OutputString->LengthAllocated > CharsNeeded) {
             OutputString->StartOfString[0] = '$';
         }
-    } else if (YoriLibCompareStringWithLiteralInsensitive(VariableName, _T("+")) == 0) {
+    } else if (YoriLibCompareStringLitIns(VariableName, _T("+")) == 0) {
         CharsNeeded = YoriShGlobal.PromptRecursionDepth;
         if (OutputString->LengthAllocated > YoriShGlobal.PromptRecursionDepth) {
-            DWORD Index;
+            YORI_ALLOC_SIZE_T Index;
             for (Index = 0; Index < YoriShGlobal.PromptRecursionDepth; Index++) {
                 OutputString->StartOfString[Index] = '+';
             }
@@ -187,7 +179,7 @@ YoriShExpandPrompt(
 BOOL
 YoriShDisplayPrompt(VOID)
 {
-    DWORD EnvVarLength;
+    YORI_ALLOC_SIZE_T EnvVarLength;
     YORI_STRING PromptVar;
     YORI_STRING PromptAfterBackquoteExpansion;
     YORI_STRING PromptAfterEnvExpansion;
@@ -214,7 +206,11 @@ YoriShDisplayPrompt(VOID)
 
                 YoriLibFreeStringContents(&YoriShGlobal.PostCmdVariable);
                 memcpy(&YoriShGlobal.PostCmdVariable, &PromptVar, sizeof(YORI_STRING));
-                YoriShGlobal.PostCmdVariable.LengthInChars = YoriShGetEnvironmentVariableWithoutSubstitution(_T("YORIPOSTCMD"), YoriShGlobal.PostCmdVariable.StartOfString, YoriShGlobal.PostCmdVariable.LengthAllocated, &YoriShGlobal.PostCmdGeneration);
+                YoriShGlobal.PostCmdVariable.LengthInChars =
+                    YoriShGetEnvironmentVariableWithoutSubstitution(_T("YORIPOSTCMD"),
+                                                                    YoriShGlobal.PostCmdVariable.StartOfString,
+                                                                    YoriShGlobal.PostCmdVariable.LengthAllocated,
+                                                                    &YoriShGlobal.PostCmdGeneration);
             }
         } else {
             YoriLibFreeStringContents(&YoriShGlobal.PostCmdVariable);
@@ -241,7 +237,11 @@ YoriShDisplayPrompt(VOID)
 
                 YoriLibFreeStringContents(&YoriShGlobal.PromptVariable);
                 memcpy(&YoriShGlobal.PromptVariable, &PromptVar, sizeof(YORI_STRING));
-                YoriShGlobal.PromptVariable.LengthInChars = YoriShGetEnvironmentVariableWithoutSubstitution(_T("YORIPROMPT"), YoriShGlobal.PromptVariable.StartOfString, YoriShGlobal.PromptVariable.LengthAllocated, &YoriShGlobal.PromptGeneration);
+                YoriShGlobal.PromptVariable.LengthInChars =
+                    YoriShGetEnvironmentVariableWithoutSubstitution(_T("YORIPROMPT"),
+                                                                    YoriShGlobal.PromptVariable.StartOfString,
+                                                                    YoriShGlobal.PromptVariable.LengthAllocated,
+                                                                    &YoriShGlobal.PromptGeneration);
             }
         } else {
             YoriLibFreeStringContents(&YoriShGlobal.PromptVariable);
@@ -316,7 +316,7 @@ YoriShDisplayPrompt(VOID)
     } else {
 
         LPTSTR PromptString;
-        EnvVarLength = GetCurrentDirectory(0, NULL);
+        EnvVarLength = (YORI_ALLOC_SIZE_T)GetCurrentDirectory(0, NULL);
 
         //
         //  If YORIPROMPT wasn't set, fall back to something generic.
@@ -347,7 +347,11 @@ YoriShDisplayPrompt(VOID)
 
                 YoriLibFreeStringContents(&YoriShGlobal.TitleVariable);
                 memcpy(&YoriShGlobal.TitleVariable, &PromptVar, sizeof(YORI_STRING));
-                YoriShGlobal.TitleVariable.LengthInChars = YoriShGetEnvironmentVariableWithoutSubstitution(_T("YORITITLE"), YoriShGlobal.TitleVariable.StartOfString, YoriShGlobal.TitleVariable.LengthAllocated, &YoriShGlobal.TitleGeneration);
+                YoriShGlobal.TitleVariable.LengthInChars =
+                    YoriShGetEnvironmentVariableWithoutSubstitution(_T("YORITITLE"),
+                                                                    YoriShGlobal.TitleVariable.StartOfString,
+                                                                    YoriShGlobal.TitleVariable.LengthAllocated,
+                                                                    &YoriShGlobal.TitleGeneration);
             }
         } else {
             YoriLibFreeStringContents(&YoriShGlobal.TitleVariable);
@@ -436,7 +440,7 @@ YoriShDisplayPrompt(VOID)
 BOOL
 YoriShExecPreCommandString(VOID)
 {
-    DWORD EnvVarLength;
+    YORI_ALLOC_SIZE_T EnvVarLength;
     YORI_STRING EnvVar;
 
 
@@ -452,7 +456,11 @@ YoriShExecPreCommandString(VOID)
 
                 YoriLibFreeStringContents(&YoriShGlobal.PreCmdVariable);
                 memcpy(&YoriShGlobal.PreCmdVariable, &EnvVar, sizeof(YORI_STRING));
-                YoriShGlobal.PreCmdVariable.LengthInChars = YoriShGetEnvironmentVariableWithoutSubstitution(_T("YORIPRECMD"), YoriShGlobal.PreCmdVariable.StartOfString, YoriShGlobal.PreCmdVariable.LengthAllocated, &YoriShGlobal.PreCmdGeneration);
+                YoriShGlobal.PreCmdVariable.LengthInChars =
+                    YoriShGetEnvironmentVariableWithoutSubstitution(_T("YORIPRECMD"),
+                                                                    YoriShGlobal.PreCmdVariable.StartOfString,
+                                                                    YoriShGlobal.PreCmdVariable.LengthAllocated,
+                                                                    &YoriShGlobal.PreCmdGeneration);
             }
         } else {
             YoriLibFreeStringContents(&YoriShGlobal.PreCmdVariable);

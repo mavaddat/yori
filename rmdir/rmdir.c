@@ -271,7 +271,7 @@ RmdirFileEnumerateErrorCallback(
         DirName.StartOfString = UnescapedFilePath.StartOfString;
         FilePart = YoriLibFindRightMostCharacter(&UnescapedFilePath, '\\');
         if (FilePart != NULL && ErrorCode != ERROR_DIRECTORY) {
-            DirName.LengthInChars = (DWORD)(FilePart - DirName.StartOfString);
+            DirName.LengthInChars = (YORI_ALLOC_SIZE_T)(FilePart - DirName.StartOfString);
         } else {
             DirName.LengthInChars = UnescapedFilePath.LengthInChars;
         }
@@ -306,17 +306,17 @@ RmdirFileEnumerateErrorCallback(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    BOOL Recursive;
-    BOOL BasicEnumeration;
-    BOOL DeleteLinks;
-    DWORD MatchFlags;
-    DWORD StartArg = 0;
-    DWORD i;
+    BOOLEAN ArgumentUnderstood;
+    BOOLEAN Recursive;
+    BOOLEAN BasicEnumeration;
+    BOOLEAN DeleteLinks;
+    WORD MatchFlags;
+    YORI_ALLOC_SIZE_T StartArg = 0;
+    YORI_ALLOC_SIZE_T i;
     RMDIR_CONTEXT RmdirContext;
     YORI_STRING Arg;
 
@@ -333,36 +333,36 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 RmdirHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2021"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("b")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("b")) == 0) {
                 BasicEnumeration = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("f")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("f")) == 0) {
                 ArgumentUnderstood = TRUE;
                 RmdirContext.DeleteFiles = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("l")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("l")) == 0) {
                 DeleteLinks = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("p")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("p")) == 0) {
                 ArgumentUnderstood = TRUE;
                 RmdirContext.PosixSemantics = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("q")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("q")) == 0) {
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("r")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("r")) == 0) {
                 ArgumentUnderstood = TRUE;
                 RmdirContext.RecycleBin = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("s")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("s")) == 0) {
                 Recursive = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("s/q")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("s/q")) == 0) {
                 Recursive = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 StartArg = i + 1;
                 ArgumentUnderstood = TRUE;
                 break;

@@ -52,6 +52,11 @@
 #pragma warning(disable: 4820) // implicit padding added in structure
 #endif
 
+/**
+ Indicate support for compiling for ARM32 if an SDK is available.
+ */
+#define _ARM_WINAPI_PARTITION_DESKTOP_SDK_AVAILABLE 1
+
 #include <windows.h>
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1200)
@@ -126,6 +131,15 @@ mini_memmove(void * dest, const void * src, unsigned int len)
     return dest;
 }
 
+//
+//  Sigh, turn off optimizations now the optimizer is too aggressive to
+//  be helpful, and MSVC doesn't have finer grained tools
+//
+
+#if defined(_MSC_VER) && (_MSC_VER >= 1940) && defined(_M_IX86)
+#pragma optimize("", off)
+#endif
+
 /**
  Set a block of memory to a specific byte value.
 
@@ -140,6 +154,9 @@ mini_memmove(void * dest, const void * src, unsigned int len)
 void *
 MCRT_FN
 mini_memset(void * dest, char c, unsigned int len)
+#ifdef __clang__
+__attribute__((no_builtin("memset")))
+#endif
 {
     unsigned int i;
     unsigned int fill;
@@ -165,6 +182,10 @@ mini_memset(void * dest, char c, unsigned int len)
 
     return dest;
 }
+
+#if defined(_MSC_VER) && (_MSC_VER >= 1940) && defined(_M_IX86)
+#pragma optimize("", on)
+#endif
 
 /**
  Compare two blocks of memory and indicate if the first is less than the

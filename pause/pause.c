@@ -74,14 +74,14 @@ PauseHelp(VOID)
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
+    BOOLEAN ArgumentUnderstood;
     TCHAR Char;
     DWORD BytesRead;
-    DWORD i;
+    YORI_ALLOC_SIZE_T i;
     YORI_STRING Arg;
 
     for (i = 1; i < ArgC; i++) {
@@ -91,10 +91,10 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 PauseHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2018"));
                 return EXIT_SUCCESS;
             }
@@ -106,7 +106,7 @@ ENTRYPOINT(
     }
 
     YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("Press any key to continue...\n"));
-    if (!SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), 0)) {
+    if (!YoriLibSetInputConsoleMode(GetStdHandle(STD_INPUT_HANDLE), 0)) {
         if (!ReadFile(GetStdHandle(STD_INPUT_HANDLE), &Char, 1, &BytesRead, NULL)) {
             return EXIT_FAILURE;
         }

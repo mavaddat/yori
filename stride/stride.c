@@ -286,7 +286,7 @@ StrideFileEnumerateErrorCallback(
         DirName.StartOfString = UnescapedFilePath.StartOfString;
         FilePart = YoriLibFindRightMostCharacter(&UnescapedFilePath, '\\');
         if (FilePart != NULL) {
-            DirName.LengthInChars = (DWORD)(FilePart - DirName.StartOfString);
+            DirName.LengthInChars = (YORI_ALLOC_SIZE_T)(FilePart - DirName.StartOfString);
         } else {
             DirName.LengthInChars = UnescapedFilePath.LengthInChars;
         }
@@ -321,19 +321,19 @@ StrideFileEnumerateErrorCallback(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
-    DWORD MatchFlags;
-    BOOL BasicEnumeration = FALSE;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
+    WORD MatchFlags;
+    BOOLEAN BasicEnumeration = FALSE;
     STRIDE_CONTEXT StrideContext;
     YORI_STRING Arg;
-    DWORD CharsConsumed;
-    LONGLONG llTemp;
+    YORI_ALLOC_SIZE_T CharsConsumed;
+    YORI_MAX_SIGNED_T llTemp;
 
     ZeroMemory(&StrideContext, sizeof(StrideContext));
     StrideContext.Interval = 10;
@@ -345,16 +345,16 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 StrideHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2019"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("b")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("b")) == 0) {
                 BasicEnumeration = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("i")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("i")) == 0) {
                 if (ArgC > i + 1) {
                     if (YoriLibStringToNumber(&ArgV[i + 1], TRUE, &llTemp, &CharsConsumed) &&
                         CharsConsumed > 0) {
@@ -364,7 +364,7 @@ ENTRYPOINT(
                         i++;
                     }
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("l")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("l")) == 0) {
                 if (ArgC > i + 1) {
                     if (YoriLibStringToNumber(&ArgV[i + 1], TRUE, &llTemp, &CharsConsumed) &&
                         CharsConsumed > 0) {
@@ -374,7 +374,7 @@ ENTRYPOINT(
                         i++;
                     }
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("o")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("o")) == 0) {
                 if (ArgC > i + 1) {
                     if (YoriLibStringToNumber(&ArgV[i + 1], TRUE, &llTemp, &CharsConsumed) &&
                         CharsConsumed > 0) {
@@ -384,10 +384,10 @@ ENTRYPOINT(
                         i++;
                     }
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("s")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("s")) == 0) {
                 StrideContext.Recursive = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 StartArg = i + 1;
                 ArgumentUnderstood = TRUE;
                 break;
@@ -404,7 +404,7 @@ ENTRYPOINT(
     }
 
 #if YORI_BUILTIN
-    YoriLibCancelEnable();
+    YoriLibCancelEnable(FALSE);
 #endif
 
     //

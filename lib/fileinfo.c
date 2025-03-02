@@ -36,17 +36,17 @@
  */
 const YORI_LIB_CHAR_TO_DWORD_FLAG
 YoriLibFileAttrPairs[] = {
-    {FILE_ATTRIBUTE_ARCHIVE,           'A'},
-    {FILE_ATTRIBUTE_READONLY,          'R'},
-    {FILE_ATTRIBUTE_HIDDEN,            'H'},
-    {FILE_ATTRIBUTE_SYSTEM,            'S'},
-    {FILE_ATTRIBUTE_DIRECTORY,         'D'},
-    {FILE_ATTRIBUTE_COMPRESSED,        'C'},
-    {FILE_ATTRIBUTE_ENCRYPTED,         'E'},
-    {FILE_ATTRIBUTE_OFFLINE,           'O'},
-    {FILE_ATTRIBUTE_REPARSE_POINT,     'r'},
-    {FILE_ATTRIBUTE_SPARSE_FILE,       's'},
-    {FILE_ATTRIBUTE_INTEGRITY_STREAM,  'I'},
+    {FILE_ATTRIBUTE_ARCHIVE,           'A', 0},
+    {FILE_ATTRIBUTE_READONLY,          'R', 0},
+    {FILE_ATTRIBUTE_HIDDEN,            'H', 0},
+    {FILE_ATTRIBUTE_SYSTEM,            'S', 0},
+    {FILE_ATTRIBUTE_DIRECTORY,         'D', 0},
+    {FILE_ATTRIBUTE_COMPRESSED,        'C', 0},
+    {FILE_ATTRIBUTE_ENCRYPTED,         'E', 0},
+    {FILE_ATTRIBUTE_OFFLINE,           'O', 0},
+    {FILE_ATTRIBUTE_REPARSE_POINT,     'r', 0},
+    {FILE_ATTRIBUTE_SPARSE_FILE,       's', 0},
+    {FILE_ATTRIBUTE_INTEGRITY_STREAM,  'I', 0},
     };
 
 /**
@@ -61,7 +61,7 @@ YoriLibFileAttrPairs[] = {
  */
 VOID
 YoriLibGetFileAttrPairs(
-    __out PDWORD Count,
+    __out PYORI_ALLOC_SIZE_T Count,
     __out PCYORI_LIB_CHAR_TO_DWORD_FLAG * Pairs
     )
 {
@@ -75,7 +75,7 @@ YoriLibGetFileAttrPairs(
  */
 const YORI_LIB_CHAR_TO_DWORD_FLAG
 YoriLibFileDirectoryPairs[] = {
-    {FILE_ATTRIBUTE_DIRECTORY,         'D'},
+    {FILE_ATTRIBUTE_DIRECTORY,         'D', 0},
     };
 
 /**
@@ -90,7 +90,7 @@ YoriLibFileDirectoryPairs[] = {
  */
 VOID
 YoriLibGetDirectoryPairs(
-    __out PDWORD Count,
+    __out PYORI_ALLOC_SIZE_T Count,
     __out PCYORI_LIB_CHAR_TO_DWORD_FLAG * Pairs
     )
 {
@@ -104,13 +104,13 @@ YoriLibGetDirectoryPairs(
  */
 const YORI_LIB_CHAR_TO_DWORD_FLAG
 YoriLibFilePermissionPairs[] = {
-    {FILE_READ_DATA,                   'R'},
-    {FILE_READ_ATTRIBUTES,             'r'},
-    {FILE_WRITE_DATA,                  'W'},
-    {FILE_WRITE_ATTRIBUTES,            'w'},
-    {FILE_APPEND_DATA,                 'A'},
-    {FILE_EXECUTE,                     'X'},
-    {DELETE,                           'D'},
+    {FILE_READ_DATA,                   'R', 0},
+    {FILE_READ_ATTRIBUTES,             'r', 0},
+    {FILE_WRITE_DATA,                  'W', 0},
+    {FILE_WRITE_ATTRIBUTES,            'w', 0},
+    {FILE_APPEND_DATA,                 'A', 0},
+    {FILE_EXECUTE,                     'X', 0},
+    {DELETE,                           'D', 0},
     };
 
 /**
@@ -125,7 +125,7 @@ YoriLibFilePermissionPairs[] = {
  */
 VOID
 YoriLibGetFilePermissionPairs(
-    __out PDWORD Count,
+    __out PYORI_ALLOC_SIZE_T Count,
     __out PCYORI_LIB_CHAR_TO_DWORD_FLAG * Pairs
     )
 {
@@ -155,12 +155,12 @@ BOOL
 YoriLibCopyFileName(
     __out_ecount(MaxLength) LPTSTR Dest,
     __in LPCTSTR Src,
-    __in DWORD MaxLength,
-    __out_opt PDWORD ValidCharCount
+    __in YORI_ALLOC_SIZE_T MaxLength,
+    __out_opt PYORI_ALLOC_SIZE_T ValidCharCount
     )
 {
-    DWORD Index;
-    DWORD Length;
+    YORI_ALLOC_SIZE_T Index;
+    YORI_ALLOC_SIZE_T Length;
 
     if (MaxLength == 0) {
         return FALSE;
@@ -371,7 +371,7 @@ YoriLibCollectAllocationSize (
         YoriLibInitEmptyString(&ParentPath);
         FinalSeperator = YoriLibFindRightMostCharacter(FullPath, '\\');
         if (FinalSeperator != NULL) {
-            DWORD StringLength = (DWORD)(FinalSeperator - FullPath->StartOfString);
+            YORI_ALLOC_SIZE_T StringLength = (YORI_ALLOC_SIZE_T)(FinalSeperator - FullPath->StartOfString);
             if (YoriLibAllocateString(&ParentPath, StringLength + 1)) {
                 memcpy(ParentPath.StartOfString, FullPath->StartOfString, StringLength * sizeof(TCHAR));
                 ParentPath.StartOfString[StringLength] = '\0';
@@ -397,7 +397,7 @@ YoriLibCollectAllocationSize (
                 //  systems can fail when given a directory to GetDiskFreeSpace.
                 //
 
-                if (YoriLibFindEffectiveRoot(&ParentPath, &EffectiveRoot)) {
+                if (YoriLibFindEffRoot(&ParentPath, &EffectiveRoot)) {
                     EffectiveRoot.StartOfString[EffectiveRoot.LengthInChars] = '\0';
                     GetDiskFreeSpace(EffectiveRoot.StartOfString, &SectorsPerCluster, &BytesPerSector, &FreeClusters, &TotalClusters);
                 }
@@ -763,7 +763,7 @@ YoriLibCollectDescription (
 {
     DWORD Junk;
     PVOID Buffer;
-    DWORD VerSize;
+    YORI_ALLOC_SIZE_T VerSize;
     PWORD TranslationBlock;
 
     UNREFERENCED_PARAMETER(FindData);
@@ -780,7 +780,7 @@ YoriLibCollectDescription (
         return TRUE;
     }
 
-    VerSize = DllVersion.pGetFileVersionInfoSizeW(FullPath->StartOfString, &Junk);
+    VerSize = (YORI_ALLOC_SIZE_T)DllVersion.pGetFileVersionInfoSizeW(FullPath->StartOfString, &Junk);
 
     Buffer = YoriLibMalloc(VerSize);
     if (Buffer != NULL) {
@@ -848,10 +848,10 @@ YoriLibCollectEffectivePermissions (
     GENERIC_MAPPING Mapping;
     PRIVILEGE_SET Privilege;
     DWORD PrivilegeLength = sizeof(Privilege);
-    DWORD Index;
+    YORI_ALLOC_SIZE_T Index;
     ACCESS_MASK UnderstoodPermissions = 0;
     PCYORI_LIB_CHAR_TO_DWORD_FLAG Pairs;
-    DWORD PairCount;
+    YORI_ALLOC_SIZE_T PairCount;
 
     UNREFERENCED_PARAMETER(FindData);
 
@@ -872,14 +872,22 @@ YoriLibCollectEffectivePermissions (
 
     SecurityDescriptor = LocalSecurityDescriptor;
 
-    if (!DllAdvApi32.pGetFileSecurityW(FullPath->StartOfString, OWNER_SECURITY_INFORMATION|GROUP_SECURITY_INFORMATION|DACL_SECURITY_INFORMATION, (PSECURITY_DESCRIPTOR)SecurityDescriptor, sizeof(LocalSecurityDescriptor), &dwSdRequired)) {
-        if (dwSdRequired != 0) {
-            SecurityDescriptor = YoriLibMalloc(dwSdRequired);
+    if (!DllAdvApi32.pGetFileSecurityW(FullPath->StartOfString,
+                                       OWNER_SECURITY_INFORMATION|GROUP_SECURITY_INFORMATION|DACL_SECURITY_INFORMATION,
+                                       (PSECURITY_DESCRIPTOR)SecurityDescriptor,
+                                       sizeof(LocalSecurityDescriptor),
+                                       &dwSdRequired)) {
+        if (dwSdRequired != 0 && YoriLibIsSizeAllocatable(dwSdRequired)) {
+            SecurityDescriptor = YoriLibMalloc((YORI_ALLOC_SIZE_T)dwSdRequired);
             if (SecurityDescriptor == NULL) {
                 goto Exit;
             }
 
-            if (!DllAdvApi32.pGetFileSecurityW(FullPath->StartOfString, OWNER_SECURITY_INFORMATION|GROUP_SECURITY_INFORMATION|DACL_SECURITY_INFORMATION, (PSECURITY_DESCRIPTOR)SecurityDescriptor, dwSdRequired, &dwSdRequired)) {
+            if (!DllAdvApi32.pGetFileSecurityW(FullPath->StartOfString,
+                                               OWNER_SECURITY_INFORMATION|GROUP_SECURITY_INFORMATION|DACL_SECURITY_INFORMATION,
+                                               (PSECURITY_DESCRIPTOR)SecurityDescriptor,
+                                               dwSdRequired,
+                                               &dwSdRequired)) {
                 goto Exit;
             }
         } else {
@@ -896,7 +904,14 @@ YoriLibCollectEffectivePermissions (
     }
 
     memset(&Mapping, 0, sizeof(Mapping));
-    DllAdvApi32.pAccessCheck((PSECURITY_DESCRIPTOR)SecurityDescriptor, TokenHandle, MAXIMUM_ALLOWED, &Mapping, &Privilege, &PrivilegeLength, &Entry->EffectivePermissions, &AccessGranted);
+    DllAdvApi32.pAccessCheck((PSECURITY_DESCRIPTOR)SecurityDescriptor,
+                             TokenHandle,
+                             MAXIMUM_ALLOWED,
+                             &Mapping,
+                             &Privilege,
+                             &PrivilegeLength,
+                             &Entry->EffectivePermissions,
+                             &AccessGranted);
 
 Exit:
     if (TokenHandle != NULL) {
@@ -941,10 +956,10 @@ YoriLibCollectFileAttributes (
     __in PYORI_STRING FullPath
     )
 {
-    DWORD i;
+    YORI_ALLOC_SIZE_T i;
     DWORD Mask;
     PCYORI_LIB_CHAR_TO_DWORD_FLAG Pairs;
-    DWORD PairCount;
+    YORI_ALLOC_SIZE_T PairCount;
 
     UNREFERENCED_PARAMETER(FullPath);
 
@@ -1126,7 +1141,7 @@ YoriLibCollectFileVersionString (
 {
     DWORD Junk;
     PVOID Buffer;
-    DWORD VerSize;
+    YORI_ALLOC_SIZE_T VerSize;
     PWORD TranslationBlock;
 
     UNREFERENCED_PARAMETER(FindData);
@@ -1143,7 +1158,7 @@ YoriLibCollectFileVersionString (
         return TRUE;
     }
 
-    VerSize = DllVersion.pGetFileVersionInfoSizeW(FullPath->StartOfString, &Junk);
+    VerSize = (YORI_ALLOC_SIZE_T)DllVersion.pGetFileVersionInfoSizeW(FullPath->StartOfString, &Junk);
 
     Buffer = YoriLibMalloc(VerSize);
     if (Buffer != NULL) {
@@ -1231,7 +1246,14 @@ YoriLibCollectFragmentCount (
         PriorLcn.QuadPart = 0;
         StartBuffer.StartingVcn.QuadPart = 0;
 
-        while ((DeviceIoControl(hFile, FSCTL_GET_RETRIEVAL_POINTERS, &StartBuffer, sizeof(StartBuffer), &u.Extents, sizeof(u), &BytesReturned, NULL) || GetLastError() == ERROR_MORE_DATA) &&
+        while ((DeviceIoControl(hFile,
+                                FSCTL_GET_RETRIEVAL_POINTERS,
+                                &StartBuffer,
+                                sizeof(StartBuffer),
+                                &u.Extents,
+                                sizeof(u),
+                                &BytesReturned,
+                                NULL) || GetLastError() == ERROR_MORE_DATA) &&
                u.Extents.ExtentCount > 0) {
 
             // 
@@ -1241,7 +1263,7 @@ YoriLibCollectFragmentCount (
             //
 
             for (BytesReturned = 0; BytesReturned < u.Extents.ExtentCount; BytesReturned++) {
-                if (u.Extents.Extents[BytesReturned].Lcn.HighPart != (DWORD)-1 &&
+                if (u.Extents.Extents[BytesReturned].Lcn.HighPart != -1 &&
                     u.Extents.Extents[BytesReturned].Lcn.LowPart != (DWORD)-1) {
 
                     if (PriorLcn.QuadPart + PriorRunLength.QuadPart != u.Extents.Extents[BytesReturned].Lcn.QuadPart) {
@@ -1673,7 +1695,7 @@ YoriLibCollectVersion (
 {
     DWORD Junk;
     PVOID Buffer;
-    DWORD VerSize;
+    YORI_ALLOC_SIZE_T VerSize;
     VS_FIXEDFILEINFO * RootBlock;
 
     UNREFERENCED_PARAMETER(FindData);
@@ -1691,7 +1713,7 @@ YoriLibCollectVersion (
         return TRUE;
     }
 
-    VerSize = DllVersion.pGetFileVersionInfoSizeW(FullPath->StartOfString, &Junk);
+    VerSize = (YORI_ALLOC_SIZE_T)DllVersion.pGetFileVersionInfoSizeW(FullPath->StartOfString, &Junk);
 
     Buffer = YoriLibMalloc(VerSize);
     if (Buffer != NULL) {
@@ -2810,12 +2832,14 @@ YoriLibGenerateAllocatedRangeCount(
     __in PYORI_STRING String
     )
 {
-    DWORD CharsConsumed;
-    if (!YoriLibStringToNumber(String, TRUE, &Entry->AllocatedRangeCount.QuadPart, &CharsConsumed) ||
+    YORI_ALLOC_SIZE_T CharsConsumed;
+    YORI_MAX_SIGNED_T llTemp;
+    if (!YoriLibStringToNumber(String, TRUE, &llTemp, &CharsConsumed) ||
         CharsConsumed == 0) {
 
         return FALSE;
     }
+    Entry->AllocatedRangeCount.QuadPart = llTemp;
     return TRUE;
 }
 
@@ -2857,15 +2881,15 @@ YoriLibGenerateArch(
     __in PYORI_STRING String
     )
 {
-    if (YoriLibCompareStringWithLiteralInsensitive(String, _T("None")) == 0) {
+    if (YoriLibCompareStringLitIns(String, _T("None")) == 0) {
         Entry->Architecture = 0;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("i386")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("i386")) == 0) {
         Entry->Architecture = IMAGE_FILE_MACHINE_I386;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("amd64")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("amd64")) == 0) {
         Entry->Architecture = IMAGE_FILE_MACHINE_AMD64;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("arm")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("arm")) == 0) {
         Entry->Architecture = IMAGE_FILE_MACHINE_ARMNT;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("arm64")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("arm64")) == 0) {
         Entry->Architecture = IMAGE_FILE_MACHINE_ARM64;
     } else {
         return FALSE;
@@ -2890,9 +2914,9 @@ YoriLibGenerateCaseSensitivity(
     __in PYORI_STRING String
     )
 {
-    if (YoriLibCompareStringWithLiteralInsensitive(String, _T("ci")) == 0) {
+    if (YoriLibCompareStringLitIns(String, _T("ci")) == 0) {
         Entry->CaseSensitive = FALSE;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("cs")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("cs")) == 0) {
         Entry->CaseSensitive = TRUE;
     } else {
         return FALSE;
@@ -2917,25 +2941,25 @@ YoriLibGenerateCompressionAlgorithm(
     __in PYORI_STRING String
     )
 {
-    if (YoriLibCompareStringWithLiteralInsensitive(String, _T("None")) == 0) {
+    if (YoriLibCompareStringLitIns(String, _T("None")) == 0) {
         Entry->CompressionAlgorithm = YoriLibCompressionNone;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("LZNT")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("LZNT")) == 0) {
         Entry->CompressionAlgorithm = YoriLibCompressionLznt;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("NTFS")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("NTFS")) == 0) {
         Entry->CompressionAlgorithm = YoriLibCompressionNtfsUnknown;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("WIM")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("WIM")) == 0) {
         Entry->CompressionAlgorithm = YoriLibCompressionWim;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("LZX")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("LZX")) == 0) {
         Entry->CompressionAlgorithm = YoriLibCompressionLzx;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("Xp4")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("Xp4")) == 0) {
         Entry->CompressionAlgorithm = YoriLibCompressionXpress4k;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("Xp8")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("Xp8")) == 0) {
         Entry->CompressionAlgorithm = YoriLibCompressionXpress8k;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("Xp16")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("Xp16")) == 0) {
         Entry->CompressionAlgorithm = YoriLibCompressionXpress16k;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("File")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("File")) == 0) {
         Entry->CompressionAlgorithm = YoriLibCompressionWofFileUnknown;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("Wof")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("Wof")) == 0) {
         Entry->CompressionAlgorithm = YoriLibCompressionWofUnknown;
     } else {
         return FALSE;
@@ -3043,10 +3067,10 @@ YoriLibGenerateDirectory(
     __in PYORI_STRING String
     )
 {
-    DWORD i;
-    DWORD StringIndex = 0;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StringIndex = 0;
     PCYORI_LIB_CHAR_TO_DWORD_FLAG Pairs;
-    DWORD PairCount;
+    YORI_ALLOC_SIZE_T PairCount;
 
     Entry->FileAttributes = 0;
 
@@ -3082,10 +3106,10 @@ YoriLibGenerateEffectivePermissions(
     __in PYORI_STRING String
     )
 {
-    DWORD i;
-    DWORD StringIndex = 0;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StringIndex = 0;
     PCYORI_LIB_CHAR_TO_DWORD_FLAG Pairs;
-    DWORD PairCount;
+    YORI_ALLOC_SIZE_T PairCount;
 
     YoriLibGetFilePermissionPairs(&PairCount, &Pairs);
 
@@ -3120,10 +3144,10 @@ YoriLibGenerateFileAttributes(
     __in PYORI_STRING String
     )
 {
-    DWORD i;
-    DWORD StringIndex = 0;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StringIndex = 0;
     PCYORI_LIB_CHAR_TO_DWORD_FLAG Pairs;
-    DWORD PairCount;
+    YORI_ALLOC_SIZE_T PairCount;
 
     Entry->FileAttributes = 0;
 
@@ -3190,8 +3214,8 @@ YoriLibGenerateFileId(
     __in PYORI_STRING String
     )
 {
-    DWORD CharsConsumed;
-    DWORDLONG FileId;
+    YORI_ALLOC_SIZE_T CharsConsumed;
+    YORI_MAX_SIGNED_T FileId;
 
     if (!YoriLibStringToNumber(String, TRUE, &FileId, &CharsConsumed) ||
         CharsConsumed == 0) {
@@ -3199,7 +3223,7 @@ YoriLibGenerateFileId(
         return FALSE;
     }
 
-    Entry->FileId.QuadPart = FileId;
+    Entry->FileId.QuadPart = (YORI_MAX_UNSIGNED_T)FileId;
     return TRUE;
 }
 
@@ -3287,12 +3311,14 @@ YoriLibGenerateFragmentCount(
     __in PYORI_STRING String
     )
 {
-    DWORD CharsConsumed;
-    if (!YoriLibStringToNumber(String, TRUE, &Entry->FragmentCount.QuadPart, &CharsConsumed) ||
+    YORI_ALLOC_SIZE_T CharsConsumed;
+    YORI_MAX_SIGNED_T llTemp;
+    if (!YoriLibStringToNumber(String, TRUE, &llTemp, &CharsConsumed) ||
         CharsConsumed == 0) {
 
         return FALSE;
     }
+    Entry->FragmentCount.QuadPart = llTemp;
     return TRUE;
 }
 
@@ -3313,8 +3339,8 @@ YoriLibGenerateLinkCount(
     __in PYORI_STRING String
     )
 {
-    DWORD CharsConsumed;
-    LONGLONG llTemp;
+    YORI_ALLOC_SIZE_T CharsConsumed;
+    YORI_MAX_SIGNED_T llTemp;
     if (!YoriLibStringToNumber(String, TRUE, &llTemp, &CharsConsumed) ||
         CharsConsumed == 0) {
 
@@ -3366,8 +3392,8 @@ YoriLibGenerateOsVersion(
     )
 {
     YORI_STRING Substring;
-    DWORD CharsConsumed;
-    LONGLONG llTemp;
+    YORI_ALLOC_SIZE_T CharsConsumed;
+    YORI_MAX_SIGNED_T llTemp;
 
     YoriLibInitEmptyString(&Substring);
     Substring.StartOfString = String->StartOfString;
@@ -3435,8 +3461,8 @@ YoriLibGenerateReparseTag(
     __in PYORI_STRING String
     )
 {
-    DWORD CharsConsumed;
-    LONGLONG llTemp;
+    YORI_ALLOC_SIZE_T CharsConsumed;
+    YORI_MAX_SIGNED_T llTemp;
     if (!YoriLibStringToNumber(String, TRUE, &llTemp, &CharsConsumed) ||
         CharsConsumed == 0) {
 
@@ -3486,35 +3512,35 @@ YoriLibGenerateSubsystem (
     __in PYORI_STRING String
     )
 {
-    if (YoriLibCompareStringWithLiteralInsensitive(String, _T("None")) == 0) {
+    if (YoriLibCompareStringLitIns(String, _T("None")) == 0) {
         Entry->Subsystem = IMAGE_SUBSYSTEM_UNKNOWN;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("NT")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("NT")) == 0) {
         Entry->Subsystem = IMAGE_SUBSYSTEM_NATIVE;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("GUI")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("GUI")) == 0) {
         Entry->Subsystem = IMAGE_SUBSYSTEM_WINDOWS_GUI;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("Cons")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("Cons")) == 0) {
         Entry->Subsystem = IMAGE_SUBSYSTEM_WINDOWS_CUI;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("OS/2")) == 0 || YoriLibCompareStringWithLiteralInsensitive(String, _T("OS2")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("OS/2")) == 0 || YoriLibCompareStringLitIns(String, _T("OS2")) == 0) {
         Entry->Subsystem = IMAGE_SUBSYSTEM_OS2_CUI;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("Posx")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("Posx")) == 0) {
         Entry->Subsystem = IMAGE_SUBSYSTEM_POSIX_CUI;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("w9x")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("w9x")) == 0) {
         Entry->Subsystem = IMAGE_SUBSYSTEM_NATIVE_WINDOWS;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("CE")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("CE")) == 0) {
         Entry->Subsystem = IMAGE_SUBSYSTEM_WINDOWS_CE_GUI;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("EFIa")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("EFIa")) == 0) {
         Entry->Subsystem = IMAGE_SUBSYSTEM_EFI_APPLICATION;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("EFIb")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("EFIb")) == 0) {
         Entry->Subsystem = IMAGE_SUBSYSTEM_EFI_BOOT_SERVICE_DRIVER;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("EFId")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("EFId")) == 0) {
         Entry->Subsystem = IMAGE_SUBSYSTEM_EFI_RUNTIME_DRIVER;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("EFIr")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("EFIr")) == 0) {
         Entry->Subsystem = IMAGE_SUBSYSTEM_EFI_ROM;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("Xbox")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("Xbox")) == 0) {
         Entry->Subsystem = IMAGE_SUBSYSTEM_XBOX;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("Xbcc")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("Xbcc")) == 0) {
         Entry->Subsystem = IMAGE_SUBSYSTEM_XBOX_CODE_CATALOG;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("Boot")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("Boot")) == 0) {
         Entry->Subsystem = IMAGE_SUBSYSTEM_WINDOWS_BOOT_APPLICATION;
     } else {
         return FALSE;
@@ -3540,8 +3566,8 @@ YoriLibGenerateStreamCount(
     __in PYORI_STRING String
     )
 {
-    DWORD CharsConsumed;
-    LONGLONG llTemp;
+    YORI_ALLOC_SIZE_T CharsConsumed;
+    YORI_MAX_SIGNED_T llTemp;
     if (!YoriLibStringToNumber(String, TRUE, &llTemp, &CharsConsumed) ||
         CharsConsumed == 0) {
 
@@ -3568,12 +3594,14 @@ YoriLibGenerateUsn(
     __in PYORI_STRING String
     )
 {
-    DWORD CharsConsumed;
-    if (!YoriLibStringToNumber(String, TRUE, &Entry->Usn.QuadPart, &CharsConsumed) ||
+    YORI_ALLOC_SIZE_T CharsConsumed;
+    YORI_MAX_SIGNED_T llTemp;
+    if (!YoriLibStringToNumber(String, TRUE, &llTemp, &CharsConsumed) ||
         CharsConsumed == 0) {
 
         return FALSE;
     }
+    Entry->Usn.QuadPart = llTemp;
     return TRUE;
 }
 
@@ -3596,8 +3624,8 @@ YoriLibGenerateVersion(
 {
     LARGE_INTEGER FileVersion;
     YORI_STRING Substring;
-    DWORD CharsConsumed;
-    LONGLONG llTemp;
+    YORI_ALLOC_SIZE_T CharsConsumed;
+    YORI_MAX_SIGNED_T llTemp;
 
     YoriLibInitEmptyString(&Substring);
     Substring.StartOfString = String->StartOfString;

@@ -78,17 +78,17 @@ CshotHelp(VOID)
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD SkipCount = 0;
-    DWORD LineCount = 0;
-    DWORD i;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T SkipCount = 0;
+    YORI_ALLOC_SIZE_T LineCount = 0;
+    YORI_ALLOC_SIZE_T i;
     YORI_STRING Arg;
-    LONGLONG Temp;
-    DWORD CharsConsumed;
+    YORI_MAX_SIGNED_T Temp;
+    YORI_ALLOC_SIZE_T CharsConsumed;
 
     for (i = 1; i < ArgC; i++) {
 
@@ -96,26 +96,26 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 CshotHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2018"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("c")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("c")) == 0) {
                 if (ArgC > i + 1) {
                     if (YoriLibStringToNumber(&ArgV[i + 1], TRUE, &Temp, &CharsConsumed)) {
 
 
-                        LineCount = (DWORD)Temp;
+                        LineCount = (YORI_ALLOC_SIZE_T)Temp;
                         ArgumentUnderstood = TRUE;
                         i++;
                     }
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("s")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("s")) == 0) {
                 if (ArgC > i + 1) {
                     if (YoriLibStringToNumber(&ArgV[i + 1], TRUE, &Temp, &CharsConsumed)) {
-                        SkipCount = (DWORD)Temp;
+                        SkipCount = (YORI_ALLOC_SIZE_T)Temp;
                         ArgumentUnderstood = TRUE;
                         i++;
                     }

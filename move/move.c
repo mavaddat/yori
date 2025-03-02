@@ -146,7 +146,7 @@ MoveFileFoundCallback(
 
     if (MoveContext->DestAttributes & FILE_ATTRIBUTE_DIRECTORY || TrailingSlash) {
         YORI_STRING DestWithFile;
-        if (!YoriLibAllocateString(&DestWithFile, MoveContext->Dest.LengthInChars + 1 + _tcslen(FileInfo->cFileName) + 1)) {
+        if (!YoriLibAllocateString(&DestWithFile, MoveContext->Dest.LengthInChars + 1 + (YORI_ALLOC_SIZE_T)_tcslen(FileInfo->cFileName) + 1)) {
             return FALSE;
         }
 
@@ -161,12 +161,12 @@ MoveFileFoundCallback(
             DestWithFile.LengthInChars = YoriLibSPrintf(DestWithFile.StartOfString, _T("%y\\%s"), &MoveContext->Dest, FileInfo->cFileName);
         }
 
-        if (!YoriLibGetFullPathNameReturnAllocation(&DestWithFile, TRUE, &FullDest, NULL)) {
+        if (!YoriLibGetFullPathNameAlloc(&DestWithFile, TRUE, &FullDest, NULL)) {
             return FALSE;
         }
         YoriLibFreeStringContents(&DestWithFile);
     } else {
-        if (!YoriLibGetFullPathNameReturnAllocation(&MoveContext->Dest, TRUE, &FullDest, NULL)) {
+        if (!YoriLibGetFullPathNameAlloc(&MoveContext->Dest, TRUE, &FullDest, NULL)) {
             return FALSE;
         }
         if (MoveContext->FilesMoved > 0) {
@@ -233,7 +233,7 @@ MoveFileEnumerateErrorCallback(
         DirName.StartOfString = UnescapedFilePath.StartOfString;
         FilePart = YoriLibFindRightMostCharacter(&UnescapedFilePath, '\\');
         if (FilePart != NULL) {
-            DirName.LengthInChars = (DWORD)(FilePart - DirName.StartOfString);
+            DirName.LengthInChars = (YORI_ALLOC_SIZE_T)(FilePart - DirName.StartOfString);
         } else {
             DirName.LengthInChars = UnescapedFilePath.LengthInChars;
         }
@@ -268,19 +268,19 @@ MoveFileEnumerateErrorCallback(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
+    BOOLEAN ArgumentUnderstood;
     DWORD FilesProcessed;
     DWORD FileCount;
     DWORD LastFileArg = 0;
-    DWORD MatchFlags;
-    DWORD i;
+    WORD MatchFlags;
+    YORI_ALLOC_SIZE_T i;
     MOVE_CONTEXT MoveContext;
-    BOOL AllocatedDest;
-    BOOL BasicEnumeration;
+    BOOLEAN AllocatedDest;
+    BOOLEAN BasicEnumeration;
     YORI_STRING Arg;
 
     FileCount = 0;
@@ -296,19 +296,19 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 MoveHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2021"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("b")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("b")) == 0) {
                 BasicEnumeration = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("k")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("k")) == 0) {
                 MoveContext.ReplaceExisting = FALSE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("p")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("p")) == 0) {
                 MoveContext.PosixSemantics = TRUE;
                 ArgumentUnderstood = TRUE;
             }
@@ -338,7 +338,7 @@ ENTRYPOINT(
     }
 
 #if YORI_BUILTIN
-    YoriLibCancelEnable();
+    YoriLibCancelEnable(FALSE);
 #endif
 
     MoveContext.DestAttributes = GetFileAttributes(MoveContext.Dest.StartOfString);

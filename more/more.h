@@ -28,6 +28,14 @@
 #include <yorilib.h>
 
 /**
+ The maximum number of concurrent searches.  It's convenient to define this
+ because there is an array of this size indicating the number of user
+ configurable colors, with different arrays for strings to search for and
+ settings for each.  These all need to correspond to each other.
+ */
+#define MORE_MAX_SEARCHES 10
+
+/**
  Data describing a physical line.  A physical line is a line of text from the
  data source, which may take more characters than fit on a viewport line.
  */
@@ -38,6 +46,13 @@ typedef struct _MORE_PHYSICAL_LINE {
      and synchronized with MORE_CONTEXT::PhysicalLineMutex .
      */
     YORI_LIST_ENTRY LineList;
+
+    /**
+     A list of physical lines matching the current search criteria.  Paired
+     with MORE_CONTEXT::FilteredPhysicalLineList and synchronized with
+     MORE_CONTEXT::PhysicalLineMutex .
+     */
+    YORI_LIST_ENTRY FilteredLineList;
 
     /**
      Pointer to the referenced allocation that contains this physical line.
@@ -51,9 +66,16 @@ typedef struct _MORE_PHYSICAL_LINE {
 
     /**
      The number of this physical line within the input stream.  The first
-     line is zero.
+     line is one.
      */
     DWORDLONG LineNumber;
+
+    /**
+     The number of this physical line within the set of lines which match the
+     filter criteria.  If filtering is not enabled, this is the same as
+     LineNumber, above.
+     */
+    DWORDLONG FilteredLineNumber;
 
     /**
      The contents of the physical line.
@@ -76,19 +98,19 @@ typedef struct _MORE_LOGICAL_LINE {
      The zero based index of this logical line from within the corresponding
      physical line.
      */
-    DWORD LogicalLineIndex;
+    YORI_ALLOC_SIZE_T LogicalLineIndex;
 
     /**
      The offset in characters from the PhysicalLine to the beginning of the
      string represented by this logical line.
      */
-    DWORD PhysicalLineCharacterOffset;
+    YORI_ALLOC_SIZE_T PhysicalLineCharacterOffset;
 
     /**
      Characters remaining in any search match, if a search match commenced
      on a previous logical line from the same physical line.
      */
-    DWORD CharactersRemainingInMatch;
+    YORI_ALLOC_SIZE_T CharactersRemainingInMatch;
 
     /**
      The color attribute to display at the beginning of the line.
@@ -122,6 +144,79 @@ typedef struct _MORE_LOGICAL_LINE {
 } MORE_LOGICAL_LINE, *PMORE_LOGICAL_LINE;
 
 /**
+ A structure to describe the state of parsing after a single logical line
+ has been processed.
+ */
+typedef struct _MORE_LINE_END_CONTEXT {
+
+    /**
+     Indicates the color that is being displayed at the end of one logical
+     line.  Conceptually the next logical line starts with this color.
+     */
+    WORD FinalDisplayColor;
+
+    /**
+     Indicates the color that is specified by the inbound text stream at the
+     end of a logical line.  Typically this is the same as the display color
+     above, but can be different if the display color is being overwridden
+     by this program via a search.
+     */
+    WORD FinalUserColor;
+
+    /**
+     Set to TRUE to indicate that once this line is displayed an explicit
+     newline character should be written.  This allows a logical line to be
+     generated referring only to characters within a physical line (no
+     reallocation or double buffering) but still terminate the line before
+     starting the next line.  This is typically FALSE because a logical line
+     has written to the edge of the console window so that processing is
+     resuming on the next console line without a newline present.
+     */
+    BOOLEAN ExplicitNewlineRequired;
+
+    /**
+     Set to TRUE to indicate the logical line needs to be parsed character
+     by character because the contents of the logical line are not merely
+     a subset of characters from a physical line.  FALSE if the line is
+     just part of a physical line allocation.  Currently this is only used
+     when a search is present so that the logical line contains extra
+     escape sequences that the physical line does not.
+     */
+    BOOLEAN RequiresGeneration;
+
+    /**
+     Specifies the number of characters needed to describe the logical line
+     contents.  When RequiresGeneration is TRUE this number may not match
+     the number of characters needing to be consumed from the physical line.
+     */
+    YORI_ALLOC_SIZE_T CharactersNeededInAllocation;
+
+    /**
+     Indicates the number of characters remaining in a search match.  This is
+     nonzero if a match is found that is partially on one logical line and
+     partially on a following logical line.  In that case, the second logical
+     line contains a highlighted region that is for fewer characters than the
+     match string, does not match the match string, etc.
+     */
+    YORI_ALLOC_SIZE_T CharactersRemainingInMatch;
+} MORE_LINE_END_CONTEXT, *PMORE_LINE_END_CONTEXT;
+
+/**
+ Additional information about each search string.  This is seperated from the
+ search strings to allow the search strings to be passed as-is when searching
+ on each line.  Information about the string can be looked up after matches
+ are located.
+ */
+typedef struct _MORE_SEARCH_CONTEXT {
+
+    /**
+     The color index for the search match.
+     */
+    UCHAR ColorIndex;
+
+} MORE_SEARCH_CONTEXT, *PMORE_SEARCH_CONTEXT;
+
+/**
  Context passed to the callback which is invoked for each file found.
  */
 typedef struct _MORE_CONTEXT {
@@ -130,6 +225,11 @@ typedef struct _MORE_CONTEXT {
      A linked list of physical lines.
      */
     YORI_LIST_ENTRY PhysicalLineList;
+
+    /**
+     A linked list of physical lines matching the current search criteria.
+     */
+    YORI_LIST_ENTRY FilteredPhysicalLineList;
 
     /**
      Synchronization around PhysicalLineList.
@@ -153,14 +253,14 @@ typedef struct _MORE_CONTEXT {
     /**
      The current width of the window, in characters.
      */
-    DWORD ViewportWidth;
+    YORI_ALLOC_SIZE_T ViewportWidth;
 
     /**
      The current height of the window, in lines.  Note this corresponds to the
      number of elements in ViewportLines so updating it implies a
      reallocation.
      */
-    DWORD ViewportHeight;
+    YORI_ALLOC_SIZE_T ViewportHeight;
 
     /**
      Description of the current selected region.
@@ -191,35 +291,30 @@ typedef struct _MORE_CONTEXT {
      currently populated with data.  Since population is a process, this
      starts at zero and counts up to ViewportHeight.
      */
-    DWORD LinesInViewport;
+    YORI_ALLOC_SIZE_T LinesInViewport;
 
     /**
      The number of lines that have been displayed as part of a single page.
      If the user hits space or similar, this value is reset such that
      another ViewportHeight number of lines is processed.
      */
-    DWORD LinesInPage;
+    YORI_ALLOC_SIZE_T LinesInPage;
 
     /**
      The number of command line arguments to use as input.  This can be zero
      if input is coming from a pipe.
      */
-    DWORD InputSourceCount;
+    YORI_ALLOC_SIZE_T InputSourceCount;
 
     /**
      The number of spaces to display for every tab.
      */
-    DWORD TabWidth;
+    YORI_ALLOC_SIZE_T TabWidth;
 
     /**
      The color attribute to display at the beginning of the application.
      */
     WORD InitialColor;
-
-    /**
-     The color to use to highlight search terms.
-     */
-    WORD SearchColor;
 
     /**
      Pointer to an array of length InputSourceCount for file specifications
@@ -228,26 +323,55 @@ typedef struct _MORE_CONTEXT {
     PYORI_STRING InputSources;
 
     /**
-     TRUE if we are in search mode, meaning that keystrokes will be applied
-     to the SearchString below.  FALSE if keystrokes imply navigation.
+     An array of strings to search for.  These are compacted so the existence
+     of one empty string implies no further strings following.  This means
+     there is no correlation between an entry in this array and the color for
+     that entry.
      */
-    BOOL SearchMode;
+    YORI_STRING SearchStrings[MORE_MAX_SEARCHES];
 
     /**
-     TRUE if the status line needs to be redrawn as a result of a search
-     string change.
+     An array of additional information about each search string above.  This
+     array currently contains information about the color to use for the
+     search match.
      */
-    BOOL SearchDirty;
+    MORE_SEARCH_CONTEXT SearchContext[MORE_MAX_SEARCHES];
 
     /**
-     A string describing any text to search for.
+     An array of colors to use to display search matches.
      */
-    YORI_STRING SearchString;
+    UCHAR SearchColors[MORE_MAX_SEARCHES];
+
+    /**
+     Indicates the current color that the user is manipulating.  This can
+     be 0-8, where the user switches them with Ctrl+1 - Ctrl+9.
+     */
+    UCHAR SearchColorIndex;
 
     /**
      Handle to the thread that is adding to the physical line array.
      */
     HANDLE IngestThread;
+
+    /**
+     TRUE if we are in search mode, meaning that keystrokes will be applied
+     to the active SearchString.  The active SearchString is identified by
+     SearchColorIndex.  FALSE if keystrokes imply navigation.
+     */
+    BOOLEAN SearchUiActive;
+
+    /**
+     TRUE if the status line needs to be redrawn as a result of a search
+     string change.
+     */
+    BOOLEAN SearchDirty;
+
+    /**
+     TRUE if lines should only be displayed that match the search criteria.
+     FALSE if all line should be displayed, while highlighting search
+     criteria matches.
+     */
+    BOOLEAN FilterToSearch;
 
     /**
      TRUE if the display implies that text at the last cell in a line auto
@@ -310,28 +434,34 @@ typedef struct _MORE_CONTEXT {
      */
     DWORDLONG LineCount;
 
+    /**
+     Records the total number of lines matching the current filter criteria.
+     If no filter is in effect, this should be the same as LineCount.
+     */
+    DWORDLONG FilteredLineCount;
+
 } MORE_CONTEXT, *PMORE_CONTEXT;
 
 VOID
 MoreGetViewportDimensions(
     __in PCONSOLE_SCREEN_BUFFER_INFO ScreenInfo,
-    __out PDWORD ViewportWidth,
-    __out PDWORD ViewportHeight
+    __out PYORI_ALLOC_SIZE_T ViewportWidth,
+    __out PYORI_ALLOC_SIZE_T ViewportHeight
     );
 
 __success(return)
-BOOL
+BOOLEAN
 MoreAllocateViewportStructures(
-    __in DWORD ViewportWidth,
-    __in DWORD ViewportHeight,
+    __in YORI_ALLOC_SIZE_T ViewportWidth,
+    __in YORI_ALLOC_SIZE_T ViewportHeight,
     __out PMORE_LOGICAL_LINE * DisplayViewportLines,
     __out PMORE_LOGICAL_LINE * StagingViewportLines
     );
 
-BOOL
+BOOLEAN
 MoreInitContext(
     __inout PMORE_CONTEXT MoreContext,
-    __in DWORD ArgCount,
+    __in YORI_ALLOC_SIZE_T ArgCount,
     __in_opt PYORI_STRING ArgStrings,
     __in BOOLEAN Recursive,
     __in BOOLEAN BasicEnumeration,
@@ -358,6 +488,108 @@ MoreIngestThread(
 BOOL
 MoreViewportDisplay(
     __inout PMORE_CONTEXT MoreContext
+    );
+
+UCHAR
+MoreSearchIndexForColorIndex(
+    __in PMORE_CONTEXT MoreContext,
+    __in UCHAR ColorIndex
+    );
+
+UCHAR
+MoreSearchCountActive(
+    __in PMORE_CONTEXT MoreContext
+    );
+
+VOID
+MoreSearchIndexFree(
+    __in PMORE_CONTEXT MoreContext,
+    __in UCHAR SearchIndex
+    );
+
+__success(return)
+BOOLEAN
+MoreFindNextSearchMatch(
+    __in PMORE_CONTEXT MoreContext,
+    __in PCYORI_STRING StringToSearch,
+    __out_opt PYORI_ALLOC_SIZE_T MatchOffset,
+    __out_opt PUCHAR MatchIndex
+    );
+
+VOID
+MoreTruncateStringToVisibleChars(
+    __in PYORI_STRING String,
+    __in YORI_ALLOC_SIZE_T VisibleChars
+    );
+
+VOID
+MoreMoveLogicalLine(
+    __inout PMORE_LOGICAL_LINE Dest,
+    __in PMORE_LOGICAL_LINE Src
+    );
+
+VOID
+MoreCloneLogicalLine(
+    __inout PMORE_LOGICAL_LINE Dest,
+    __in PMORE_LOGICAL_LINE Src
+    );
+
+YORI_ALLOC_SIZE_T
+MoreGetLogicalLineLength(
+    __in PMORE_CONTEXT MoreContext,
+    __in PYORI_STRING PhysicalLineSubset,
+    __in YORI_ALLOC_SIZE_T MaximumVisibleCharacters,
+    __in WORD InitialDisplayColor,
+    __in WORD InitialUserColor,
+    __in YORI_ALLOC_SIZE_T CharactersRemainingInMatch,
+    __out_opt PMORE_LINE_END_CONTEXT LineEndContext
+    );
+
+__success(return)
+BOOLEAN
+MoreGetNextLogicalLines(
+    __inout PMORE_CONTEXT MoreContext,
+    __in_opt PMORE_LOGICAL_LINE CurrentLine,
+    __in BOOLEAN StartFromNextLine,
+    __in YORI_ALLOC_SIZE_T LinesToOutput,
+    __out_ecount(*NumberLinesGenerated) PMORE_LOGICAL_LINE OutputLines,
+    __out PYORI_ALLOC_SIZE_T NumberLinesGenerated
+    );
+
+__success(return)
+BOOLEAN
+MoreGetPreviousLogicalLines(
+    __inout PMORE_CONTEXT MoreContext,
+    __in_opt PMORE_LOGICAL_LINE CurrentLine,
+    __in YORI_ALLOC_SIZE_T LinesToOutput,
+    __out_ecount(*NumberLinesGenerated) PMORE_LOGICAL_LINE OutputLines,
+    __out PYORI_ALLOC_SIZE_T NumberLinesGenerated
+    );
+
+__success(return != NULL)
+PMORE_PHYSICAL_LINE
+MoreFindNextLineWithSearchMatch(
+    __in PMORE_CONTEXT MoreContext,
+    __in_opt PMORE_LOGICAL_LINE PreviousMatchLine,
+    __in BOOLEAN MatchAny,
+    __in YORI_ALLOC_SIZE_T MaxLogicalLinesMoved,
+    __out_opt PYORI_ALLOC_SIZE_T LogicalLinesMoved
+    );
+
+__success(return != NULL)
+PMORE_PHYSICAL_LINE
+MoreFindPreviousLineWithSearchMatch(
+    __in PMORE_CONTEXT MoreContext,
+    __in_opt PMORE_LOGICAL_LINE PreviousMatchLine,
+    __in BOOLEAN MatchAny,
+    __in YORI_ALLOC_SIZE_T MaxLogicalLinesMoved,
+    __out_opt PYORI_ALLOC_SIZE_T LogicalLinesMoved
+    );
+
+PMORE_PHYSICAL_LINE
+MoreUpdateFilteredLines(
+    __in PMORE_CONTEXT MoreContext,
+    __in_opt PMORE_PHYSICAL_LINE PreviousStartPoint
     );
 
 // vim:sw=4:ts=4:et:

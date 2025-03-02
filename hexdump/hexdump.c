@@ -75,23 +75,23 @@ typedef struct _HEXDUMP_CONTEXT {
     /**
      Records the total number of files processed.
      */
-    LONGLONG FilesFound;
+    YORI_MAX_SIGNED_T FilesFound;
 
     /**
      Records the total number of files processed within a single command line
      argument.
      */
-    LONGLONG FilesFoundThisArg;
+    YORI_MAX_SIGNED_T FilesFoundThisArg;
 
     /**
      Offset within each stream to display.
      */
-    LONGLONG OffsetToDisplay;
+    YORI_MAX_SIGNED_T OffsetToDisplay;
 
     /**
      Length within each stream to display.
      */
-    LONGLONG LengthToDisplay;
+    YORI_MAX_SIGNED_T LengthToDisplay;
 
     /**
      Number of bytes to display per group.
@@ -135,6 +135,28 @@ typedef struct _HEXDUMP_CONTEXT {
 } HEXDUMP_CONTEXT, *PHEXDUMP_CONTEXT;
 
 /**
+ Check if a character is a valid hex digit.
+
+ @param Char Character to check.
+
+ @return TRUE if the character is hex, FALSE if not.
+ */
+BOOLEAN
+HexDumpIsHexDigit(
+    __in TCHAR Char
+    )
+{
+    if ((Char < '0' || Char > '9') &&
+        (Char < 'a' || Char > 'f') &&
+        (Char < 'A' || Char > 'F')) {
+
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+/**
  Check if the string starts with a consecutive section of hex characters.
 
  @param String Pointer to the string to check.
@@ -158,10 +180,7 @@ HexDumpDoesStringStartWithHexDigits(
 
     for (Index = 0; Index < DigitsToCheck; Index++) {
         Char = String->StartOfString[Index];
-        if ((Char < '0' || Char > '9') &&
-            (Char < 'a' || Char > 'f') &&
-            (Char < 'A' || Char > 'F')) {
-
+        if (!HexDumpIsHexDigit(Char)) {
             return FALSE;
         }
     }
@@ -180,20 +199,26 @@ typedef struct _HEXDUMP_REVERSE_CONTEXT {
      line. This is nonzero to ignore any offset information, which is
      meaningless here.
      */
-    DWORD CharsInInputLineToIgnore;
+    YORI_ALLOC_SIZE_T CharsInInputLineToIgnore;
 
     /**
      Indicates the number of bytes per word.  This program can process 1, 2,
      4 or 8.
      */
-    DWORD BytesPerWord;
+    UCHAR BytesPerWord;
 
     /**
      The number of words per line.  Since the line length is fixed at
      YORI_LIB_HEXDUMP_BYTES_PER_LINE, this is really just that value divided
      by BytesPerWord.
      */
-    DWORD WordsPerLine;
+    UCHAR WordsPerLine;
+
+    /**
+     TRUE if all whitespace should be ignored and the input should be parsed
+     as a sequential hex stream.  FALSE for a regular format.
+     */
+    BOOLEAN NoWhitespace;
 
     /**
      The buffer to populate with data as each line is parsed.  This may point
@@ -211,20 +236,23 @@ typedef struct _HEXDUMP_REVERSE_CONTEXT {
     /**
      The number of bytes of OutputBuffer that have been allocated.
      */
-    DWORD BytesAllocated;
+    YORI_ALLOC_SIZE_T BytesAllocated;
 
     /**
      The number of bytes of OutputBuffer that have been filled.  Note that
      on the final line the process needs to end when the output buffer is
      not completely filled.
      */
-    DWORD BytesThisLine;
+    YORI_ALLOC_SIZE_T BytesThisLine;
 } HEXDUMP_REVERSE_CONTEXT, *PHEXDUMP_REVERSE_CONTEXT;
 
 /**
  Detect the format of hex encoded text.
 
  @param Line Pointer to a line of hex encoded text to test.
+
+ @param SupportBinary If TRUE, succeed for a series of hex digits with no
+        whitespace.
 
  @param ReverseContext Pointer to the reverse hex dump context.  On output
         it is populated with the format of the data.
@@ -235,12 +263,19 @@ typedef struct _HEXDUMP_REVERSE_CONTEXT {
 BOOL
 HexDumpDetectReverseFormatFromLine(
     __in PYORI_STRING Line,
+    __in BOOLEAN SupportBinary,
     __out PHEXDUMP_REVERSE_CONTEXT ReverseContext
     )
 {
     YORI_STRING Substring;
 
+    ReverseContext->NoWhitespace = FALSE;
     ReverseContext->CharsInInputLineToIgnore = 0;
+
+    //
+    //  Look if the line starts with an offset.  If so, we need to ignore it
+    //  when converting back to binary.
+    //
 
     if (HexDumpDoesStringStartWithHexDigits(Line, 8)) {
 
@@ -282,23 +317,36 @@ HexDumpDetectReverseFormatFromLine(
     Substring.LengthInChars = Line->LengthInChars - ReverseContext->CharsInInputLineToIgnore;
 
 
+    //
+    //  8 hex digits with a space == DWORDs
+    //
+
     if (Substring.LengthInChars >= 2 * 4 &&
         HexDumpDoesStringStartWithHexDigits(&Substring, 2 * 4) &&
         (Substring.LengthInChars == 2 * 4 || Substring.StartOfString[2 * 4] == ' ')) {
 
         ReverseContext->BytesPerWord = 4;
 
+    //
+    //  4 hex digits with a space == WORDs
+    //
     } else if (Substring.LengthInChars >= 2 * 2 &&
                HexDumpDoesStringStartWithHexDigits(&Substring, 2 * 2) &&
                (Substring.LengthInChars == 2 * 2 || Substring.StartOfString[2 * 2] == ' ')) {
 
         ReverseContext->BytesPerWord = 2;
 
+    //
+    //  2 hex digits with a space == BYTEs
+    //
     } else if (Substring.LengthInChars >= 2 * 1 &&
                HexDumpDoesStringStartWithHexDigits(&Substring, 2 * 1) &&
                (Substring.LengthInChars == 2 * 1 || Substring.StartOfString[2 * 1] == ' ')) {
 
         ReverseContext->BytesPerWord = 1;
+    //
+    //  8 hex digits, backquote, 8 hex digits == QWORDs
+    //
     } else if (Substring.LengthInChars >= 2 * 4 + 1 + 2 * 4 &&
         HexDumpDoesStringStartWithHexDigits(&Substring, 2 * 4) &&
         Substring.StartOfString[2 * 4] == '`') {
@@ -311,13 +359,25 @@ HexDumpDetectReverseFormatFromLine(
 
             ReverseContext->BytesPerWord = 8;
         }
+    //
+    //  2 hex digits, no space and binary support...just assume bytes
+    //
+    } else if (SupportBinary &&
+               Substring.LengthInChars >= 2 * 1 &&
+               HexDumpDoesStringStartWithHexDigits(&Substring, 2 * 1)) {
+        ReverseContext->BytesPerWord = 1;
+        ReverseContext->NoWhitespace = TRUE;
     }
+
+    //
+    //  If we don't know how to parse it, fail
+    //
 
     if (ReverseContext->BytesPerWord == 0) {
         return FALSE;
     }
 
-    ReverseContext->WordsPerLine = YORI_LIB_HEXDUMP_BYTES_PER_LINE / ReverseContext->BytesPerWord;
+    ReverseContext->WordsPerLine = (UCHAR)(YORI_LIB_HEXDUMP_BYTES_PER_LINE / ReverseContext->BytesPerWord);
 
     return TRUE;
 }
@@ -343,7 +403,7 @@ HexDumpReverseParseByte(
     TCHAR SourceChar;
     DWORD BytePart;
 
-    if (String->LengthInChars < ReverseContext->BytesPerWord * 2) {
+    if (String->LengthInChars < (YORI_ALLOC_SIZE_T)ReverseContext->BytesPerWord * 2) {
         return FALSE;
     }
 
@@ -392,7 +452,7 @@ HexDumpReverseParseWord(
     DWORD Index;
     DWORD BytePart;
 
-    if (String->LengthInChars < ReverseContext->BytesPerWord * 2) {
+    if (String->LengthInChars < (YORI_ALLOC_SIZE_T)ReverseContext->BytesPerWord * 2) {
         return FALSE;
     }
 
@@ -444,7 +504,7 @@ HexDumpReverseParseDword(
     DWORD Index;
     DWORD BytePart;
 
-    if (String->LengthInChars < ReverseContext->BytesPerWord * 2) {
+    if (String->LengthInChars < (YORI_ALLOC_SIZE_T)ReverseContext->BytesPerWord * 2) {
         return FALSE;
     }
 
@@ -493,11 +553,11 @@ HexDumpReverseParseDwordLong(
     DWORDLONG Value = 0;
     UCHAR ThisByte = 0;
     TCHAR SourceChar;
-    DWORD Index;
-    DWORD BytePart;
-    DWORD ByteShift = 0;
+    UCHAR Index;
+    UCHAR BytePart;
+    UCHAR ByteShift = 0;
 
-    if (String->LengthInChars < ReverseContext->BytesPerWord * 2) {
+    if (String->LengthInChars < (YORI_ALLOC_SIZE_T)ReverseContext->BytesPerWord * 2) {
         return FALSE;
     }
 
@@ -543,16 +603,16 @@ HexDumpReverseParseDwordLong(
 
  @return TRUE to indicate success, FALSE to indicate failure.
  */
-BOOL
+BOOLEAN
 HexDumpReverseParseLine(
     __in PYORI_STRING Line,
     __inout PHEXDUMP_REVERSE_CONTEXT ReverseContext
     )
 {
     YORI_STRING Substring;
-    DWORD StartChar;
-    DWORD Index;
-    BOOL StopProcessing = FALSE;
+    YORI_ALLOC_SIZE_T StartChar;
+    YORI_ALLOC_SIZE_T Index;
+    BOOLEAN StopProcessing = FALSE;
 
     YoriLibInitEmptyString(&Substring);
     if (Line->LengthInChars < ReverseContext->CharsInInputLineToIgnore) {
@@ -569,7 +629,7 @@ HexDumpReverseParseLine(
         //
 
         if (ReverseContext->BytesPerWord == 8 && Index > 0) {
-            StartChar += Index;
+            StartChar = StartChar + Index;
         }
 
         if (Line->LengthInChars <= StartChar) {
@@ -646,7 +706,8 @@ HexDumpReverseProcessStream(
         return TRUE;
     }
 
-    if (!HexDumpDetectReverseFormatFromLine(&LineString, &ReverseContext)) {
+    if (!HexDumpDetectReverseFormatFromLine(&LineString, FALSE, &ReverseContext)) {
+        YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("hexdump: not a stream of hex digits\n"));
         YoriLibLineReadCloseOrCache(LineContext);
         YoriLibFreeStringContents(&LineString);
         return FALSE;
@@ -681,6 +742,9 @@ HexDumpReverseProcessStream(
 
  @param Line Pointer to a line of hex encoded text.
 
+ @param ErrorChar On failure, updated to indicate the location of the parse
+        error.
+
  @param ReverseContext Pointer to the reverse hex dump context.  On input
         indicates the format and it is populated with the binary form on
         output.
@@ -690,13 +754,18 @@ HexDumpReverseProcessStream(
 BOOL
 HexDumpBinaryParseLine(
     __in PYORI_STRING Line,
+    __out_opt PYORI_ALLOC_SIZE_T ErrorChar,
     __inout PHEXDUMP_REVERSE_CONTEXT ReverseContext
     )
 {
     YORI_STRING Substring;
-    DWORD StartChar;
-    DWORD Index;
+    YORI_ALLOC_SIZE_T StartChar;
+    YORI_ALLOC_SIZE_T Index;
     BOOL Result;
+
+    if (ErrorChar != NULL) {
+        *ErrorChar = 0;
+    }
 
     YoriLibInitEmptyString(&Substring);
 
@@ -712,19 +781,24 @@ HexDumpBinaryParseLine(
 
     ReverseContext->BytesThisLine = 0;
 
+    StartChar = 0;
     Index = 0;
     Result = TRUE;
 
     while(TRUE) {
 
-        StartChar = Index * (ReverseContext->BytesPerWord * 2 + 1);
+        if (ReverseContext->NoWhitespace) {
+            StartChar = Index * (ReverseContext->BytesPerWord * 2);
+        } else {
+            StartChar = Index * (ReverseContext->BytesPerWord * 2 + 1);
+        }
 
         //
         //  8 byte words have a seperator, so they consist of 17 raw chars
         //
 
         if (ReverseContext->BytesPerWord == 8 && Index > 0) {
-            StartChar += Index;
+            StartChar = StartChar + Index;
         }
 
         //
@@ -743,7 +817,8 @@ HexDumpBinaryParseLine(
         //  are for.
         //
 
-        if (StartChar + ReverseContext->BytesPerWord > Line->LengthInChars) {
+        if (StartChar + ReverseContext->BytesPerWord * 2 > Line->LengthInChars) {
+            Result = FALSE;
             break;
         }
 
@@ -755,11 +830,25 @@ HexDumpBinaryParseLine(
 
         if (ReverseContext->BytesThisLine + ReverseContext->BytesPerWord > ReverseContext->BytesAllocated) {
             PUCHAR NewBuffer;
-            DWORD NewLength;
+            DWORD BytesDesired;
+            DWORD BytesRequired;
+            YORI_ALLOC_SIZE_T NewLength;
 
-            NewLength = ReverseContext->BytesAllocated * 4;
-            if (NewLength < 0x800) {
-                NewLength = 0x800;
+            BytesRequired = ReverseContext->BytesThisLine + ReverseContext->BytesPerWord;
+            BytesDesired = ReverseContext->BytesAllocated;
+            BytesDesired = BytesDesired * 4;
+            if (BytesDesired < BytesRequired) {
+                BytesDesired = BytesRequired;
+            }
+
+            if (BytesDesired < 0x800) {
+                BytesDesired = 0x800;
+            }
+
+            NewLength = YoriLibMaximumAllocationInRange(BytesRequired, BytesDesired);
+            if (NewLength == 0) {
+                Result = FALSE;
+                break;
             }
 
             NewBuffer = YoriLibMalloc(NewLength);
@@ -813,6 +902,10 @@ HexDumpBinaryParseLine(
         Index++;
     }
 
+    if (Result == FALSE && ErrorChar != NULL) {
+        *ErrorChar = StartChar;
+    }
+
     return Result;
 }
 
@@ -839,6 +932,9 @@ HexDumpBinaryProcessStream(
     DWORD BytesWritten;
     DWORDLONG LineNumber;
     HEXDUMP_REVERSE_CONTEXT ReverseContext;
+    YORI_ALLOC_SIZE_T ErrorChar;
+    YORI_ALLOC_SIZE_T Index;
+    YORI_ALLOC_SIZE_T DigitsPerWord;
 
     YoriLibInitEmptyString(&LineString);
     HexDumpContext->FilesFound++;
@@ -852,7 +948,8 @@ HexDumpBinaryProcessStream(
 
     LineNumber++;
 
-    if (!HexDumpDetectReverseFormatFromLine(&LineString, &ReverseContext)) {
+    if (!HexDumpDetectReverseFormatFromLine(&LineString, TRUE, &ReverseContext)) {
+        YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("hexdump: not a stream of hex digits, line %lli\n"), LineNumber);
         YoriLibLineReadCloseOrCache(LineContext);
         YoriLibFreeStringContents(&LineString);
         return FALSE;
@@ -871,8 +968,29 @@ HexDumpBinaryProcessStream(
 
     while (TRUE) {
 
-        if (!HexDumpBinaryParseLine(&LineString, &ReverseContext)) {
-            YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("hexdump: not a stream of hex digits, line %lli\n"), LineNumber);
+        if (!HexDumpBinaryParseLine(&LineString, &ErrorChar, &ReverseContext)) {
+            if (ErrorChar < LineString.LengthInChars) {
+                DigitsPerWord = 2 * ReverseContext.BytesPerWord;
+                if (ErrorChar + DigitsPerWord > LineString.LengthInChars) {
+                    YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("hexdump: insufficient digits for a word, line %lli position %i\n"), LineNumber, ErrorChar);
+                } else {
+                    for (Index = 0; Index < DigitsPerWord; Index++) {
+                        TCHAR Char;
+                        Char = LineString.StartOfString[ErrorChar + Index];
+                        if (!HexDumpIsHexDigit(Char)) {
+                            if (YoriLibIsCharPrintable(Char)) {
+                                YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("hexdump: not a hex digit, line %lli position %i '%c'\n"), LineNumber, ErrorChar + Index, Char);
+                            } else {
+                                YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("hexdump: not a hex digit, line %lli position %i <unprintable>\n"), LineNumber, ErrorChar + Index);
+                            }
+                            break;
+                        }
+                    }
+                    if (Index == DigitsPerWord) {
+                        YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("hexdump: not a stream of hex digits, line %lli position %i\n"), LineNumber, ErrorChar);
+                    }
+                }
+            }
             break;
         }
 
@@ -917,25 +1035,27 @@ HexDumpProcessStream(
     )
 {
     PUCHAR Buffer;
-    DWORD BufferSize;
-    DWORD BufferReadOffset;
-    DWORD BufferDisplayOffset;
+    YORI_ALLOC_SIZE_T BufferSize;
+    YORI_ALLOC_SIZE_T BufferReadOffset;
+    YORI_ALLOC_SIZE_T BufferDisplayOffset;
     DWORD BytesReturned;
-    DWORD LengthToDisplay;
+    YORI_ALLOC_SIZE_T LengthToDisplay;
     DWORD DisplayFlags;
     DWORD FileType;
+    DWORD SectorSize;
     LARGE_INTEGER StreamOffset;
     BOOLEAN LimitDisplayToEvenLine;
 
     HexDumpContext->FilesFound++;
     HexDumpContext->FilesFoundThisArg++;
 
-    BufferSize = 64 * 1024;
+    BufferSize = YoriLibMaximumAllocationInRange(16 * 1024, 64 * 1024);
     Buffer = YoriLibMalloc(BufferSize);
     if (Buffer == NULL) {
         return FALSE;
     }
     DisplayFlags = 0;
+    SectorSize = 0;
     if (!HexDumpContext->HideOffset) {
         DisplayFlags |= YORI_LIB_HEX_FLAG_DISPLAY_LARGE_OFFSET;
     }
@@ -960,7 +1080,12 @@ HexDumpProcessStream(
 
     StreamOffset.QuadPart = 0;
     if (FileType != FILE_TYPE_PIPE) {
+        SectorSize = YoriLibGetHandleSectorSize(hSource);
         StreamOffset.QuadPart = HexDumpContext->OffsetToDisplay;
+
+        if (SectorSize != 0) {
+            StreamOffset.LowPart = StreamOffset.LowPart & (~(SectorSize - 1));
+        }
 
         if (!SetFilePointer(hSource, StreamOffset.LowPart, &StreamOffset.HighPart, FILE_BEGIN)) {
             StreamOffset.QuadPart = 0;
@@ -1003,7 +1128,7 @@ HexDumpProcessStream(
             continue;
         }
 
-        LengthToDisplay = BytesReturned;
+        LengthToDisplay = (YORI_ALLOC_SIZE_T)BytesReturned;
 
         //
         //  If the starting point to display is partway through the buffer,
@@ -1013,11 +1138,11 @@ HexDumpProcessStream(
 
         BufferDisplayOffset = 0;
         if (StreamOffset.QuadPart < HexDumpContext->OffsetToDisplay) {
-            BufferDisplayOffset = (DWORD)(HexDumpContext->OffsetToDisplay - StreamOffset.QuadPart);
-            LengthToDisplay -= BufferDisplayOffset;
+            BufferDisplayOffset = (YORI_ALLOC_SIZE_T)(HexDumpContext->OffsetToDisplay - StreamOffset.QuadPart);
+            LengthToDisplay = LengthToDisplay - BufferDisplayOffset;
         }
 
-        ASSERT(BufferDisplayOffset + LengthToDisplay == BytesReturned);
+        ASSERT(BufferDisplayOffset + LengthToDisplay == (YORI_ALLOC_SIZE_T)BytesReturned);
 
         //
         //  If the number of bytes that the user requested to display is
@@ -1028,7 +1153,7 @@ HexDumpProcessStream(
         LimitDisplayToEvenLine = TRUE;
         if (HexDumpContext->LengthToDisplay != 0) {
             if (StreamOffset.QuadPart + BufferDisplayOffset + LengthToDisplay >= HexDumpContext->OffsetToDisplay + HexDumpContext->LengthToDisplay) {
-                LengthToDisplay = (DWORD)(HexDumpContext->OffsetToDisplay + HexDumpContext->LengthToDisplay - StreamOffset.QuadPart - BufferDisplayOffset);
+                LengthToDisplay = (YORI_ALLOC_SIZE_T)(HexDumpContext->OffsetToDisplay + HexDumpContext->LengthToDisplay - StreamOffset.QuadPart - BufferDisplayOffset);
                 LimitDisplayToEvenLine = FALSE;
             }
         }
@@ -1305,7 +1430,7 @@ HexDumpFileEnumerateErrorCallback(
         DirName.StartOfString = UnescapedFilePath.StartOfString;
         FilePart = YoriLibFindRightMostCharacter(&UnescapedFilePath, '\\');
         if (FilePart != NULL) {
-            DirName.LengthInChars = (DWORD)(FilePart - DirName.StartOfString);
+            DirName.LengthInChars = (YORI_ALLOC_SIZE_T)(FilePart - DirName.StartOfString);
         } else {
             DirName.LengthInChars = UnescapedFilePath.LengthInChars;
         }
@@ -1353,7 +1478,7 @@ typedef struct _HEXDUMP_ONE_OBJECT {
      buffer.  This is recalculated for each line based on the source's
      buffer length.
      */
-    DWORD DisplayLength;
+    YORI_ALLOC_SIZE_T DisplayLength;
 } HEXDUMP_ONE_OBJECT, *PHEXDUMP_ONE_OBJECT;
 
 /**
@@ -1375,17 +1500,17 @@ HexDumpDisplayDiff(
     )
 {
     HEXDUMP_ONE_OBJECT Objects[2];
-    DWORD BufferSize;
-    DWORD BufferOffset;
-    DWORD LengthToDisplay;
-    DWORD LengthThisLine;
+    YORI_ALLOC_SIZE_T BufferSize;
+    YORI_ALLOC_SIZE_T BufferOffset;
+    YORI_ALLOC_SIZE_T LengthToDisplay;
+    YORI_ALLOC_SIZE_T LengthThisLine;
     DWORD DisplayFlags;
     LARGE_INTEGER StreamOffset;
     DWORD Count;
     BOOL Result = FALSE;
     BOOL LineDifference;
 
-    BufferSize = 64 * 1024;
+    BufferSize = YoriLibMaximumAllocationInRange(16 * 1024, 64 * 1024);
     DisplayFlags = 0;
     if (!HexDumpContext->HideOffset) {
         DisplayFlags |= YORI_LIB_HEX_FLAG_DISPLAY_LARGE_OFFSET;
@@ -1494,9 +1619,9 @@ HexDumpDisplayDiff(
         //
 
         if (Objects[0].BytesReturned > Objects[1].BytesReturned) {
-            LengthToDisplay = Objects[0].BytesReturned;
+            LengthToDisplay = (YORI_ALLOC_SIZE_T)Objects[0].BytesReturned;
         } else {
-            LengthToDisplay = Objects[1].BytesReturned;
+            LengthToDisplay = (YORI_ALLOC_SIZE_T)Objects[1].BytesReturned;
         }
 
         //
@@ -1505,7 +1630,7 @@ HexDumpDisplayDiff(
 
         if (HexDumpContext->LengthToDisplay != 0) {
             if (StreamOffset.QuadPart + LengthToDisplay >= HexDumpContext->OffsetToDisplay + HexDumpContext->LengthToDisplay) {
-                LengthToDisplay = (DWORD)(HexDumpContext->OffsetToDisplay + HexDumpContext->LengthToDisplay - StreamOffset.QuadPart);
+                LengthToDisplay = (YORI_ALLOC_SIZE_T)(HexDumpContext->OffsetToDisplay + HexDumpContext->LengthToDisplay - StreamOffset.QuadPart);
                 if (LengthToDisplay == 0) {
                     break;
                 }
@@ -1528,11 +1653,11 @@ HexDumpDisplayDiff(
             }
             for (Count = 0; Count < sizeof(Objects)/sizeof(Objects[0]); Count++) {
                 Objects[Count].DisplayLength = LengthThisLine;
-                if (BufferOffset + LengthThisLine > Objects[Count].BytesReturned) {
+                if (BufferOffset + LengthThisLine > (YORI_ALLOC_SIZE_T)Objects[Count].BytesReturned) {
                     LineDifference = TRUE;
                     Objects[Count].DisplayLength = 0;
                     if (Objects[Count].BytesReturned > BufferOffset) {
-                        Objects[Count].DisplayLength = Objects[0].BytesReturned - BufferOffset;
+                        Objects[Count].DisplayLength = (YORI_ALLOC_SIZE_T)Objects[0].BytesReturned - BufferOffset;
                     }
                 }
             }
@@ -1562,7 +1687,7 @@ HexDumpDisplayDiff(
             //  Move to the next line
             //
 
-            BufferOffset += LengthThisLine;
+            BufferOffset = BufferOffset + LengthThisLine;
         }
 
         StreamOffset.QuadPart += LengthToDisplay;
@@ -1615,15 +1740,15 @@ Exit:
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
     BOOLEAN ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
-    DWORD MatchFlags;
-    DWORD CharsConsumed;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
+    WORD MatchFlags;
+    YORI_ALLOC_SIZE_T CharsConsumed;
     BOOLEAN BasicEnumeration = FALSE;
     BOOLEAN DiffMode = FALSE;
     BOOLEAN BinaryEncode = FALSE;
@@ -1641,76 +1766,76 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 HexDumpHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
-                YoriLibDisplayMitLicense(_T("2017-2021"));
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
+                YoriLibDisplayMitLicense(_T("2017-2023"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("b")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("b")) == 0) {
                 BasicEnumeration = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("bin")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("bin")) == 0) {
                 BinaryEncode = TRUE;
                 Reverse = FALSE;
                 HexDumpContext.CStyleInclude = FALSE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("d")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("d")) == 0) {
                 DiffMode = TRUE;
                 HexDumpContext.CStyleInclude = FALSE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("g1")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("g1")) == 0) {
                 HexDumpContext.BytesPerGroup = 1;
                 HexDumpContext.CStyleInclude = FALSE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("g2")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("g2")) == 0) {
                 HexDumpContext.BytesPerGroup = 2;
                 HexDumpContext.CStyleInclude = FALSE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("g4")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("g4")) == 0) {
                 HexDumpContext.BytesPerGroup = 4;
                 HexDumpContext.CStyleInclude = FALSE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("g8")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("g8")) == 0) {
                 HexDumpContext.BytesPerGroup = 8;
                 HexDumpContext.CStyleInclude = FALSE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("hc")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("hc")) == 0) {
                 HexDumpContext.HideCharacters = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("ho")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("ho")) == 0) {
                 HexDumpContext.HideOffset = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("i")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("i")) == 0) {
                 DiffMode = FALSE;
                 HexDumpContext.CStyleInclude = TRUE;
                 HexDumpContext.HideOffset = TRUE;
                 HexDumpContext.HideCharacters = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("l")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("l")) == 0) {
                 if (ArgC > i + 1) {
                     YoriLibStringToNumber(&ArgV[i + 1], TRUE, &HexDumpContext.LengthToDisplay, &CharsConsumed);
                     i++;
                     ArgumentUnderstood = TRUE;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("o")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("o")) == 0) {
                 if (ArgC > i + 1) {
                     YoriLibStringToNumber(&ArgV[i + 1], TRUE, &HexDumpContext.OffsetToDisplay, &CharsConsumed);
                     i++;
                     ArgumentUnderstood = TRUE;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("r")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("r")) == 0) {
                 Reverse = TRUE;
                 BinaryEncode = FALSE;
                 HexDumpContext.CStyleInclude = FALSE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("s")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("s")) == 0) {
                 HexDumpContext.Recursive = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("w")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("w")) == 0) {
                 HexDumpContext.WideCharacters = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 StartArg = i + 1;
                 ArgumentUnderstood = TRUE;
                 break;
@@ -1727,7 +1852,7 @@ ENTRYPOINT(
     }
 
 #if YORI_BUILTIN
-    YoriLibCancelEnable();
+    YoriLibCancelEnable(FALSE);
 #endif
 
     //
@@ -1807,7 +1932,7 @@ ENTRYPOINT(
             if (HexDumpContext.FilesFoundThisArg == 0) {
                 YORI_STRING FullPath;
                 YoriLibInitEmptyString(&FullPath);
-                if (YoriLibUserStringToSingleFilePath(&ArgV[i], TRUE, &FullPath)) {
+                if (YoriLibUserStringToSingleFilePathOrDevice(&ArgV[i], TRUE, &FullPath)) {
                     if (BinaryEncode) {
                         HexDumpBinaryFileFoundCallback(&FullPath, NULL, 0, &HexDumpContext);
                     } else if (Reverse) {

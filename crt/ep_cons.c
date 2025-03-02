@@ -40,6 +40,31 @@
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1700)
 #pragma warning(disable: 26451) // Arithmetic overflow
+#if (_MSC_VER >= 1939)
+//
+//  These warnings aim to check for integer overflows when allocating memory,
+//  resulting in a smaller allocation than expected.  Unfortunately the
+//  implementation is quite bad:
+//
+//   - An allocator is a function with "alloc" in its name, which matches
+//     Yori's bounds check functions
+//   - There is no annotation or awareness of a bounds check function, so it
+//     will catch overflows that have already been checked.
+//
+//  The "best" thing Yori could do here is implement bounds check functions,
+//  without "alloc" in their names, that return an integer value which is
+//  supplied directly to the allocator.  Note this has the effect of
+//  disabling these warnings completely anyway, because they only apply to
+//  "alloc" functions and would not catch overflows as the input of the
+//  bounds check.
+//
+//  This is quite frustrating because the class of bug these exist to catch
+//  does exist in Yori and is challenging to completely eliminate.
+//
+#pragma warning(disable: 26831) // Allocation size might be from overflow
+#pragma warning(disable: 26832) // Allocation size from narrowing conversion
+#pragma warning(disable: 26833) // Potential overflow before a bounds check 
+#endif
 #endif
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1200)
@@ -51,6 +76,11 @@
 #pragma warning(disable: 4255) // no function prototype given.  8.1 and earlier SDKs exhibit this.
 #pragma warning(disable: 4820) // implicit padding added in structure
 #endif
+
+/**
+ Indicate support for compiling for ARM32 if an SDK is available.
+ */
+#define _ARM_WINAPI_PARTITION_DESKTOP_SDK_AVAILABLE 1
 
 #include <windows.h>
 
@@ -252,6 +282,8 @@ VOID __cdecl CONSOLE_CRT_ENTRYPOINT(void)
     TCHAR ** argv;
     int argc;
     int ret;
+
+    argc = 0;
 
     argv = mini_tcmdlinetoargs(GetCommandLine(), &argc);
     if (argv == NULL) {

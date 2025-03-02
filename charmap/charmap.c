@@ -1,9 +1,9 @@
 /**
  * @file charmap/charmap.c
  *
- * Yori shell display command line output
+ * Yori shell display characters from the character map
  *
- * Copyright (c) 2019 Malcolm J. Smith
+ * Copyright (c) 2019-2022 Malcolm J. Smith
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -75,8 +75,8 @@ CharMapHelp(VOID)
 BOOL
 CharMapDisplay(
     __in DWORD Encoding,
-    __in DWORD StartChar,
-    __in DWORD CharCount
+    __in YORI_ALLOC_SIZE_T StartChar,
+    __in YORI_ALLOC_SIZE_T CharCount
     )
 {
     CONSOLE_SCREEN_BUFFER_INFO BufferInfo;
@@ -129,7 +129,7 @@ CharMapDisplay(
         }
 
         if (StartChar + CharCount > 0xffff) {
-            CharCount = 0x10000 - StartChar;
+            CharCount = (YORI_ALLOC_SIZE_T)(0x10000 - StartChar);
         }
         for (i = 0; i < CharCount; i++) {
             WideChars.StartOfString[i] = (TCHAR)(StartChar + i);
@@ -164,12 +164,7 @@ CharMapDisplay(
     ColumnIndex = 0;
     for (i = 0; i < CharCount; i++) {
         CharToDisplay = WideChars.StartOfString[i];
-        if (CharToDisplay == '\r' ||
-            CharToDisplay == '\n' ||
-            CharToDisplay == '\t' ||
-            CharToDisplay == '\b' ||
-            CharToDisplay == '\a') {
-
+        if (!YoriLibIsCharPrintable(CharToDisplay)) {
             CharToDisplay = ' ';
         }
 
@@ -207,11 +202,11 @@ CharMapEncodingFromString(
     __in PYORI_STRING String
     )
 {
-    if (YoriLibCompareStringWithLiteralInsensitive(String, _T("ascii")) == 0) {
+    if (YoriLibCompareStringLitIns(String, _T("ascii")) == 0) {
         return CP_OEMCP;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("ansi")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("ansi")) == 0) {
         return CP_ACP;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(String, _T("utf16")) == 0) {
+    } else if (YoriLibCompareStringLitIns(String, _T("utf16")) == 0) {
         return CP_UTF16;
     }
     return (DWORD)-1;
@@ -241,16 +236,16 @@ CharMapEncodingFromString(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
     BOOL ArgumentUnderstood;
-    DWORD i;
+    YORI_ALLOC_SIZE_T i;
     YORI_STRING Arg;
     DWORD Encoding;
-    DWORD CharCount;
-    DWORD StartChar;
+    YORI_ALLOC_SIZE_T CharCount;
+    YORI_ALLOC_SIZE_T StartChar;
 
     Encoding = CP_OEMCP;
     StartChar = 0;
@@ -264,24 +259,24 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 CharMapHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2019"));
                 return EXIT_SUCCESS;
 
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("c")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("c")) == 0) {
                 if (ArgC > i + 1) {
-                    DWORD CharsConsumed;
-                    LONGLONG llTemp;
+                    YORI_ALLOC_SIZE_T CharsConsumed;
+                    YORI_MAX_SIGNED_T llTemp;
                     if (YoriLibStringToNumber(&ArgV[i + 1], TRUE, &llTemp, &CharsConsumed) && CharsConsumed > 0) {
-                        CharCount = (DWORD)llTemp;
+                        CharCount = (YORI_ALLOC_SIZE_T)llTemp;
                         ArgumentUnderstood = TRUE;
                         i++;
                     }
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("e")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("e")) == 0) {
                 if (ArgC > i + 1) {
                     DWORD NewEncoding;
                     NewEncoding = CharMapEncodingFromString(&ArgV[i + 1]);
@@ -291,12 +286,12 @@ ENTRYPOINT(
                         i++;
                     }
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("s")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("s")) == 0) {
                 if (ArgC > i + 1) {
-                    DWORD CharsConsumed;
-                    LONGLONG llTemp;
+                    YORI_ALLOC_SIZE_T CharsConsumed;
+                    YORI_MAX_SIGNED_T llTemp;
                     if (YoriLibStringToNumber(&ArgV[i + 1], TRUE, &llTemp, &CharsConsumed) && CharsConsumed > 0) {
-                        StartChar = (DWORD)llTemp;
+                        StartChar = (YORI_ALLOC_SIZE_T)llTemp;
                         ArgumentUnderstood = TRUE;
                         i++;
                     }

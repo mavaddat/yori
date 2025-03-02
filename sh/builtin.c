@@ -42,29 +42,34 @@
 DWORD
 YoriShBuckPass (
     __in PYORI_LIBSH_SINGLE_EXEC_CONTEXT ExecContext,
-    __in DWORD ExtraArgCount,
+    __in YORI_ALLOC_SIZE_T ExtraArgCount,
     ...
     )
 {
     YORI_LIBSH_CMD_CONTEXT OldCmdContext;
     DWORD ExitCode = 1;
-    DWORD count;
+    YORI_ALLOC_SIZE_T count;
     BOOL ExecAsBuiltin = FALSE;
+    PVOID MemoryToFree;
     va_list marker;
 
     memcpy(&OldCmdContext, &ExecContext->CmdToExec, sizeof(YORI_LIBSH_CMD_CONTEXT));
 
-    ExecContext->CmdToExec.ArgC += ExtraArgCount;
-    ExecContext->CmdToExec.MemoryToFree = YoriLibReferencedMalloc(ExecContext->CmdToExec.ArgC * (sizeof(YORI_STRING) + sizeof(YORI_LIBSH_ARG_CONTEXT)));
-    if (ExecContext->CmdToExec.MemoryToFree == NULL) {
+    ExecContext->CmdToExec.ArgC = ExecContext->CmdToExec.ArgC + ExtraArgCount;
+    MemoryToFree = YoriLibReferencedMalloc((YORI_ALLOC_SIZE_T)ExecContext->CmdToExec.ArgC * (sizeof(YORI_STRING) + sizeof(YORI_LIBSH_ARG_CONTEXT)));
+    if (MemoryToFree == NULL) {
         memcpy(&ExecContext->CmdToExec, &OldCmdContext, sizeof(YORI_LIBSH_CMD_CONTEXT));
         return ExitCode;
     }
 
-    ExecContext->CmdToExec.ArgV = ExecContext->CmdToExec.MemoryToFree;
+    ExecContext->CmdToExec.ArgV = MemoryToFree;
+    ExecContext->CmdToExec.MemoryToFreeArgV = MemoryToFree;
 
+    YoriLibReference(MemoryToFree);
     ExecContext->CmdToExec.ArgContexts = (PYORI_LIBSH_ARG_CONTEXT)YoriLibAddToPointer(ExecContext->CmdToExec.ArgV, sizeof(YORI_STRING) * ExecContext->CmdToExec.ArgC);
+    ExecContext->CmdToExec.MemoryToFreeArgContexts = MemoryToFree;
     ZeroMemory(ExecContext->CmdToExec.ArgContexts, sizeof(YORI_LIBSH_ARG_CONTEXT) * ExecContext->CmdToExec.ArgC);
+
 
     va_start(marker, ExtraArgCount);
     for (count = 0; count < ExtraArgCount; count++) {
@@ -175,22 +180,27 @@ YoriShBuckPassToCmd (
 
  @param EscapedArgV An array of arguments to pass to the builtin.
 
+ @param ArgQuotesPresent An array of booleans indicating whether the
+        corresponding ArgV element contained quotes.
+
  @return ExitCode, typically zero for success, nonzero for failure.
  */
 int
 YoriShExecuteInProc(
     __in PYORI_CMD_BUILTIN Fn,
     __in PYORI_LIBSH_SINGLE_EXEC_CONTEXT ExecContext,
-    __in DWORD ArgC,
-    __in PYORI_STRING EscapedArgV
+    __in YORI_ALLOC_SIZE_T ArgC,
+    __in PYORI_STRING EscapedArgV,
+    __in PBOOLEAN ArgQuotesPresent
     )
 {
     YORI_LIBSH_PREVIOUS_REDIRECT_CONTEXT PreviousRedirectContext;
     BOOLEAN WasPipe = FALSE;
     PYORI_STRING NoEscapedArgV;
     PYORI_STRING SavedEscapedArgV;
-    DWORD SavedEscapedArgC;
-    DWORD Count;
+    YORI_ALLOC_SIZE_T SavedEscapedArgC;
+    PBOOLEAN SavedEscapedArgQuotesPresent;
+    YORI_ALLOC_SIZE_T Count;
     DWORD ExitCode = 0;
 
     NoEscapedArgV = NULL;
@@ -200,7 +210,7 @@ YoriShExecuteInProc(
     //  have access to the escaped form if required.
     //
 
-    NoEscapedArgV = YoriLibReferencedMalloc(ArgC * sizeof(YORI_STRING));
+    NoEscapedArgV = YoriLibReferencedMalloc((YORI_ALLOC_SIZE_T)ArgC * sizeof(YORI_STRING));
     if (NoEscapedArgV == NULL) {
         ExitCode = ERROR_OUTOFMEMORY;
         goto Cleanup;
@@ -257,13 +267,16 @@ YoriShExecuteInProc(
 
     SavedEscapedArgC = YoriShGlobal.EscapedArgC;
     SavedEscapedArgV = YoriShGlobal.EscapedArgV;
+    SavedEscapedArgQuotesPresent = YoriShGlobal.EscapedArgQuotesPresent;
     YoriShGlobal.EscapedArgC = ArgC;
     YoriShGlobal.EscapedArgV = EscapedArgV;
+    YoriShGlobal.EscapedArgQuotesPresent = ArgQuotesPresent;
     YoriShGlobal.RecursionDepth++;
     ExitCode = Fn(ArgC, NoEscapedArgV);
     YoriShGlobal.RecursionDepth--;
     YoriShGlobal.EscapedArgC = SavedEscapedArgC;
     YoriShGlobal.EscapedArgV = SavedEscapedArgV;
+    YoriShGlobal.EscapedArgQuotesPresent = SavedEscapedArgQuotesPresent;
     YoriLibShRevertRedirection(&PreviousRedirectContext);
 
     if (WasPipe) {
@@ -338,9 +351,10 @@ YoriShExecuteNamedModuleInProc(
     if (Main) {
         PYORI_LIBSH_LOADED_MODULE PreviousModule;
         YORI_STRING CmdLine;
-        DWORD ArgC;
-        DWORD Count;
+        YORI_ALLOC_SIZE_T ArgC;
+        YORI_ALLOC_SIZE_T Count;
         PYORI_STRING EscapedArgV;
+        PBOOLEAN ArgQuotesPresent;
 
         //
         //  Build a command line, leaving all escapes in the command line.
@@ -357,7 +371,7 @@ YoriShExecuteNamedModuleInProc(
         //
 
         ASSERT(YoriLibIsStringNullTerminated(&CmdLine));
-        EscapedArgV = YoriLibCmdlineToArgcArgv(CmdLine.StartOfString, (DWORD)-1, TRUE, &ArgC);
+        EscapedArgV = YoriLibCmdlineToArgcArgv(CmdLine.StartOfString, (DWORD)-1, TRUE, &ArgC, &ArgQuotesPresent);
         YoriLibFreeStringContents(&CmdLine);
 
         if (EscapedArgV == NULL) {
@@ -367,7 +381,7 @@ YoriShExecuteNamedModuleInProc(
 
         PreviousModule = YoriLibShGetActiveModule();
         YoriLibShSetActiveModule(Module);
-        *ExitCode = YoriShExecuteInProc(Main, ExecContext, ArgC, EscapedArgV);
+        *ExitCode = YoriShExecuteInProc(Main, ExecContext, ArgC, EscapedArgV, ArgQuotesPresent);
         YoriLibShSetActiveModule(PreviousModule);
 
         for (Count = 0; Count < ArgC; Count++) {
@@ -398,10 +412,58 @@ YoriShBuiltIn (
     DWORD ExitCode = 1;
     PYORI_CMD_BUILTIN BuiltInCmd = NULL;
     PYORI_LIBSH_BUILTIN_CALLBACK CallbackEntry = NULL;
+    PYORI_STRING CmdString;
     YORI_STRING CmdLine;
-    DWORD ArgC;
-    DWORD Count;
+    YORI_ALLOC_SIZE_T ArgC;
+    YORI_ALLOC_SIZE_T Count;
     PYORI_STRING EscapedArgV;
+    PBOOLEAN ArgQuotesPresent;
+
+    //
+    //  Lookup the builtin command.
+    //
+
+    CmdString = &ExecContext->CmdToExec.ArgV[0];
+    CallbackEntry = YoriLibShLookupBuiltinByName(CmdString);
+
+    //
+    //  If the command is not found, split the command looking for the first
+    //  period, slash or backslash.  Note by this point we know that no file
+    //  was found from the string, and are only trying to find any builtin.
+    //
+
+    if (CallbackEntry == NULL) {
+        PYORI_STRING NewString;
+        YORI_ALLOC_SIZE_T LenBeforeSep;
+
+        LenBeforeSep = YoriLibCntStringNotWithChars(CmdString, _T("./\\"));
+        if (LenBeforeSep < CmdString->LengthInChars) {
+
+            if (!YoriLibShExpandCmdContext(&ExecContext->CmdToExec, 1, 1)) {
+                return ExitCode;
+            }
+
+            CmdString = &ExecContext->CmdToExec.ArgV[0];
+            NewString = &ExecContext->CmdToExec.ArgV[1];
+            if (CmdString->MemoryToFree != NULL) {
+                YoriLibReference(CmdString->MemoryToFree);
+            }
+            NewString->MemoryToFree = CmdString->MemoryToFree;
+            NewString->StartOfString = &CmdString->StartOfString[LenBeforeSep];
+            NewString->LengthInChars = CmdString->LengthInChars - LenBeforeSep;
+            NewString->LengthAllocated = CmdString->LengthAllocated - LenBeforeSep;
+
+            YoriLibShCheckIfArgNeedsQuotes(&ExecContext->CmdToExec, 1);
+
+            CmdString->LengthInChars = LenBeforeSep;
+            CmdString->LengthAllocated = LenBeforeSep;
+
+            YoriShExpandAlias(&ExecContext->CmdToExec);
+
+            CmdString = &ExecContext->CmdToExec.ArgV[0];
+            CallbackEntry = YoriLibShLookupBuiltinByName(CmdString);
+        }
+    }
 
     //
     //  Build a command line, leaving all escapes in the command line.
@@ -418,7 +480,7 @@ YoriShBuiltIn (
     //
 
     ASSERT(YoriLibIsStringNullTerminated(&CmdLine));
-    EscapedArgV = YoriLibCmdlineToArgcArgv(CmdLine.StartOfString, (DWORD)-1, TRUE, &ArgC);
+    EscapedArgV = YoriLibCmdlineToArgcArgv(CmdLine.StartOfString, (DWORD)-1, TRUE, &ArgC, &ArgQuotesPresent);
     YoriLibFreeStringContents(&CmdLine);
 
     if (EscapedArgV == NULL) {
@@ -426,7 +488,6 @@ YoriShBuiltIn (
         return ExitCode;
     }
 
-    CallbackEntry = YoriLibShLookupBuiltinByName(&EscapedArgV[0]);
     if (CallbackEntry != NULL) {
         BuiltInCmd = CallbackEntry->BuiltInFn;
     }
@@ -453,7 +514,7 @@ YoriShBuiltIn (
 
         PreviousModule = YoriLibShGetActiveModule();
         YoriLibShSetActiveModule(HostingModule);
-        ExitCode = YoriShExecuteInProc(BuiltInCmd, ExecContext, ArgC, EscapedArgV);
+        ExitCode = YoriShExecuteInProc(BuiltInCmd, ExecContext, ArgC, EscapedArgV, ArgQuotesPresent);
         ASSERT(YoriLibShGetActiveModule() == HostingModule);
         YoriLibShSetActiveModule(PreviousModule);
 

@@ -64,14 +64,14 @@ FgHelp(VOID)
 DWORD
 YORI_BUILTIN_FN
 YoriCmd_FG(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
     DWORD JobId = 0;
     BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     YORI_STRING Arg;
 
     YoriLibLoadNtDllFunctions();
@@ -84,10 +84,10 @@ YoriCmd_FG(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 FgHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2018"));
                 return EXIT_SUCCESS;
             }
@@ -111,8 +111,8 @@ YoriCmd_FG(
         HANDLE WritePipe;
         YORI_STRING Line;
         PVOID LineContext = NULL;
-        LONGLONG llTemp;
-        DWORD CharsConsumed;
+        YORI_MAX_SIGNED_T llTemp;
+        YORI_ALLOC_SIZE_T CharsConsumed;
 
         llTemp = 0;
         if (!YoriLibStringToNumber(&ArgV[StartArg], TRUE, &llTemp, &CharsConsumed)) {
@@ -136,7 +136,7 @@ YoriCmd_FG(
             return EXIT_FAILURE;
         }
 
-        YoriLibCancelEnable();
+        YoriLibCancelEnable(FALSE);
         YoriLibInitEmptyString(&Line);
 
         while (TRUE) {

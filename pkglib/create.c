@@ -28,11 +28,6 @@
 #include <yorilib.h>
 #include "yoripkgp.h"
 
-#if defined(_MSC_VER) && (_MSC_VER == 1500)
-#pragma warning(push)
-#pragma warning(disable: 6309 6387) // GetTempPath is mis-annotated in old SDKs
-#endif
-
 /**
  Creates a binary (installable) package.  This could be architecture specific
  or architecture neutral.
@@ -109,9 +104,13 @@ YoriPkgCreateBinaryPackage(
     YORI_STRING FileNameInCab;
     PVOID LineContext = NULL;
     HANDLE FileListSource;
-    DWORD Count;
+    YORI_ALLOC_SIZE_T Count;
 
     PVOID CabHandle;
+
+    if (DllKernel32.pWritePrivateProfileStringW == NULL) {
+        return FALSE;
+    }
 
     __analysis_assume(ReplaceCount == 0 || Replaces != NULL);
 
@@ -119,11 +118,9 @@ YoriPkgCreateBinaryPackage(
     //  Query for a temporary directory
     //
 
-    TempPath.LengthAllocated = GetTempPath(0, NULL);
-    if (!YoriLibAllocateString(&TempPath, TempPath.LengthAllocated)) {
+    if (!YoriLibGetTempPath(&TempPath, 0)) {
         return FALSE;
     }
-    TempPath.LengthInChars = GetTempPath(TempPath.LengthAllocated, TempPath.StartOfString);
 
     if (!YoriLibAllocateString(&TempFile, TempPath.LengthAllocated + MAX_PATH)) {
         YoriLibFreeStringContents(&TempPath);
@@ -140,36 +137,36 @@ YoriPkgCreateBinaryPackage(
         return FALSE;
     }
 
-    TempFile.LengthInChars = _tcslen(TempFile.StartOfString);
+    TempFile.LengthInChars = (YORI_ALLOC_SIZE_T)_tcslen(TempFile.StartOfString);
     YoriLibFreeStringContents(&TempPath);
 
-    WritePrivateProfileString(_T("Package"), _T("Name"), PackageName->StartOfString, TempFile.StartOfString);
-    WritePrivateProfileString(_T("Package"), _T("Architecture"), Architecture->StartOfString, TempFile.StartOfString);
-    WritePrivateProfileString(_T("Package"), _T("Version"), Version->StartOfString, TempFile.StartOfString);
+    DllKernel32.pWritePrivateProfileStringW(_T("Package"), _T("Name"), PackageName->StartOfString, TempFile.StartOfString);
+    DllKernel32.pWritePrivateProfileStringW(_T("Package"), _T("Architecture"), Architecture->StartOfString, TempFile.StartOfString);
+    DllKernel32.pWritePrivateProfileStringW(_T("Package"), _T("Version"), Version->StartOfString, TempFile.StartOfString);
     if (MinimumOSBuild != NULL) {
-        WritePrivateProfileString(_T("Package"), _T("MinimumOSBuild"), MinimumOSBuild->StartOfString, TempFile.StartOfString);
+        DllKernel32.pWritePrivateProfileStringW(_T("Package"), _T("MinimumOSBuild"), MinimumOSBuild->StartOfString, TempFile.StartOfString);
         if (PackagePathForOlderBuilds != NULL) {
-            WritePrivateProfileString(_T("Package"), _T("PackagePathForOlderBuilds"), PackagePathForOlderBuilds->StartOfString, TempFile.StartOfString);
+            DllKernel32.pWritePrivateProfileStringW(_T("Package"), _T("PackagePathForOlderBuilds"), PackagePathForOlderBuilds->StartOfString, TempFile.StartOfString);
         }
     }
     if (UpgradePath != NULL) {
-        WritePrivateProfileString(_T("Package"), _T("UpgradePath"), UpgradePath->StartOfString, TempFile.StartOfString);
+        DllKernel32.pWritePrivateProfileStringW(_T("Package"), _T("UpgradePath"), UpgradePath->StartOfString, TempFile.StartOfString);
     }
     if (SourcePath != NULL) {
-        WritePrivateProfileString(_T("Package"), _T("SourcePath"), SourcePath->StartOfString, TempFile.StartOfString);
+        DllKernel32.pWritePrivateProfileStringW(_T("Package"), _T("SourcePath"), SourcePath->StartOfString, TempFile.StartOfString);
     }
     if (SymbolPath != NULL) {
-        WritePrivateProfileString(_T("Package"), _T("SymbolPath"), SymbolPath->StartOfString, TempFile.StartOfString);
+        DllKernel32.pWritePrivateProfileStringW(_T("Package"), _T("SymbolPath"), SymbolPath->StartOfString, TempFile.StartOfString);
     }
     if (UpgradeToStablePath != NULL) {
-        WritePrivateProfileString(_T("Package"), _T("UpgradeToStablePath"), UpgradeToStablePath->StartOfString, TempFile.StartOfString);
+        DllKernel32.pWritePrivateProfileStringW(_T("Package"), _T("UpgradeToStablePath"), UpgradeToStablePath->StartOfString, TempFile.StartOfString);
     }
     if (UpgradeToDailyPath != NULL) {
-        WritePrivateProfileString(_T("Package"), _T("UpgradeToDailyPath"), UpgradeToDailyPath->StartOfString, TempFile.StartOfString);
+        DllKernel32.pWritePrivateProfileStringW(_T("Package"), _T("UpgradeToDailyPath"), UpgradeToDailyPath->StartOfString, TempFile.StartOfString);
     }
 
     for (Count = 0; Count < ReplaceCount; Count++) {
-        WritePrivateProfileString(_T("Replaces"), Replaces[Count].StartOfString, _T("1"), TempFile.StartOfString);
+        DllKernel32.pWritePrivateProfileStringW(_T("Replaces"), Replaces[Count].StartOfString, _T("1"), TempFile.StartOfString);
     }
 
     if (!YoriLibUserStringToSingleFilePath(FileListFile, TRUE, &FullFileListFile)) {
@@ -444,8 +441,8 @@ YoriPkgCreateSourceFileFoundCallback(
     PYORIPKG_CREATE_SOURCE_CONTEXT CreateSourceContext = (PYORIPKG_CREATE_SOURCE_CONTEXT)Context;
     YORI_STRING RelativePathFromSource;
     YORI_STRING PathInCab;
-    DWORD SlashesFound;
-    DWORD Index;
+    YORI_ALLOC_SIZE_T SlashesFound;
+    YORI_ALLOC_SIZE_T Index;
 
     UNREFERENCED_PARAMETER(FileInfo);
 
@@ -473,8 +470,8 @@ YoriPkgCreateSourceFileFoundCallback(
     //  Skip any object starting with .git or .svn
     //
 
-    if (YoriLibCompareStringWithLiteralCount(&RelativePathFromSource, _T(".git"), sizeof(".git") - 1) == 0 ||
-        YoriLibCompareStringWithLiteralCount(&RelativePathFromSource, _T(".svn"), sizeof(".svn") - 1) == 0) {
+    if (YoriLibCompareStringLitCnt(&RelativePathFromSource, _T(".git"), sizeof(".git") - 1) == 0 ||
+        YoriLibCompareStringLitCnt(&RelativePathFromSource, _T(".svn"), sizeof(".svn") - 1) == 0) {
 
         return TRUE;
     }
@@ -541,7 +538,7 @@ YoriPkgCreateSourceEnumerateErrorCallback(
         DirName.StartOfString = UnescapedFilePath.StartOfString;
         FilePart = YoriLibFindRightMostCharacter(&UnescapedFilePath, '\\');
         if (FilePart != NULL) {
-            DirName.LengthInChars = (DWORD)(FilePart - DirName.StartOfString);
+            DirName.LengthInChars = (YORI_ALLOC_SIZE_T)(FilePart - DirName.StartOfString);
         } else {
             DirName.LengthInChars = UnescapedFilePath.LengthInChars;
         }
@@ -589,11 +586,9 @@ YoriPkgCreateSourcePackage(
     //  Query for a temporary directory
     //
 
-    TempPath.LengthAllocated = GetTempPath(0, NULL);
-    if (!YoriLibAllocateString(&TempPath, TempPath.LengthAllocated)) {
+    if (!YoriLibGetTempPath(&TempPath, 0)) {
         return FALSE;
     }
-    TempPath.LengthInChars = GetTempPath(TempPath.LengthAllocated, TempPath.StartOfString);
 
     if (!YoriLibAllocateString(&TempFile, TempPath.LengthAllocated + MAX_PATH)) {
         YoriLibFreeStringContents(&TempPath);
@@ -610,12 +605,12 @@ YoriPkgCreateSourcePackage(
         return FALSE;
     }
 
-    TempFile.LengthInChars = _tcslen(TempFile.StartOfString);
+    TempFile.LengthInChars = (YORI_ALLOC_SIZE_T)_tcslen(TempFile.StartOfString);
     YoriLibFreeStringContents(&TempPath);
 
-    WritePrivateProfileString(_T("Package"), _T("Name"), PackageName->StartOfString, TempFile.StartOfString);
-    WritePrivateProfileString(_T("Package"), _T("Version"), Version->StartOfString, TempFile.StartOfString);
-    WritePrivateProfileString(_T("Package"), _T("Architecture"), _T("noarch"), TempFile.StartOfString);
+    DllKernel32.pWritePrivateProfileStringW(_T("Package"), _T("Name"), PackageName->StartOfString, TempFile.StartOfString);
+    DllKernel32.pWritePrivateProfileStringW(_T("Package"), _T("Version"), Version->StartOfString, TempFile.StartOfString);
+    DllKernel32.pWritePrivateProfileStringW(_T("Package"), _T("Architecture"), _T("noarch"), TempFile.StartOfString);
 
     if (!YoriLibCreateCab(FileName, &CreateSourceContext.CabHandle)) {
         YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("YoriLibCreateCab failure\n"));
@@ -700,10 +695,5 @@ YoriPkgCreateSourcePackage(
     YoriPkgCreateSourceFreeMatchLists(&CreateSourceContext);
     return TRUE;
 }
-
-#if defined(_MSC_VER) && (_MSC_VER == 1500)
-#pragma warning(pop)
-#endif
-
 
 // vim:sw=4:ts=4:et:

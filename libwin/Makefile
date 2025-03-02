@@ -11,12 +11,15 @@ OBJS=\
 	 combo.obj    \
 	 ctrl.obj     \
 	 edit.obj     \
+	 hexedit.obj  \
 	 itemaray.obj \
 	 label.obj    \
 	 list.obj     \
 	 menubar.obj  \
 	 mledit.obj   \
+	 radio.obj    \
 	 scrolbar.obj \
+	 text.obj     \
 	 window.obj   \
 	 winmgr.obj   \
 

@@ -33,6 +33,16 @@ typedef PVOID PYORI_WIN_WINDOW;
 #endif
 
 /**
+ Pointer to a character and attribute array that should not be changed.
+ */
+typedef CHAR_INFO CONST * PCCHAR_INFO;
+
+/**
+ Pointer to a rectangle that should not be changed.
+ */
+typedef SMALL_RECT CONST * PCSMALL_RECT;
+
+/**
  Some events might want to refer to a position which is outside of a control.
  Expressing this in control relative terms implies a position (if that
  coordinate is within the control) which can be superseded by values
@@ -290,6 +300,14 @@ typedef struct _YORI_WIN_CTRL {
     BOOLEAN CanReceiveFocus;
 
     /**
+     If TRUE, the control should receive focus in response to a mouse click.
+     Individual controls or dialogs can suppress this behavior based on UX
+     considerations (eg. should a check box click take focus from an input
+     field), etc.
+     */
+    BOOLEAN ReceiveFocusOnMouseClick;
+
+    /**
      A bitmask of the mouse button down notifications that have been
      received by this control.  If a control has observed a mouse down event,
      it will also be sent a mouse up event, even if the event occurs outside
@@ -303,6 +321,42 @@ typedef struct _YORI_WIN_CTRL {
     // debugging
 
 } YORI_WIN_CTRL;
+
+/**
+ A description of how the cursor should be displayed.
+ */
+typedef struct _YORI_WIN_CURSOR_STATE {
+
+    /**
+     TRUE if the cursor should be visible, FALSE if it should be hidden.
+     */
+    BOOLEAN Visible;
+
+    /**
+     The size of the cursor, in percent.
+     */
+    UCHAR SizePercentage;
+
+    /**
+     The X and Y coordinates for where the cursor should be displayed.
+     */
+    COORD Pos;
+} YORI_WIN_CURSOR_STATE, *PYORI_WIN_CURSOR_STATE;
+
+/**
+ A list of possible shadow types that can be associated with a window.
+ */
+typedef enum _YORI_WIN_SHADOW_TYPE {
+    YoriWinShadowNone,
+    YoriWinShadowSolid,
+    YoriWinShadowTransparent
+} YORI_WIN_SHADOW_TYPE;
+
+
+/**
+ A pointer to a shadow type that can be associated with a window.
+ */
+typedef YORI_WIN_SHADOW_TYPE *PYORI_WIN_SHADOW_TYPE;
 
 /**
  A set of character arrays which describe various drawing operations.  Note
@@ -322,7 +376,11 @@ typedef enum _YORI_WIN_CHARACTERS {
     YoriWinCharsShadow,
     YoriWinCharsAsciiShadow,
     YoriWinCharsComboDown,
-    YoriWinCharsAsciiComboDown
+    YoriWinCharsAsciiComboDown,
+    YoriWinCharsRadioSelection,
+    YoriWinCharsAsciiRadioSelection,
+    YoriWinCharsOneLineSingleBorder,
+    YoriWinCharsOneLineDoubleBorder,
 } YORI_WIN_CHARACTERS;
 
 // ITEMARAY.C
@@ -357,12 +415,12 @@ typedef struct _YORI_WIN_ITEM_ARRAY {
     /**
      Count of items with meaningful data in the array.
      */
-    DWORD Count;
+    YORI_ALLOC_SIZE_T Count;
 
     /**
      Number of elements allocated in the Items array.
      */
-    DWORD CountAllocated;
+    YORI_ALLOC_SIZE_T CountAllocated;
 
     /**
      The base of the string allocation (to reference when consuming.)
@@ -377,7 +435,7 @@ typedef struct _YORI_WIN_ITEM_ARRAY {
     /**
      The number of characters remaining in the string allocation.
      */
-    DWORD StringAllocationRemaining;
+    YORI_ALLOC_SIZE_T StringAllocationRemaining;
 
     /**
      An array of items in memory.  This allocation is referenced because it
@@ -401,8 +459,8 @@ __success(return)
 BOOLEAN
 YoriWinItemArrayAddItems(
     __inout PYORI_WIN_ITEM_ARRAY ItemArray,
-    __in PYORI_STRING NewItems,
-    __in DWORD NumNewItems
+    __in PCYORI_STRING NewItems,
+    __in YORI_ALLOC_SIZE_T NumNewItems
     );
 
 __success(return)
@@ -459,8 +517,21 @@ YoriWinItemArrayAddItemArray(
  */
 #define YORI_WIN_BORDER_STYLE_MASK      0x0070
 
+/**
+ A flag to indicate that the border should be displayed with a bright color.
+ */
+#define YORI_WIN_BORDER_BRIGHT          0x1000
+
 BOOLEAN
 YoriWinDrawBorderOnControl(
+    __inout PYORI_WIN_CTRL Ctrl,
+    __in PSMALL_RECT Dimensions,
+    __in WORD Attributes,
+    __in WORD BorderType
+    );
+
+BOOLEAN
+YoriWinDrawSingleLineBorderOnControl(
     __inout PYORI_WIN_CTRL Ctrl,
     __in PSMALL_RECT Dimensions,
     __in WORD Attributes,
@@ -479,7 +550,7 @@ typedef PVOID YORI_WIN_COLOR_TABLE_HANDLE;
  */
 typedef enum _YORI_WIN_COLOR_ID {
     YoriWinColorWindowDefault = 0,
-    YoriWinColorTitleBarDefault,
+    YoriWinColorTitleBarActive,
     YoriWinColorMenuDefault,
     YoriWinColorMenuSelected,
     YoriWinColorMenuAccelerator,
@@ -489,11 +560,14 @@ typedef enum _YORI_WIN_COLOR_ID {
     YoriWinColorAcceleratorDefault,
     YoriWinColorListActive,
     YoriWinColorControlSelected,
+    YoriWinColorTitleBarInactive,
     YoriWinColorBeyondMax
 } YORI_WIN_COLOR_ID;
 
 YORI_WIN_COLOR_TABLE_HANDLE
-YoriWinGetDefaultColorTable(VOID);
+YoriWinGetColorTable(
+    __in YORI_WIN_COLOR_TABLE_ID ColorTableId
+    );
 
 UCHAR
 YoriWinDefaultColorLookup(
@@ -509,7 +583,13 @@ YoriWinCreateControl(
     __in_opt PYORI_WIN_CTRL Parent,
     __in PSMALL_RECT Rect,
     __in BOOLEAN CanReceiveFocus,
+    __in BOOLEAN ReceiveFocusOnMouseClick,
     __out PYORI_WIN_CTRL Ctrl
+    );
+
+VOID
+YoriWinCloseControl(
+    __in PYORI_WIN_CTRL Ctrl
     );
 
 VOID
@@ -525,8 +605,8 @@ YoriWinGetTopLevelWindow(
 BOOLEAN
 YoriWinSetControlCursorState(
     __in PYORI_WIN_CTRL Ctrl,
-    __in BOOL Visible,
-    __in DWORD SizePercentage
+    __in BOOLEAN Visible,
+    __in UCHAR SizePercentage
     );
 
 VOID
@@ -534,6 +614,12 @@ YoriWinSetControlClientCursorLocation(
     __in PYORI_WIN_CTRL Ctrl,
     __in WORD X,
     __in WORD Y
+    );
+
+VOID
+YoriWinGetCursorState(
+    __in PYORI_WIN_WINDOW Window,
+    __out PYORI_WIN_CURSOR_STATE CursorState
     );
 
 BOOLEAN
@@ -617,6 +703,7 @@ YoriWinTranslateCtrlCoordinatesToScreenCoordinates(
 
 VOID
 YoriWinTranslateScreenCoordinatesToWindow(
+    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
     __in PYORI_WIN_CTRL Ctrl,
     __in COORD ScreenCoord,
     __out PBOOLEAN InWindowRange,
@@ -666,7 +753,7 @@ YoriWinScrollBarCreate(
     __in_opt PYORI_WIN_NOTIFY ChangeCallback
     );
 
-DWORDLONG
+YORI_MAX_UNSIGNED_T
 YoriWinScrollBarGetPosition(
     __in PYORI_WIN_CTRL Ctrl
     );
@@ -674,9 +761,9 @@ YoriWinScrollBarGetPosition(
 VOID
 YoriWinScrollBarSetPosition(
     __in PYORI_WIN_CTRL Ctrl,
-    __in DWORDLONG CurrentValue,
-    __in DWORDLONG NumberVisible,
-    __in DWORDLONG MaximumValue
+    __in YORI_MAX_UNSIGNED_T CurrentValue,
+    __in YORI_MAX_UNSIGNED_T NumberVisible,
+    __in YORI_MAX_UNSIGNED_T MaximumValue
     );
 
 BOOLEAN
@@ -685,7 +772,44 @@ YoriWinScrollBarReposition(
     __in PSMALL_RECT CtrlRect
     );
 
+// TEXT.C
+
+VOID
+YoriWinTextBufferOffsetFromDisplayCellOffset(
+    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORI_STRING String,
+    __in YORI_ALLOC_SIZE_T TabWidth,
+    __in YORI_ALLOC_SIZE_T CellOffset,
+    __in BOOLEAN AllowOffsetBeyondString,
+    __out PYORI_ALLOC_SIZE_T BufferOffset,
+    __out_opt PYORI_ALLOC_SIZE_T Remainder
+    );
+
+VOID
+YoriWinTextDisplayCellOffsetFromBufferOffset(
+    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORI_STRING String,
+    __in YORI_ALLOC_SIZE_T TabWidth,
+    __in YORI_ALLOC_SIZE_T BufferOffset,
+    __out PYORI_ALLOC_SIZE_T CellOffset
+    );
+
+BOOLEAN
+YoriWinTextStringToDisplayCells(
+    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORI_STRING String,
+    __in YORI_ALLOC_SIZE_T LeftPadding,
+    __in YORI_ALLOC_SIZE_T TabWidth,
+    __in YORI_ALLOC_SIZE_T MaxCells,
+    __inout PYORI_STRING CellsString
+    );
+
 // WINDOW.C
+
+BOOLEAN
+YoriWinFlushWindowContents(
+    __in PYORI_WIN_WINDOW_HANDLE WindowHandle
+    );
 
 PYORI_WIN_CTRL
 YoriWinGetFocus(
@@ -722,15 +846,10 @@ YoriWinGetWindowSize(
     );
 
 BOOLEAN
-YoriWinSaveCursorState(
-    __in PYORI_WIN_WINDOW_HANDLE WindowHandle
-    );
-
-BOOLEAN
 YoriWinSetCursorState(
     __in PYORI_WIN_WINDOW_HANDLE WindowHandle,
-    __in BOOL Visible,
-    __in DWORD SizePercentage
+    __in BOOLEAN Visible,
+    __in UCHAR SizePercentage
     );
 
 VOID
@@ -741,13 +860,12 @@ YoriWinSetCursorPosition(
     );
 
 VOID
-YoriWinSetFocus(
-    __in PYORI_WIN_WINDOW Window,
-    __in_opt PYORI_WIN_CTRL Ctrl
+YoriWinSetWindowFocus(
+    __in PYORI_WIN_WINDOW_HANDLE WindowHandle
     );
 
 VOID
-YoriWinSetInitialFocus(
+YoriWinLoseWindowFocus(
     __in PYORI_WIN_WINDOW_HANDLE WindowHandle
     );
 
@@ -812,12 +930,47 @@ YoriWinIsWindowClosing(
     __in PYORI_WIN_WINDOW_HANDLE WindowHandle
     );
 
+BOOLEAN
+YoriWinIsWindowHidden(
+    __in PYORI_WIN_WINDOW_HANDLE WindowHandle
+    );
+
+BOOLEAN
+YoriWinIsWindowEnabled(
+    __in PYORI_WIN_WINDOW_HANDLE WindowHandle
+    );
+
+VOID
+YoriWinEnableWindow(
+    __in PYORI_WIN_WINDOW_HANDLE WindowHandle
+    );
+
+VOID
+YoriWinDisableWindow(
+    __in PYORI_WIN_WINDOW_HANDLE WindowHandle
+    );
+
+PCCHAR_INFO
+YoriWinGetWindowContentsBuffer(
+    __in PYORI_WIN_WINDOW_HANDLE WindowHandle,
+    __out PCSMALL_RECT *WindowRect,
+    __out PYORI_WIN_SHADOW_TYPE ShadowType
+    );
+
 PYORI_WIN_WINDOW_HANDLE
-YoriWinWindowFromTopLevelListEntry(
+YoriWinWindowFromZOrderListEntry(
     __in PYORI_LIST_ENTRY ListEntry
     );
 
+PYORI_LIST_ENTRY
+YoriWinZOrderListEntryFromWindow(
+    __in PYORI_WIN_WINDOW_HANDLE WindowHandle
+    );
+
 // WINMGR.C
+
+BOOLEAN
+YoriWinMgrAlwaysDisplayAccelerators(VOID);
 
 LPCTSTR
 YoriWinGetDrawingCharacters(
@@ -831,42 +984,67 @@ YoriWinMgrDefaultColorLookup(
     __in YORI_WIN_COLOR_ID ColorId
     );
 
-HANDLE
-YoriWinGetConsoleInputHandle(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle
-    );
-
-HANDLE
-YoriWinGetConsoleOutputHandle(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle
-    );
-
 BOOLEAN
 YoriWinIsConhostv2(
     __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle
     );
 
-DWORD
-YoriWinGetPreviousMouseButtonState(
+BOOLEAN
+YoriWinIsDoubleWideCharSupported(
     __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle
     );
 
 VOID
-YoriWinSetPreviousMouseButtonState(
+YoriWinMgrRegenerateRegion(
     __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
-    __in DWORD PreviousMouseButtonState
+    __in PSMALL_RECT Rect
     );
 
 VOID
-YoriWinMgrPushWindow(
+YoriWinMgrRefreshWindowRegion(
     __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
-    __in PYORI_LIST_ENTRY TopLevelWindowListEntry
+    __in PYORI_WIN_WINDOW_HANDLE WindowHandle
+    );
+
+BOOLEAN
+YoriWinMgrDisplayContents(
+    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle
+    );
+
+BOOLEAN
+YoriWinMgrIsWindowTopmostAndActive(
+    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORI_WIN_WINDOW_HANDLE WindowHandle
     );
 
 VOID
-YoriWinMgrPopWindow(
+YoriWinMgrNotifyWindowDestroy(
     __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
-    __in PYORI_LIST_ENTRY TopLevelWindowListEntry
+    __in PYORI_WIN_WINDOW_HANDLE WindowHandle
+    );
+
+VOID
+YoriWinMgrPushWindowZOrder(
+    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORI_WIN_WINDOW_HANDLE WindowHandle
+    );
+
+VOID
+YoriWinMgrPopWindowZOrder(
+    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORI_WIN_WINDOW_HANDLE WindowHandle
+    );
+
+BOOLEAN
+YoriWinMgrLockMouseExclusively(
+    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORI_WIN_WINDOW_HANDLE ExclusiveWindow
+    );
+
+BOOLEAN
+YoriWinMgrUnlockMouseExclusively(
+    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORI_WIN_WINDOW_HANDLE ExclusiveWindow
     );
 
 PYORI_WIN_CTRL_HANDLE

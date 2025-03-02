@@ -93,7 +93,7 @@ YoriLibGetTempFileName(
 
         Err = ERROR_SUCCESS;
         Handle = CreateFile(TestFileName.StartOfString,
-                            GENERIC_WRITE,
+                            GENERIC_READ | GENERIC_WRITE,
                             FILE_SHARE_READ | FILE_SHARE_DELETE,
                             NULL,
                             CREATE_NEW,
@@ -153,23 +153,45 @@ YoriLibGetTempFileName(
 BOOL
 YoriLibGetTempPath(
     __out PYORI_STRING TempPathName,
-    __in DWORD ExtraChars
+    __in YORI_ALLOC_SIZE_T ExtraChars
     )
 {
-    TempPathName->LengthAllocated = GetTempPath(0, NULL);
+    DWORD MajorVersion;
+    DWORD MinorVersion;
+    DWORD BuildNumber;
+    YORI_ALLOC_SIZE_T CharsToAllocate;
+
+    TempPathName->LengthAllocated = (YORI_ALLOC_SIZE_T)GetTempPath(0, NULL);
     if (TempPathName->LengthAllocated == 0) {
         return FALSE;
     }
 
-    TempPathName->LengthAllocated += ExtraChars;
+    TempPathName->LengthAllocated = TempPathName->LengthAllocated + ExtraChars;
 
-    if (!YoriLibAllocateString(TempPathName, TempPathName->LengthAllocated)) {
+    YoriLibGetOsVersion(&MajorVersion, &MinorVersion, &BuildNumber);
+
+    //
+    //  NT 3.1 has a horrible bug in GetTempPathW where it confuses byte
+    //  offset with character offset and writes a NULL at a byte offset
+    //  which is twice where it should be.  To tolerate that, allocate
+    //  twice as many bytes as needed, and manually fix up the NULL below.
+    //
+
+    CharsToAllocate = TempPathName->LengthAllocated;
+    if (MajorVersion == 3 && MinorVersion == 10) {
+        CharsToAllocate = CharsToAllocate * 2;
+    }
+
+    if (!YoriLibAllocateString(TempPathName, CharsToAllocate)) {
         return FALSE;
     }
 
-    TempPathName->LengthInChars = GetTempPath(TempPathName->LengthAllocated,
-                                              TempPathName->StartOfString);
+    TempPathName->LengthInChars = (YORI_ALLOC_SIZE_T)GetTempPath(TempPathName->LengthAllocated,
+            TempPathName->StartOfString);
 
+    if (MajorVersion == 3 && MinorVersion == 10) {
+        TempPathName->StartOfString[TempPathName->LengthInChars] = '\0';
+    }
 
     return TRUE;
 }

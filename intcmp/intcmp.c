@@ -120,23 +120,23 @@ IntCmpHelp(VOID)
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
     BOOL ArgumentUnderstood;
-    DWORD StartArg = 0;
-    DWORD i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
+    YORI_ALLOC_SIZE_T i;
     YORI_STRING EntireExpression;
     YORI_STRING FirstPart;
     YORI_STRING SecondPart;
     YORI_STRING OperatorMatches[INTCMP_OPERATOR_BEYOND_MAX];
     YORI_STRING Arg;
     PYORI_STRING MatchingOperator;
-    DWORD OperatorIndex;
-    DWORD CharsConsumed;
-    LONGLONG FirstNumber;
-    LONGLONG SecondNumber;
+    YORI_ALLOC_SIZE_T OperatorIndex;
+    YORI_ALLOC_SIZE_T CharsConsumed;
+    YORI_MAX_SIGNED_T FirstNumber;
+    YORI_MAX_SIGNED_T SecondNumber;
     int Result;
 
     for (i = 1; i < ArgC; i++) {
@@ -146,13 +146,13 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 IntCmpHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2018"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 if (i + 1 < ArgC) {
                     ArgumentUnderstood = TRUE;
                     StartArg = i + 1;
@@ -186,7 +186,7 @@ ENTRYPOINT(
     YoriLibConstantString(&OperatorMatches[INTCMP_OPERATOR_GREATER], _T(">"));
     YoriLibConstantString(&OperatorMatches[INTCMP_OPERATOR_LESS], _T("<"));
 
-    MatchingOperator = YoriLibFindFirstMatchingSubstring(&EntireExpression, sizeof(OperatorMatches)/sizeof(OperatorMatches[0]), OperatorMatches, &OperatorIndex);
+    MatchingOperator = YoriLibFindFirstMatchSubstr(&EntireExpression, sizeof(OperatorMatches)/sizeof(OperatorMatches[0]), OperatorMatches, &OperatorIndex);
     if (MatchingOperator == NULL) {
         YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("intcmp: missing operator\n"));
         YoriLibFreeStringContents(&EntireExpression);

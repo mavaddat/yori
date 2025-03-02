@@ -68,7 +68,7 @@ YoriLibShRevertRedirection(
 {
     YORI_LIBSH_PREVIOUS_REDIRECT_CONTEXT CurrentRedirectContext;
 
-    SetConsoleCtrlHandler(NULL, TRUE);
+    YoriLibCancelInheritedIgnore();
 
     YoriLibShCaptureRedirectContext(&CurrentRedirectContext);
 
@@ -142,8 +142,8 @@ YoriLibShInitializeRedirection(
     //
 
     if (!PrepareForBuiltIn) {
-        SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
-        SetConsoleCtrlHandler(NULL, FALSE);
+        YoriLibSetInputConsoleModeWithoutExtended(GetStdHandle(STD_INPUT_HANDLE), ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
+        YoriLibCancelInheritedProcess();
     }
 
     Error = ERROR_SUCCESS;
@@ -677,21 +677,26 @@ YoriLibShBuildCmdContextForCmdBuckPass (
 {
     YORI_STRING Arg;
     YORI_STRING FoundInPath;
+    PVOID MemoryToFree;
 
     //
     //  Allocate three components, for "cmd", "/c" and "CmdLine"
     //
 
     CmdContext->ArgC = 3;
-    CmdContext->MemoryToFree = YoriLibReferencedMalloc(CmdContext->ArgC * (sizeof(YORI_STRING) + sizeof(YORI_LIBSH_ARG_CONTEXT)));
-    if (CmdContext->MemoryToFree == NULL) {
+    MemoryToFree = YoriLibReferencedMalloc(CmdContext->ArgC * (sizeof(YORI_STRING) + sizeof(YORI_LIBSH_ARG_CONTEXT)));
+    if (MemoryToFree == NULL) {
         return FALSE;
     }
 
-    CmdContext->ArgV = CmdContext->MemoryToFree;
+    CmdContext->ArgV = MemoryToFree;
+    CmdContext->MemoryToFreeArgV = MemoryToFree;
 
     CmdContext->ArgContexts = (PYORI_LIBSH_ARG_CONTEXT)YoriLibAddToPointer(CmdContext->ArgV, sizeof(YORI_STRING) * CmdContext->ArgC);
     ZeroMemory(CmdContext->ArgContexts, sizeof(YORI_LIBSH_ARG_CONTEXT) * CmdContext->ArgC);
+
+    YoriLibReference(MemoryToFree);
+    CmdContext->MemoryToFreeArgContexts = MemoryToFree;
 
     //
     //  Locate "cmd" in PATH

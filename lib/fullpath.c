@@ -45,7 +45,7 @@ TCHAR YoriLibPathPrefixChar;
  @return TRUE if the string starts with a drive letter and colon.
  */
 BOOL
-YoriLibIsDriveLetterWithColon(
+YoriLibIsDrvLetterColon(
     __in PCYORI_STRING Path
     )
 {
@@ -73,7 +73,7 @@ YoriLibIsDriveLetterWithColon(
          seperator; FALSE otherwise.
  */
 BOOL
-YoriLibIsDriveLetterWithColonAndSlash(
+YoriLibIsDrvLetterColonSlash(
     __in PCYORI_STRING Path
     )
 {
@@ -81,7 +81,7 @@ YoriLibIsDriveLetterWithColonAndSlash(
         return FALSE;
     }
 
-    if (YoriLibIsDriveLetterWithColon(Path) &&
+    if (YoriLibIsDrvLetterColon(Path) &&
         YoriLibIsSep(Path->StartOfString[2])) {
 
         return TRUE;
@@ -126,7 +126,7 @@ YoriLibIsPathPrefixed(
          FALSE otherwise.
  */
 BOOL
-YoriLibIsPrefixedDriveLetterWithColon(
+YoriLibIsPfxDrvLetterColon(
     __in PCYORI_STRING Path
     )
 {
@@ -158,7 +158,7 @@ YoriLibIsPrefixedDriveLetterWithColon(
          seperator; FALSE otherwise.
  */
 BOOL
-YoriLibIsPrefixedDriveLetterWithColonAndSlash(
+YoriLibIsPfxDrvLetterColonSlash(
     __in PCYORI_STRING Path
     )
 {
@@ -180,6 +180,8 @@ YoriLibIsPrefixedDriveLetterWithColonAndSlash(
 
     return FALSE;
 }
+
+#if YORI_UNC_SUPPORT
 
 
 /**
@@ -215,6 +217,8 @@ YoriLibIsFullPathUnc(
     return FALSE;
 }
 
+#endif
+
 /**
  Given a fully qualified path containing a drive letter or UNC root, determine
  where the root component is that cannot be traversed above.  The path may
@@ -240,10 +244,12 @@ YoriLibIsFullPathUnc(
  */
 __success(return)
 BOOL
-YoriLibFindEffectiveRootInternal(
+YoriLibFindEffRootInternal(
     __in PYORI_STRING Path,
     __in BOOL PathHasPrefix,
+#if YORI_UNC_SUPPORT
     __in BOOL PathIsUnc,
+#endif
     __out PYORI_STRING EffectiveRoot
     )
 {
@@ -257,6 +263,7 @@ YoriLibFindEffectiveRootInternal(
 
     if (PathHasPrefix) {
 
+#if YORI_UNC_SUPPORT
         if (PathIsUnc) {
 
             ASSERT(Path->LengthInChars >= sizeof("\\\\?\\UNC\\") - 1);
@@ -274,7 +281,7 @@ YoriLibFindEffectiveRootInternal(
                 return FALSE;
             }
 
-            Substring.LengthInChars = Substring.LengthInChars - (DWORD)(StringPtr - Substring.StartOfString) - 1;
+            Substring.LengthInChars = Substring.LengthInChars - (YORI_ALLOC_SIZE_T)(StringPtr - Substring.StartOfString) - 1;
             Substring.StartOfString = &StringPtr[1];
 
             StringPtr = YoriLibFindLeftMostCharacter(&Substring, '\\');
@@ -286,8 +293,14 @@ YoriLibFindEffectiveRootInternal(
             //
 
         } else {
+#endif
 
-            ASSERT(Path->LengthInChars >= sizeof("\\\\?\\C:") - 1);
+            //
+            //  If a path has a prefix, it needs to have characters for one,
+            //  and those are four characters in length.
+            //
+
+            ASSERT(Path->LengthInChars >= 4);
 
             Substring.StartOfString = &Path->StartOfString[4];
             Substring.LengthInChars = Path->LengthInChars - 4;
@@ -301,8 +314,11 @@ YoriLibFindEffectiveRootInternal(
             if (StringPtr != NULL) {
                 StringPtr++;
             }
+#if YORI_UNC_SUPPORT
         }
+#endif
     } else {
+#if YORI_UNC_SUPPORT
         if (PathIsUnc) {
 
             ASSERT(Path->LengthInChars >= sizeof("\\\\") - 1);
@@ -320,7 +336,7 @@ YoriLibFindEffectiveRootInternal(
                 return FALSE;
             }
 
-            Substring.LengthInChars = Substring.LengthInChars - (DWORD)(StringPtr - Substring.StartOfString) - 1;
+            Substring.LengthInChars = Substring.LengthInChars - (YORI_ALLOC_SIZE_T)(StringPtr - Substring.StartOfString) - 1;
             Substring.StartOfString = &StringPtr[1];
 
             StringPtr = YoriLibFindLeftMostCharacter(&Substring, '\\');
@@ -332,6 +348,7 @@ YoriLibFindEffectiveRootInternal(
             //
 
         } else {
+#endif
 
             StringPtr = YoriLibFindLeftMostCharacter(Path, '\\');
 
@@ -342,7 +359,9 @@ YoriLibFindEffectiveRootInternal(
             if (StringPtr != NULL) {
                 StringPtr++;
             }
+#if YORI_UNC_SUPPORT
         }
+#endif
     }
 
     if (StringPtr == NULL) {
@@ -350,7 +369,7 @@ YoriLibFindEffectiveRootInternal(
         return TRUE;
     }
 
-    EffectiveRoot->LengthInChars = (DWORD)(StringPtr - EffectiveRoot->StartOfString);
+    EffectiveRoot->LengthInChars = (YORI_ALLOC_SIZE_T)(StringPtr - EffectiveRoot->StartOfString);
     return TRUE;
 }
 
@@ -373,15 +392,20 @@ YoriLibFindEffectiveRootInternal(
  */
 __success(return)
 BOOL
-YoriLibFindEffectiveRoot(
+YoriLibFindEffRoot(
     __in PYORI_STRING Path,
     __out PYORI_STRING EffectiveRoot
     )
 {
     BOOL PrefixedPath = FALSE;
+#if YORI_UNC_SUPPORT
     BOOL UncPath = FALSE;
+#endif
+    BOOL Result;
+
     if (YoriLibIsPathPrefixed(Path)) {
         PrefixedPath = TRUE;
+#if YORI_UNC_SUPPORT
         if (YoriLibIsFullPathUnc(Path)) {
             UncPath = TRUE;
         }
@@ -391,9 +415,16 @@ YoriLibFindEffectiveRoot(
             Path->StartOfString[1] == '\\') {
             UncPath = TRUE;
         }
+#endif
     }
 
-    return YoriLibFindEffectiveRootInternal(Path, PrefixedPath, UncPath, EffectiveRoot);
+    Result = YoriLibFindEffRootInternal(Path,
+                                        PrefixedPath,
+#if YORI_UNC_SUPPORT
+                                        UncPath,
+#endif
+                                        EffectiveRoot);
+    return Result;
 }
 
 /**
@@ -435,11 +466,13 @@ typedef union _YORI_LIB_FULL_PATH_TYPE {
          */
         BOOLEAN PrefixPresent:1;
 
+#if YORI_UNC_SUPPORT
         /**
          If TRUE, the "\\" UNC prefix, including the "\\?\UNC\" prefix, is
          present in a path.
          */
         BOOLEAN UncPath:1;
+#endif
     } Flags;
 } YORI_LIB_FULL_PATH_TYPE, *PYORI_LIB_FULL_PATH_TYPE;
 
@@ -449,6 +482,10 @@ typedef union _YORI_LIB_FULL_PATH_TYPE {
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1700)
 #pragma warning(disable: 28159)
+#endif
+
+#if defined(__clang__)
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #endif
 
 /**
@@ -486,8 +523,8 @@ typedef union _YORI_LIB_FULL_PATH_TYPE {
          completion.
  */
 __success(return == ERROR_SUCCESS)
-DWORD
-YoriLibGetFullPathDeterminePathType(
+SYSERR
+YoriLibGetFullPathPathType(
     __in PYORI_STRING FileName,
     __out PYORI_LIB_FULL_PATH_TYPE PathType,
     __out_opt PYORI_STRING StartOfRelativePath
@@ -526,7 +563,9 @@ YoriLibGetFullPathDeterminePathType(
         YoriLibIsSep(FileName->StartOfString[0]) &&
         YoriLibIsSep(FileName->StartOfString[1])) {
 
+#if YORI_UNC_SUPPORT
         PathType->Flags.UncPath = TRUE;
+#endif
 
         if (FileName->LengthInChars >= 4 &&
             (FileName->StartOfString[2] == '?' ||
@@ -535,12 +574,14 @@ YoriLibGetFullPathDeterminePathType(
 
             PathType->Flags.PrefixPresent = TRUE;
 
+#if YORI_UNC_SUPPORT
             if (!YoriLibIsFullPathUnc(FileName)) {
                 PathType->Flags.UncPath = FALSE;
             }
+#endif
         }
 
-    } else if (YoriLibIsDriveLetterWithColon(FileName)) {
+    } else if (YoriLibIsDrvLetterColon(FileName)) {
 
         if (FileName->LengthInChars == 2 ||
             (FileName->LengthInChars >= 3 && !YoriLibIsSep(FileName->StartOfString[2]))) {
@@ -591,8 +632,8 @@ YoriLibGetFullPathDeterminePathType(
  @return A win32 error code, or ERROR_SUCCESS to indicate successful
          completion.
  */
-DWORD
-YoriLibFullPathMergeRootWithRelative(
+SYSERR
+YoriLibFullPathMergeRootWithRel(
     __in PYORI_STRING PrimaryDirectory,
     __in PYORI_STRING RelativePath,
     __in BOOL ReturnEscapedPath,
@@ -602,7 +643,7 @@ YoriLibFullPathMergeRootWithRelative(
     )
 {
     YORI_STRING CurrentDirectory;
-    DWORD Result;
+    YORI_ALLOC_SIZE_T Result;
 
     //
     //  This function is likely to want a substring of the primary directory,
@@ -630,13 +671,16 @@ YoriLibFullPathMergeRootWithRelative(
         (CurrentDirectory.StartOfString[2] == '?' || CurrentDirectory.StartOfString[2] == '.') &&
         CurrentDirectory.StartOfString[3] == '\\') {
 
+#if YORI_UNC_SUPPORT
         if (YoriLibIsFullPathUnc(&CurrentDirectory)) {
             CurrentDirectory.StartOfString += 7;
             CurrentDirectory.LengthInChars -= 7;
             PathType->Flags.UncPath = TRUE;
         } else {
+#endif
             CurrentDirectory.StartOfString += 4;
             CurrentDirectory.LengthInChars -= 4;
+#if YORI_UNC_SUPPORT
         }
     } else {
 
@@ -648,6 +692,7 @@ YoriLibFullPathMergeRootWithRelative(
             CurrentDirectory.LengthInChars -= 1;
             PathType->Flags.UncPath = TRUE;
         }
+#endif
     }
 
     //
@@ -657,6 +702,7 @@ YoriLibFullPathMergeRootWithRelative(
 
     if (PathType->Flags.AbsoluteWithoutDrive) {
         if (CurrentDirectory.LengthInChars > 2) {
+#if YORI_UNC_SUPPORT
             if (PathType->Flags.UncPath) {
                 YORI_STRING CurrentDirectorySubstring;
                 LPTSTR Slash;
@@ -674,14 +720,15 @@ YoriLibFullPathMergeRootWithRelative(
                 Slash = YoriLibFindLeftMostCharacter(&CurrentDirectorySubstring, '\\');
                 if (Slash != NULL) {
                     CurrentDirectorySubstring.StartOfString = Slash + 1;
-                    CurrentDirectorySubstring.LengthInChars = CurrentDirectory.LengthInChars - (DWORD)(Slash - CurrentDirectory.StartOfString) - 1;
+                    CurrentDirectorySubstring.LengthInChars = CurrentDirectory.LengthInChars - (YORI_ALLOC_SIZE_T)(Slash - CurrentDirectory.StartOfString) - 1;
                     Slash = YoriLibFindLeftMostCharacter(&CurrentDirectorySubstring, '\\');
                     if (Slash != NULL) {
-                        CurrentDirectory.LengthInChars = (DWORD)(Slash - CurrentDirectory.StartOfString);
+                        CurrentDirectory.LengthInChars = (YORI_ALLOC_SIZE_T)(Slash - CurrentDirectory.StartOfString);
                         CurrentDirectory.StartOfString[CurrentDirectory.LengthInChars] = '\0';
                     }
                 }
             } else {
+#endif
 
                 //
                 //  If it's a drive letter path, just truncate the string
@@ -689,7 +736,9 @@ YoriLibFullPathMergeRootWithRelative(
                 //
 
                 CurrentDirectory.LengthInChars = 2;
+#if YORI_UNC_SUPPORT
             }
+#endif
         }
     }
 
@@ -702,14 +751,18 @@ YoriLibFullPathMergeRootWithRelative(
 
     if (ReturnEscapedPath) {
         Result = 4 + CurrentDirectory.LengthInChars + 1 + RelativePath->LengthInChars + 1;
+#if YORI_UNC_SUPPORT
         if (PathType->Flags.UncPath) {
             Result += 4; // Remove "\" and add "\UNC\"
         }
+#endif
     } else {
         Result = CurrentDirectory.LengthInChars + 1 + RelativePath->LengthInChars + 1;
+#if YORI_UNC_SUPPORT
         if (PathType->Flags.UncPath) {
             Result += 1;
         }
+#endif
     }
 
     if (Result > Buffer->LengthAllocated) {
@@ -730,33 +783,81 @@ YoriLibFullPathMergeRootWithRelative(
     //
 
     if (ReturnEscapedPath) {
+#if YORI_UNC_SUPPORT
         if (PathType->Flags.UncPath) {
             if (RelativePath->LengthInChars > 0) {
-                Buffer->LengthInChars = YoriLibSPrintfS(Buffer->StartOfString, Buffer->LengthAllocated, _T("\\\\%c\\UNC%y\\%y"), YoriLibPathPrefixChar, &CurrentDirectory, RelativePath);
+                Buffer->LengthInChars =
+                    YoriLibSPrintfS(Buffer->StartOfString,
+                                    Buffer->LengthAllocated,
+                                    _T("\\\\%c\\UNC%y\\%y"),
+                                    YoriLibPathPrefixChar,
+                                    &CurrentDirectory,
+                                    RelativePath);
             } else {
-                Buffer->LengthInChars = YoriLibSPrintfS(Buffer->StartOfString, Buffer->LengthAllocated, _T("\\\\%c\\UNC%y"), YoriLibPathPrefixChar, &CurrentDirectory);
+                Buffer->LengthInChars =
+                    YoriLibSPrintfS(Buffer->StartOfString,
+                                    Buffer->LengthAllocated,
+                                    _T("\\\\%c\\UNC%y"),
+                                    YoriLibPathPrefixChar,
+                                    &CurrentDirectory);
             }
         } else {
+#endif
             if (RelativePath->LengthInChars > 0) {
-                Buffer->LengthInChars = YoriLibSPrintfS(Buffer->StartOfString, Buffer->LengthAllocated, _T("\\\\%c\\%y\\%y"), YoriLibPathPrefixChar, &CurrentDirectory, RelativePath);
+                Buffer->LengthInChars =
+                    YoriLibSPrintfS(Buffer->StartOfString,
+                                    Buffer->LengthAllocated,
+                                    _T("\\\\%c\\%y\\%y"),
+                                    YoriLibPathPrefixChar,
+                                    &CurrentDirectory,
+                                    RelativePath);
             } else {
-                Buffer->LengthInChars = YoriLibSPrintfS(Buffer->StartOfString, Buffer->LengthAllocated, _T("\\\\%c\\%y"), YoriLibPathPrefixChar, &CurrentDirectory);
+                Buffer->LengthInChars =
+                    YoriLibSPrintfS(Buffer->StartOfString,
+                                    Buffer->LengthAllocated,
+                                    _T("\\\\%c\\%y"),
+                                    YoriLibPathPrefixChar,
+                                    &CurrentDirectory);
             }
+#if YORI_UNC_SUPPORT
         }
+#endif
     } else {
+#if YORI_UNC_SUPPORT
         if (PathType->Flags.UncPath) {
             if (RelativePath->LengthInChars > 0) {
-                Buffer->LengthInChars = YoriLibSPrintfS(Buffer->StartOfString, Buffer->LengthAllocated, _T("\\%y\\%y"), &CurrentDirectory, RelativePath);
+                Buffer->LengthInChars =
+                    YoriLibSPrintfS(Buffer->StartOfString,
+                                    Buffer->LengthAllocated,
+                                    _T("\\%y\\%y"),
+                                    &CurrentDirectory,
+                                    RelativePath);
             } else {
-                Buffer->LengthInChars = YoriLibSPrintfS(Buffer->StartOfString, Buffer->LengthAllocated, _T("\\%y"), &CurrentDirectory);
+                Buffer->LengthInChars =
+                    YoriLibSPrintfS(Buffer->StartOfString,
+                                    Buffer->LengthAllocated,
+                                    _T("\\%y"),
+                                    &CurrentDirectory);
             }
         } else {
+#endif
             if (RelativePath->LengthInChars > 0) {
-                Buffer->LengthInChars = YoriLibSPrintfS(Buffer->StartOfString, Buffer->LengthAllocated, _T("%y\\%y"), &CurrentDirectory, RelativePath);
+                Buffer->LengthInChars =
+                    YoriLibSPrintfS(Buffer->StartOfString,
+                                    Buffer->LengthAllocated,
+                                    _T("%y\\%y"),
+                                    &CurrentDirectory,
+                                    RelativePath);
             } else {
-                Buffer->LengthInChars = YoriLibSPrintfS(Buffer->StartOfString, Buffer->LengthAllocated, _T("%y"), &CurrentDirectory);
+                Buffer->LengthInChars =
+                    YoriLibSPrintfS(Buffer->StartOfString,
+                                    Buffer->LengthAllocated,
+                                    _T("%y"),
+                                    &CurrentDirectory);
             }
+#if YORI_UNC_SUPPORT
         }
+#endif
     }
 
     return ERROR_SUCCESS;
@@ -790,7 +891,7 @@ YoriLibFullPathMergeRootWithRelative(
  @return A win32 error code, or ERROR_SUCCESS to indicate successful
          completion.
  */
-DWORD
+SYSERR
 YoriLibFullPathNormalize(
     __in PYORI_STRING FileName,
     __in BOOL ReturnEscapedPath,
@@ -799,9 +900,8 @@ YoriLibFullPathNormalize(
     __inout PBOOLEAN FreeOnFailure
     )
 {
-    DWORD Result;
+    YORI_ALLOC_SIZE_T Result;
     YORI_STRING Subset;
-
 
     //
     //  Allocate a buffer for the "absolute" path so we can do compaction.
@@ -810,9 +910,11 @@ YoriLibFullPathNormalize(
 
     if (ReturnEscapedPath) {
         Result = FileName->LengthInChars + 1 + 4;
+#if YORI_UNC_SUPPORT
         if (!PathType->Flags.PrefixPresent && PathType->Flags.UncPath) {
             Result += 4;
         }
+#endif
     } else {
         Result = FileName->LengthInChars + 1;
     }
@@ -830,6 +932,7 @@ YoriLibFullPathNormalize(
     Subset.LengthAllocated = 0;
     Subset.MemoryToFree = NULL;
 
+#if YORI_UNC_SUPPORT
     if (ReturnEscapedPath) {
         if (!PathType->Flags.PrefixPresent && PathType->Flags.UncPath) {
             //
@@ -841,7 +944,9 @@ YoriLibFullPathNormalize(
             Subset.LengthInChars -= 2;
         }
     } else {
+#endif
         if (PathType->Flags.PrefixPresent) {
+#if YORI_UNC_SUPPORT
             if (PathType->Flags.UncPath) {
 
                 //
@@ -852,6 +957,7 @@ YoriLibFullPathNormalize(
                 Subset.StartOfString += 7;
                 Subset.LengthInChars -= 7;
             } else {
+#endif
 
                 //
                 //  Input string is \\?\C:\, output is C:\, chop off
@@ -860,8 +966,10 @@ YoriLibFullPathNormalize(
 
                 Subset.StartOfString += 4;
                 Subset.LengthInChars -= 4;
+#if YORI_UNC_SUPPORT
             }
         }
+#endif
     }
 
     if (ReturnEscapedPath) {
@@ -869,18 +977,25 @@ YoriLibFullPathNormalize(
         if (PathType->Flags.PrefixPresent) {
 
             Buffer->LengthInChars = YoriLibSPrintfS(Buffer->StartOfString, Buffer->LengthAllocated, _T("%y"), &Subset);
+#if YORI_UNC_SUPPORT
         } else if (PathType->Flags.UncPath) {
             Buffer->LengthInChars = YoriLibSPrintfS(Buffer->StartOfString, Buffer->LengthAllocated, _T("\\\\%c\\UNC\\%y"), YoriLibPathPrefixChar, &Subset);
         } else {
+#endif
+
             Buffer->LengthInChars = YoriLibSPrintfS(Buffer->StartOfString, Buffer->LengthAllocated, _T("\\\\%c\\%y"), YoriLibPathPrefixChar, &Subset);
         }
     } else {
         if (PathType->Flags.PrefixPresent) {
+#if YORI_UNC_SUPPORT
             if (PathType->Flags.UncPath) {
                 Buffer->LengthInChars = YoriLibSPrintfS(Buffer->StartOfString, Buffer->LengthAllocated, _T("\\%y"), &Subset);
             } else {
+#endif
                 Buffer->LengthInChars = YoriLibSPrintfS(Buffer->StartOfString, Buffer->LengthAllocated, _T("%y"), &Subset);
+#if YORI_UNC_SUPPORT
             }
+#endif
         } else {
             Buffer->LengthInChars = YoriLibSPrintfS(Buffer->StartOfString, Buffer->LengthAllocated, _T("%y"), &Subset);
         }
@@ -911,16 +1026,18 @@ YoriLibFullPathNormalize(
          completion.
  */
 __success(return == ERROR_SUCCESS)
-DWORD
-YoriLibGetFullPathSquashRelativeComponents(
+SYSERR
+YoriLibGetFullPathSquashRelCmp(
     __inout PYORI_STRING Buffer,
+#if YORI_UNC_SUPPORT
     __in PYORI_LIB_FULL_PATH_TYPE PathType,
+#endif
     __in BOOL ReturnEscapedPath,
     __deref_opt_out_opt LPTSTR* lpFilePart
     )
 {
 
-    DWORD Result;
+    SYSERR Result;
     LPTSTR EffectiveRoot;
     YORI_STRING EffectiveRootSubstring;
     LPTSTR CurrentReadChar;
@@ -945,6 +1062,7 @@ YoriLibGetFullPathSquashRelativeComponents(
     //  before \\?\X:\ or \\?\UNC\server\share.
     //
 
+#if YORI_UNC_SUPPORT
     if (ReturnEscapedPath) {
         if (YoriLibIsFullPathUnc(Buffer)) {
             PathType->Flags.UncPath = TRUE;
@@ -958,8 +1076,14 @@ YoriLibGetFullPathSquashRelativeComponents(
             PathType->Flags.UncPath = FALSE;
         }
     }
+#endif
 
-    if (!YoriLibFindEffectiveRootInternal(Buffer, ReturnEscapedPath, PathType->Flags.UncPath, &EffectiveRootSubstring)) {
+    if (!YoriLibFindEffRootInternal(Buffer,
+                                    ReturnEscapedPath,
+#if YORI_UNC_SUPPORT
+                                    PathType->Flags.UncPath,
+#endif
+                                    &EffectiveRootSubstring)) {
         return ERROR_BAD_PATHNAME;
     }
 
@@ -1078,6 +1202,42 @@ YoriLibGetFullPathSquashRelativeComponents(
         }
 
         //
+        //  Now that . and .. components are processed, if this is not an
+        //  escaped path, trim any trailing periods or spaces from the
+        //  component.  Currently this loops forward on these characters
+        //  to see if they're followed by a seperator.  This isn't
+        //  computationally ideal, but the risk of long strings of these
+        //  characters not followed by a terminator doesn't seem likely.
+        //
+
+        if (!ReturnEscapedPath) {
+            LPTSTR TestReadChar;
+            TestReadChar = CurrentReadChar;
+            while (*TestReadChar == '.' || *TestReadChar == ' ') {
+                TestReadChar++;
+            }
+            if (TestReadChar > CurrentReadChar &&
+                (*TestReadChar == '\\' || *TestReadChar == '\0')) {
+
+                //
+                //  If the whole component was truncated, remove the
+                //  previous seperator.
+                //
+
+                if (PreviousWasSeperator && CurrentWriteChar > EffectiveRoot) {
+                    CurrentWriteChar--;
+                    PreviousWasSeperator = FALSE;
+                }
+
+                CurrentReadChar = TestReadChar;
+
+                if (*TestReadChar == '\0') {
+                    break;
+                }
+            }
+        }
+
+        //
         //  Note if this is a seperator or not.  If it's the final char and
         //  a seperator, drop it
         //
@@ -1097,7 +1257,7 @@ YoriLibGetFullPathSquashRelativeComponents(
     //
 
     *CurrentWriteChar = *CurrentReadChar;
-    Buffer->LengthInChars = (DWORD)(CurrentWriteChar - Buffer->StartOfString);
+    Buffer->LengthInChars = (YORI_ALLOC_SIZE_T)(CurrentWriteChar - Buffer->StartOfString);
     ASSERT(Buffer->StartOfString[Buffer->LengthInChars] == '\0');
 
     //
@@ -1155,7 +1315,7 @@ YoriLibGetFullPathSquashRelativeComponents(
  */
 __success(return)
 BOOL
-YoriLibGetFullPathNameReturnAllocation(
+YoriLibGetFullPathNameAlloc(
     __in PYORI_STRING FileName,
     __in BOOL ReturnEscapedPath,
     __inout PYORI_STRING Buffer,
@@ -1179,11 +1339,11 @@ YoriLibGetFullPathNameReturnAllocation(
 
     YORI_STRING StartOfRelativePath;
 
-    DWORD Result;
+    SYSERR Result;
 
-    Result = YoriLibGetFullPathDeterminePathType(FileName,
-                                                 &PathType,
-                                                 &StartOfRelativePath);
+    Result = YoriLibGetFullPathPathType(FileName,
+                                        &PathType,
+                                        &StartOfRelativePath);
     if (Result != ERROR_SUCCESS) {
         SetLastError(Result);
         return FALSE;
@@ -1200,42 +1360,45 @@ YoriLibGetFullPathNameReturnAllocation(
         PathType.Flags.AbsoluteWithoutDrive) {
 
         YORI_STRING CurrentDirectory;
+        YORI_ALLOC_SIZE_T CurrentDirectoryLength;
+
+        CurrentDirectoryLength = (YORI_ALLOC_SIZE_T)GetCurrentDirectory(0, NULL);
+        if (!YoriLibAllocateString(&CurrentDirectory, CurrentDirectoryLength)) {
+            SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+            return FALSE;
+        }
+
+        Result = GetCurrentDirectory(CurrentDirectory.LengthAllocated, CurrentDirectory.StartOfString);
+        if (Result == 0 || Result >= CurrentDirectory.LengthAllocated) {
+            YoriLibFreeStringContents(&CurrentDirectory);
+            return FALSE;
+        }
+
+        CurrentDirectory.LengthInChars = (YORI_ALLOC_SIZE_T)Result;
 
         //
-        //  If it's drive relative, get the current directory of the requested
-        //  drive.  The only documented way to do this is to call
-        //  GetFullPathName itself, which looks a little goofy given where
-        //  we are.
+        //  If it's drive relative, and it's relative to a different drive,
+        //  get the current directory of the requested drive.
         //
 
         if (PathType.Flags.DriveRelativePath) {
-            if (!YoriLibGetCurrentDirectoryOnDrive(FileName->StartOfString[0], &CurrentDirectory)) {
-                SetLastError(ERROR_NOT_ENOUGH_MEMORY);
-                return FALSE;
-            }
-        } else {
-            DWORD CurrentDirectoryLength;
-            CurrentDirectoryLength = GetCurrentDirectory(0, NULL);
-            if (!YoriLibAllocateString(&CurrentDirectory, CurrentDirectoryLength)) {
-                SetLastError(ERROR_NOT_ENOUGH_MEMORY);
-                return FALSE;
-            }
+            if (CurrentDirectory.LengthInChars == 0 ||
+                YoriLibUpcaseChar(CurrentDirectory.StartOfString[0]) != YoriLibUpcaseChar(FileName->StartOfString[0])) {
 
-            Result = GetCurrentDirectory(CurrentDirectory.LengthAllocated, CurrentDirectory.StartOfString);
-            if (Result == 0 || Result >= CurrentDirectory.LengthAllocated) {
                 YoriLibFreeStringContents(&CurrentDirectory);
-                return FALSE;
+                if (!YoriLibGetCurDirOnDrive(FileName->StartOfString[0], &CurrentDirectory)) {
+                    SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+                    return FALSE;
+                }
             }
-
-            CurrentDirectory.LengthInChars = Result;
         }
 
-        Result = YoriLibFullPathMergeRootWithRelative(&CurrentDirectory,
-                                                      &StartOfRelativePath,
-                                                      ReturnEscapedPath,
-                                                      &PathType,
-                                                      Buffer,
-                                                      &FreeOnFailure);
+        Result = YoriLibFullPathMergeRootWithRel(&CurrentDirectory,
+                                                 &StartOfRelativePath,
+                                                 ReturnEscapedPath,
+                                                 &PathType,
+                                                 Buffer,
+                                                 &FreeOnFailure);
         YoriLibFreeStringContents(&CurrentDirectory);
 
     } else {
@@ -1256,7 +1419,12 @@ YoriLibGetFullPathNameReturnAllocation(
         return FALSE;
     }
 
-    Result = YoriLibGetFullPathSquashRelativeComponents(Buffer, &PathType, ReturnEscapedPath, lpFilePart);
+    Result = YoriLibGetFullPathSquashRelCmp(Buffer,
+#if YORI_UNC_SUPPORT
+                                            &PathType,
+#endif
+                                            ReturnEscapedPath,
+                                            lpFilePart);
     if (Result != ERROR_SUCCESS) {
         if (FreeOnFailure) {
             YoriLibFreeStringContents(Buffer);
@@ -1300,7 +1468,7 @@ YoriLibGetFullPathNameReturnAllocation(
  */
 __success(return)
 BOOL
-YoriLibGetFullPathNameRelativeTo(
+YoriLibGetFullPathNameRelTo(
     __in PYORI_STRING PrimaryDirectory,
     __in PYORI_STRING FileName,
     __in BOOL ReturnEscapedPath,
@@ -1313,11 +1481,11 @@ YoriLibGetFullPathNameRelativeTo(
 
     YORI_STRING StartOfRelativePath;
 
-    DWORD Result;
+    SYSERR Result;
 
-    Result = YoriLibGetFullPathDeterminePathType(FileName,
-                                                 &PathType,
-                                                 &StartOfRelativePath);
+    Result = YoriLibGetFullPathPathType(FileName,
+                                        &PathType,
+                                        &StartOfRelativePath);
     if (Result != ERROR_SUCCESS) {
         SetLastError(Result);
         return FALSE;
@@ -1336,9 +1504,9 @@ YoriLibGetFullPathNameRelativeTo(
                PathType.Flags.AbsoluteWithoutDrive) {
 
         YORI_LIB_FULL_PATH_TYPE PrimaryDirPathType;
-        Result = YoriLibGetFullPathDeterminePathType(PrimaryDirectory,
-                                                     &PrimaryDirPathType,
-                                                     NULL);
+        Result = YoriLibGetFullPathPathType(PrimaryDirectory,
+                                            &PrimaryDirPathType,
+                                            NULL);
         if (Result != ERROR_SUCCESS) {
             SetLastError(Result);
             return FALSE;
@@ -1358,12 +1526,12 @@ YoriLibGetFullPathNameRelativeTo(
             return FALSE;
         }
 
-        Result = YoriLibFullPathMergeRootWithRelative(PrimaryDirectory,
-                                                      &StartOfRelativePath,
-                                                      ReturnEscapedPath,
-                                                      &PathType,
-                                                      Buffer,
-                                                      &FreeOnFailure);
+        Result = YoriLibFullPathMergeRootWithRel(PrimaryDirectory,
+                                                 &StartOfRelativePath,
+                                                 ReturnEscapedPath,
+                                                 &PathType,
+                                                 Buffer,
+                                                 &FreeOnFailure);
     } else {
 
         Result = YoriLibFullPathNormalize(FileName,
@@ -1382,7 +1550,12 @@ YoriLibGetFullPathNameRelativeTo(
         return FALSE;
     }
 
-    Result = YoriLibGetFullPathSquashRelativeComponents(Buffer, &PathType, ReturnEscapedPath, lpFilePart);
+    Result = YoriLibGetFullPathSquashRelCmp(Buffer,
+#if YORI_UNC_SUPPORT
+                                            &PathType,
+#endif
+                                            ReturnEscapedPath,
+                                            lpFilePart);
     if (Result != ERROR_SUCCESS) {
         if (FreeOnFailure) {
             YoriLibFreeStringContents(Buffer);
@@ -1393,477 +1566,6 @@ YoriLibGetFullPathNameRelativeTo(
 
     SetLastError(0);
     return TRUE;
-}
-
-
-/**
- Convert a specified shell folder, by a known folder GUID, into its string
- form.  This function is only available in Vista+.
-
- @param FolderType The identifier of the directory.
-
- @param ExpandedSymbol On successful completion, populated with a string
-        identifying the path to the directory.
-
- @return TRUE to indicate success, FALSE to indicate failure.
- */
-__success(return)
-BOOL
-YoriLibExpandShellDirectoryGuid(
-    __in CONST GUID * FolderType,
-    __inout PYORI_STRING ExpandedSymbol
-    )
-{
-    PWSTR ExpandedString;
-    DWORD LocationLength;
-
-    YoriLibLoadShell32Functions();
-    YoriLibLoadOle32Functions();
-
-    if (DllShell32.pSHGetKnownFolderPath == NULL ||
-        DllOle32.pCoTaskMemFree == NULL) {
-        return FALSE;
-    }
-
-
-    if (DllShell32.pSHGetKnownFolderPath(FolderType, 0, NULL, &ExpandedString) != 0) {
-        return FALSE;
-    }
-
-    LocationLength = _tcslen(ExpandedString);
-
-    if (!YoriLibAllocateString(ExpandedSymbol, LocationLength + 1)) {
-        DllOle32.pCoTaskMemFree(ExpandedString);
-        return FALSE;
-    }
-
-    memcpy(ExpandedSymbol->StartOfString, ExpandedString, (LocationLength + 1) * sizeof(TCHAR));
-    ExpandedSymbol->LengthInChars = LocationLength;
-
-    DllOle32.pCoTaskMemFree(ExpandedString);
-    return TRUE;
-}
-
-
-/**
- Convert a specified shell folder, by identifier, into its string form.
-
- @param FolderType The identifier of the directory.
-
- @param ExpandedSymbol On successful completion, populated with a string
-        identifying the path to the directory.
-
- @return TRUE to indicate success, FALSE to indicate failure.
- */
-__success(return)
-BOOL
-YoriLibExpandShellDirectory(
-    __in INT FolderType,
-    __inout PYORI_STRING ExpandedSymbol
-    )
-{
-    YoriLibLoadShell32Functions();
-    if (DllShell32.pSHGetSpecialFolderPathW == NULL) {
-        YoriLibLoadShfolderFunctions();
-        if (DllShfolder.pSHGetFolderPathW == NULL) {
-            return FALSE;
-        }
-    }
-
-    if (!YoriLibAllocateString(ExpandedSymbol, MAX_PATH)) {
-        return FALSE;
-    }
-
-    ExpandedSymbol->StartOfString[0] = '\0';
-
-    if (DllShell32.pSHGetSpecialFolderPathW != NULL) {
-        if (DllShell32.pSHGetSpecialFolderPathW(NULL, ExpandedSymbol->StartOfString, FolderType, FALSE) < 0) {
-            YoriLibFreeStringContents(ExpandedSymbol);
-            return FALSE;
-        }
-    } else {
-        if (!SUCCEEDED(DllShfolder.pSHGetFolderPathW(NULL, FolderType, NULL, 0, ExpandedSymbol->StartOfString))) {
-            YoriLibFreeStringContents(ExpandedSymbol);
-            return FALSE;
-        }
-    }
-
-    ExpandedSymbol->LengthInChars = _tcslen(ExpandedSymbol->StartOfString);
-
-    return TRUE;
-}
-
-/**
- A mapping between a '~' prefixed special directory name and a CSIDL that the
- shell uses to identify it.
- */
-typedef struct _YORI_LIB_CSIDL_MAP {
-
-    /**
-     The special directory name.
-     */
-    LPTSTR DirName;
-
-    /**
-     The corresponding CSIDL.
-     */
-    DWORD Csidl;
-} YORI_LIB_CSIDL_MAP, *PYORI_LIB_CSIDL_MAP;
-
-/**
- A table of special directory names whose locations can be obtained via
- SHGetSpecialFolderPath or SHGetFolderPath.
- */
-CONST YORI_LIB_CSIDL_MAP YoriLibSpecialDirectoryMap[] = {
-    {_T("~APPDATA"),            CSIDL_APPDATA},
-    {_T("~COMMONAPPDATA"),      CSIDL_COMMON_APPDATA},
-    {_T("~COMMONDESKTOP"),      CSIDL_COMMON_DESKTOPDIRECTORY},
-    {_T("~COMMONDOCUMENTS"),    CSIDL_COMMON_DOCUMENTS},
-    {_T("~COMMONPROGRAMS"),     CSIDL_COMMON_PROGRAMS},
-    {_T("~COMMONSTART"),        CSIDL_COMMON_STARTMENU},
-    {_T("~DESKTOP"),            CSIDL_DESKTOPDIRECTORY},
-    {_T("~DOCUMENTS"),          CSIDL_PERSONAL},
-    {_T("~LOCALAPPDATA"),       CSIDL_LOCALAPPDATA},
-    {_T("~PROGRAMFILES"),       CSIDL_PROGRAM_FILES},
-#ifdef _WIN64
-    {_T("~PROGRAMFILES32"),     CSIDL_PROGRAM_FILESX86},
-    {_T("~PROGRAMFILES64"),     CSIDL_PROGRAM_FILES},
-#else
-    {_T("~PROGRAMFILES32"),     CSIDL_PROGRAM_FILES},
-#endif
-    {_T("~PROGRAMS"),           CSIDL_PROGRAMS},
-    {_T("~START"),              CSIDL_STARTMENU},
-    {_T("~STARTUP"),            CSIDL_STARTUP},
-    {_T("~SYSTEM"),             CSIDL_SYSTEM},
-    {_T("~WINDOWS"),            CSIDL_WINDOWS}
-};
-
-/**
- Translate a special directory name into its expanded form if the directory
- name is defined via a CSIDL that can be resolved with SHGetSpecialFolderPath
- et al.
-
- @param SymbolToExpand The special directory name, prefixed with '~'.
-
- @param ExpandedSymbol On successful completion, populated with the directory
-        corresponding to the special directory name.
-
- @return TRUE to indicate a match was found and expansion successfully
-         performed, FALSE if the symbol name should be checked for other
-         matches.
- */
-__success(return)
-BOOL
-YoriLibExpandDirectoryFromMap(
-    __in PYORI_STRING SymbolToExpand,
-    __inout PYORI_STRING ExpandedSymbol
-    )
-{
-    DWORD Index;
-
-    for (Index = 0; Index < sizeof(YoriLibSpecialDirectoryMap)/sizeof(YoriLibSpecialDirectoryMap[0]); Index++) {
-        if (YoriLibCompareStringWithLiteralInsensitive(SymbolToExpand, YoriLibSpecialDirectoryMap[Index].DirName) == 0) {
-            return YoriLibExpandShellDirectory(YoriLibSpecialDirectoryMap[Index].Csidl, ExpandedSymbol);
-        }
-    }
-
-    return FALSE;
-}
-
-/**
- Expand a directory component in a path, specified via a tilde and description,
- into its corresponding physical directory.
-
- @param SymbolToExpand The tilde based directory reference.
-
- @param ExpandedSymbol On successful completion, populated with the directory
-        corresponding to the reference.
-
- @return TRUE to indicate success, FALSE to indicate failure.
- */
-__success(return)
-BOOL
-YoriLibExpandHomeSymbol(
-    __in PYORI_STRING SymbolToExpand,
-    __inout PYORI_STRING ExpandedSymbol
-    )
-{
-    if (YoriLibCompareStringWithLiteralInsensitive(SymbolToExpand, _T("~")) == 0) {
-        if (!YoriLibAllocateString(ExpandedSymbol, GetEnvironmentVariable(_T("HOMEDRIVE"), NULL, 0) + GetEnvironmentVariable(_T("HOMEPATH"), NULL, 0))) {
-            return FALSE;
-        }
-
-        ExpandedSymbol->LengthInChars = GetEnvironmentVariable(_T("HOMEDRIVE"), ExpandedSymbol->StartOfString, ExpandedSymbol->LengthAllocated);
-        ExpandedSymbol->LengthInChars += GetEnvironmentVariable(_T("HOMEPATH"), &ExpandedSymbol->StartOfString[ExpandedSymbol->LengthInChars], ExpandedSymbol->LengthAllocated - ExpandedSymbol->LengthInChars);
-        return TRUE;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(SymbolToExpand, _T("~APPDIR")) == 0) {
-        LPTSTR FinalSlash;
-
-        //
-        //  Unlike most other Win32 APIs, this one has no way to indicate
-        //  how much space it needs.  We can be wasteful here though, since
-        //  it'll be freed immediately.
-        //
-
-        if (!YoriLibAllocateString(ExpandedSymbol, 32768)) {
-            return FALSE;
-        }
-
-        ExpandedSymbol->LengthInChars = GetModuleFileName(NULL, ExpandedSymbol->StartOfString, ExpandedSymbol->LengthAllocated);
-        FinalSlash = YoriLibFindRightMostCharacter(ExpandedSymbol, '\\');
-        if (FinalSlash == NULL) {
-            YoriLibFreeStringContents(ExpandedSymbol);
-            return FALSE;
-        }
-
-        ExpandedSymbol->LengthInChars = (DWORD)(FinalSlash - ExpandedSymbol->StartOfString);
-        return TRUE;
-    } else if (YoriLibExpandDirectoryFromMap(SymbolToExpand, ExpandedSymbol)) {
-        return TRUE;
-    } else if (YoriLibCompareStringWithLiteralInsensitive(SymbolToExpand, _T("~DOWNLOADS")) == 0) {
-        return YoriLibExpandShellDirectoryGuid(&FOLDERID_Downloads, ExpandedSymbol);
-    }
-
-    ExpandedSymbol->StartOfString = SymbolToExpand->StartOfString;
-    ExpandedSymbol->LengthInChars = SymbolToExpand->LengthInChars;
-    return TRUE;
-}
-
-/**
- Expand all tilde based home references in a file path and return the
- expanded form.
-
- @param FileString A string specifying a path that may include tilde based
-        directory references.
-
- @param ExpandedString On successful completion, contains the corresponding
-        full path.
-
- @return TRUE to indicate success, FALSE to indicate failure.
- */
-__success(return)
-BOOL
-YoriLibExpandHomeDirectories(
-    __in PYORI_STRING FileString,
-    __out PYORI_STRING ExpandedString
-    )
-{
-    DWORD CharIndex;
-    YORI_STRING BeforeSymbol;
-    YORI_STRING AfterSymbol;
-    YORI_STRING SymbolToExpand;
-    YORI_STRING ExpandedSymbol;
-    BOOL PreviousWasSeperator = TRUE;
-
-    for (CharIndex = 0; CharIndex < FileString->LengthInChars; CharIndex++) {
-        if (FileString->StartOfString[CharIndex] == '~' &&
-            (CharIndex == 0 || YoriLibIsSep(FileString->StartOfString[CharIndex - 1]))) {
-
-            YoriLibInitEmptyString(&BeforeSymbol);
-            YoriLibInitEmptyString(&AfterSymbol);
-            YoriLibInitEmptyString(&SymbolToExpand);
-
-            BeforeSymbol.StartOfString = FileString->StartOfString;
-            BeforeSymbol.LengthInChars = CharIndex;
-
-            SymbolToExpand.StartOfString = &FileString->StartOfString[CharIndex];
-            SymbolToExpand.LengthInChars = 0;
-
-            while (CharIndex < FileString->LengthInChars && !YoriLibIsSep(FileString->StartOfString[CharIndex])) {
-                SymbolToExpand.LengthInChars++;
-                CharIndex++;
-            }
-
-            AfterSymbol.StartOfString = &FileString->StartOfString[CharIndex];
-            AfterSymbol.LengthInChars = FileString->LengthInChars - CharIndex;
-
-            YoriLibInitEmptyString(&ExpandedSymbol);
-
-            if (!YoriLibExpandHomeSymbol(&SymbolToExpand, &ExpandedSymbol)) {
-                return FALSE;
-            }
-
-            YoriLibInitEmptyString(ExpandedString);
-            YoriLibYPrintf(ExpandedString, _T("%y%y%y"), &BeforeSymbol, &ExpandedSymbol, &AfterSymbol);
-            YoriLibFreeStringContents(&ExpandedSymbol);
-            if (ExpandedString->StartOfString != NULL) {
-                return TRUE;
-            }
-            return FALSE;
-        }
-
-        if (YoriLibIsSep(FileString->StartOfString[CharIndex])) {
-            PreviousWasSeperator = TRUE;
-        } else {
-            PreviousWasSeperator = FALSE;
-        }
-    }
-
-    return FALSE;
-}
-
-/**
- Return TRUE if the argument is a special DOS device name, FALSE if it is
- a regular file.  DOS device names include things like AUX, CON, PRN etc.
- In Yori, a DOS device name is only a DOS device name if it does not
- contain any path information.
-
- @param File The file name to check.
-
- @return TRUE to indicate this argument is a DOS device name, FALSE to
-         indicate that it is a regular file.
- */
-BOOL
-YoriLibIsFileNameDeviceName(
-    __in PCYORI_STRING File
-    )
-{
-    YORI_STRING NameToCheck;
-    DWORD Offset;
-
-    YoriLibInitEmptyString(&NameToCheck);
-    Offset = 0;
-    if (YoriLibIsPathPrefixed(File)) {
-        Offset = sizeof("\\\\.\\") - 1;
-    }
-
-    NameToCheck.StartOfString = &File->StartOfString[Offset];
-    NameToCheck.LengthInChars = File->LengthInChars - Offset;
-
-    if (NameToCheck.LengthInChars < 3 || NameToCheck.LengthInChars > 4) {
-        return FALSE;
-    }
-
-    if (YoriLibCompareStringWithLiteralInsensitive(&NameToCheck, _T("CON")) == 0 ||
-        YoriLibCompareStringWithLiteralInsensitive(&NameToCheck, _T("AUX")) == 0 ||
-        YoriLibCompareStringWithLiteralInsensitive(&NameToCheck, _T("PRN")) == 0 ||
-        YoriLibCompareStringWithLiteralInsensitive(&NameToCheck, _T("NUL")) == 0) {
-
-        return TRUE;
-    }
-
-    if (NameToCheck.LengthInChars < 4) {
-        return FALSE;
-    }
-
-    if (YoriLibCompareStringWithLiteralInsensitiveCount(&NameToCheck, _T("LPT"), 3) == 0 &&
-        (NameToCheck.StartOfString[3] >= '1' && NameToCheck.StartOfString[3] <= '9')) {
-
-        return TRUE;
-    }
-
-    if (YoriLibCompareStringWithLiteralInsensitiveCount(&NameToCheck, _T("COM"), 3) == 0 &&
-        (NameToCheck.StartOfString[3] >= '1' && NameToCheck.StartOfString[3] <= '9')) {
-
-        return TRUE;
-    }
-
-    return FALSE;
-}
-
-/**
- Resolves a user string which must refer to a single file into a physical path
- for that file.
-
- @param UserString The string as specified by the user.  This is currently
-        required to be NULL terminated.
-
- @param ReturnEscapedPath TRUE if the resulting path should be prefixed with
-        \\?\, FALSE to indicate a traditional Win32 path.
-
- @param FullPath On successful completion, this pointer is updated to point to
-        the full path string.  This string should be uninitialized on input and
-        is allocated within this routine.  The caller is expected to free this
-        with @ref YoriLibFreeStringContents.
-
- @return TRUE to indicate success, FALSE to indicate failure.
- */
-__success(return)
-BOOL
-YoriLibUserStringToSingleFilePath(
-    __in PCYORI_STRING UserString,
-    __in BOOL ReturnEscapedPath,
-    __out PYORI_STRING FullPath
-    )
-{
-    YORI_STRING PathToTranslate;
-    YORI_STRING YsFilePrefix;
-    YORI_STRING ExpandedString;
-    BOOL ReturnValue = FALSE;
-
-    YoriLibInitEmptyString(&YsFilePrefix);
-    YsFilePrefix.StartOfString = UserString->StartOfString;
-    YsFilePrefix.LengthInChars = sizeof("file:///") - 1;
-
-    YoriLibInitEmptyString(&PathToTranslate);
-    if (YoriLibCompareStringWithLiteralInsensitive(&YsFilePrefix, _T("file:///")) == 0) {
-        PathToTranslate.StartOfString = &UserString->StartOfString[YsFilePrefix.LengthInChars];
-        PathToTranslate.LengthInChars = UserString->LengthInChars - YsFilePrefix.LengthInChars;
-    } else {
-        PathToTranslate.StartOfString = UserString->StartOfString;
-        PathToTranslate.LengthInChars = UserString->LengthInChars;
-    }
-
-    YoriLibInitEmptyString(FullPath);
-
-    if (YoriLibExpandHomeDirectories(&PathToTranslate, &ExpandedString)) {
-        ReturnValue = YoriLibGetFullPathNameReturnAllocation(&ExpandedString, ReturnEscapedPath, FullPath, NULL);
-        YoriLibFreeStringContents(&ExpandedString);
-    } else {
-        ReturnValue = YoriLibGetFullPathNameReturnAllocation(&PathToTranslate, ReturnEscapedPath, FullPath, NULL);
-    }
-
-    if (ReturnValue == 0) {
-        YoriLibFreeStringContents(FullPath);
-        return 0;
-    }
-
-    return ReturnValue;
-}
-
-/**
- Checks if a file name refers to a device, and if so returns a path to the
- device.  If it does not refer to a device, the path is resolved into a file
- path for the specified file.
-
- @param UserString The string as specified by the user.  This is currently
-        required to be NULL terminated.
-
- @param ReturnEscapedPath TRUE if the resulting path should be prefixed with
-        \\?\, FALSE to indicate a traditional Win32 path.
-
- @param FullPath On successful completion, this pointer is updated to point to
-        the full path string.  This string should be uninitialized on input and
-        is allocated within this routine.  The caller is expected to free this
-        with @ref YoriLibFreeStringContents.
-
- @return TRUE to indicate success, FALSE to indicate failure.
- */
-__success(return)
-BOOL
-YoriLibUserStringToSingleFilePathOrDevice(
-    __in PCYORI_STRING UserString,
-    __in BOOL ReturnEscapedPath,
-    __out PYORI_STRING FullPath
-    )
-{
-    if (YoriLibIsFileNameDeviceName(UserString)) {
-        DWORD CharsNeeded;
-        CharsNeeded = UserString->LengthInChars + 1;
-        if (ReturnEscapedPath) {
-            CharsNeeded += sizeof("\\\\.\\") - 1;
-        }
-        if (!YoriLibAllocateString(FullPath, CharsNeeded)) {
-            return FALSE;
-        }
-        if (ReturnEscapedPath) {
-            FullPath->LengthInChars = YoriLibSPrintf(FullPath->StartOfString, _T("\\\\.\\%y"), UserString);
-        } else {
-            FullPath->LengthInChars = YoriLibSPrintf(FullPath->StartOfString, _T("%y"), UserString);
-        }
-        return TRUE;
-    }
-    return YoriLibUserStringToSingleFilePath(UserString, ReturnEscapedPath, FullPath);
 }
 
 /**
@@ -1885,9 +1587,11 @@ YoriLibUnescapePath(
     )
 {
     BOOLEAN HasEscape = FALSE;
+#if YORI_UNC_SUPPORT
     BOOLEAN UncPath = FALSE;
-    DWORD Offset;
-    DWORD BufferLength;
+#endif
+    YORI_ALLOC_SIZE_T Offset;
+    YORI_ALLOC_SIZE_T BufferLength;
     YORI_STRING SubsetToCopy;
 
     Offset = 0;
@@ -1907,12 +1611,16 @@ YoriLibUnescapePath(
 
         HasEscape = TRUE;
 
+#if YORI_UNC_SUPPORT
         if (YoriLibIsFullPathUnc(Path)) {
             UncPath = TRUE;
             Offset = 7;
         } else {
+#endif
             Offset = 4;
+#if YORI_UNC_SUPPORT
         }
+#endif
     }
 
     //
@@ -1922,9 +1630,11 @@ YoriLibUnescapePath(
     //
 
     BufferLength = Path->LengthInChars - Offset + 1;
+#if YORI_UNC_SUPPORT
     if (UncPath) {
         BufferLength++;
     }
+#endif
 
     if (UnescapedPath->LengthAllocated < BufferLength) {
         YoriLibFreeStringContents(UnescapedPath);
@@ -1935,395 +1645,21 @@ YoriLibUnescapePath(
 
     memcpy(&SubsetToCopy, Path, sizeof(YORI_STRING));
     SubsetToCopy.StartOfString += Offset;
-    SubsetToCopy.LengthInChars -= Offset;
+    SubsetToCopy.LengthInChars = SubsetToCopy.LengthInChars - Offset;
 
+#if YORI_UNC_SUPPORT
     if (UncPath) {
         YoriLibSPrintfS(UnescapedPath->StartOfString, BufferLength, _T("\\%y"), &SubsetToCopy);
         UnescapedPath->LengthInChars = SubsetToCopy.LengthInChars + 1;
     } else {
+#endif
         YoriLibSPrintfS(UnescapedPath->StartOfString, BufferLength, _T("%y"), &SubsetToCopy);
         UnescapedPath->LengthInChars = SubsetToCopy.LengthInChars;
+#if YORI_UNC_SUPPORT
     }
+#endif
 
     return TRUE;
 }
-
-/**
- Return the volume name of the volume that is hosting a particular file.  This
- is normally done via the Win32 GetVolumePathName API, which was added in
- Windows 2000 to support mount points; on older versions this behavior is
- emulated by returning the drive letter or UNC share name.
-
- @param FileName Pointer to the file name to obtain the volume for.
-
- @param VolumeName On successful completion, populated with a path to the
-        volume name.  This string is expected to be initialized on entry and
-        may be reallocated within this routine.
-
- @return TRUE to indicate success, FALSE to indicate failure.
- */
-__success(return)
-BOOL
-YoriLibGetVolumePathName(
-    __in PYORI_STRING FileName,
-    __inout PYORI_STRING VolumeName
-    )
-{
-    BOOL FreeOnFailure = FALSE;
-    ASSERT(YoriLibIsStringNullTerminated(FileName));
-
-    //
-    //  This function expects a full/escaped path, because Win32 has no way
-    //  to determine the buffer length if it's anything else.
-    //
-
-    if (FileName->LengthInChars < 4 ||
-        !YoriLibIsSep(FileName->StartOfString[0]) ||
-        !YoriLibIsSep(FileName->StartOfString[1]) ||
-        (FileName->StartOfString[2] != '?' && FileName->StartOfString[2] != '.') ||
-        !YoriLibIsSep(FileName->StartOfString[3])) {
-
-        return FALSE;
-    }
-
-    //
-    //  The volume name can be as long as the file name, plus a NULL
-    //  terminator.
-    //
-
-    if (VolumeName->LengthAllocated <= FileName->LengthInChars) {
-        YoriLibFreeStringContents(VolumeName);
-        if (!YoriLibAllocateString(VolumeName, FileName->LengthInChars + 1)) {
-            return FALSE;
-        }
-        FreeOnFailure = TRUE;
-    }
-
-    //
-    //  If Win32 support exists, use it.
-    //
-
-    if (DllKernel32.pGetVolumePathNameW != NULL) {
-        if (!DllKernel32.pGetVolumePathNameW(FileName->StartOfString, VolumeName->StartOfString, VolumeName->LengthAllocated)) {
-            if (FreeOnFailure) {
-                YoriLibFreeStringContents(VolumeName);
-            }
-            return FALSE;
-        }
-        VolumeName->LengthInChars = _tcslen(VolumeName->StartOfString);
-
-        //
-        //  If it ends in a backslash, truncate it
-        //
-
-        if (VolumeName->LengthInChars > 0 &&
-            YoriLibIsSep(VolumeName->StartOfString[VolumeName->LengthInChars - 1])) {
-
-            VolumeName->LengthInChars--;
-            VolumeName->StartOfString[VolumeName->LengthInChars] = '\0';
-        }
-        return TRUE;
-    }
-
-    //
-    //  If Win32 support doesn't exist, we know that mount points can't
-    //  exist so we can return only the drive letter path, or the UNC
-    //  path with server and share.
-    //
-
-    if (!YoriLibIsFullPathUnc(FileName)) {
-        if (FileName->LengthInChars >= 6) {
-            memcpy(VolumeName->StartOfString, FileName->StartOfString, 6 * sizeof(TCHAR));
-            VolumeName->StartOfString[6] = '\0';
-            VolumeName->LengthInChars = 6;
-            return TRUE;
-        }
-    } else {
-        if (FileName->LengthInChars >= sizeof("\\\\?\\UNC\\")) {
-            YORI_STRING Subset;
-            LPTSTR Slash;
-            DWORD CharsToCopy;
-
-            YoriLibInitEmptyString(&Subset);
-            Subset.StartOfString = FileName->StartOfString + sizeof("\\\\?\\UNC\\");
-            Subset.LengthInChars = FileName->LengthInChars - sizeof("\\\\?\\UNC\\");
-
-            Slash = YoriLibFindLeftMostCharacter(&Subset, '\\');
-            if (Slash != NULL) {
-                Subset.LengthInChars = Subset.LengthInChars - (DWORD)(Slash - Subset.StartOfString);
-                Subset.StartOfString = Slash;
-
-                if (Subset.LengthInChars > 0) {
-                    Subset.LengthInChars--;
-                    Subset.StartOfString++;
-                    Slash = YoriLibFindLeftMostCharacter(&Subset, '\\');
-                    if (Slash != NULL) {
-                        CharsToCopy = (DWORD)(Slash - FileName->StartOfString);
-                    } else {
-                        CharsToCopy = (DWORD)(Subset.StartOfString - FileName->StartOfString) + Subset.LengthInChars;
-                    }
-
-                    memcpy(VolumeName->StartOfString, FileName->StartOfString, CharsToCopy * sizeof(TCHAR));
-                    VolumeName->StartOfString[CharsToCopy] = '\0';
-                    VolumeName->LengthInChars = CharsToCopy;
-                    return TRUE;
-                }
-            }
-        }
-    }
-
-    if (FreeOnFailure) {
-        YoriLibFreeStringContents(VolumeName);
-    }
-    YoriLibFreeStringContents(VolumeName);
-    return FALSE;
-}
-
-/**
- Context structure used to preserve state about the next volume to return
- when a native platform implementation of FindFirstVolume et al are not
- available.
- */
-typedef struct _YORI_LIB_FIND_VOLUME_CONTEXT {
-
-    /**
-     Indicates the number of the drive to probe on the next call to
-     @ref YoriLibFindNextVolume .
-     */
-    DWORD NextDriveLetter;
-} YORI_LIB_FIND_VOLUME_CONTEXT, *PYORI_LIB_FIND_VOLUME_CONTEXT;
-
-/**
- Returns the next volume on the system following a previous call to
- @ref YoriLibFindFirstVolume.  When no more volumes are available, this
- function will return FALSE and set last error to ERROR_NO_MORE_FILES.
- When this occurs, the handle must be closed with
- @ref YoriLibFindVolumeClose.
-
- @param FindHandle The handle previously returned from
-        @ref YoriLibFindFirstVolume .
-
- @param VolumeName On successful completion, populated with the path to the
-        next volume found.
-
- @param BufferLength Specifies the length, in characters, of the VolumeName
-        buffer.
-
- @return TRUE to indicate success, FALSE to indicate failure.
- */
-__success(return)
-BOOL
-YoriLibFindNextVolume(
-    __in HANDLE FindHandle,
-    __out_ecount(BufferLength) LPWSTR VolumeName,
-    __in DWORD BufferLength
-    )
-{
-    if (DllKernel32.pFindFirstVolumeW &&
-        DllKernel32.pFindNextVolumeW &&
-        DllKernel32.pFindVolumeClose &&
-        DllKernel32.pGetVolumePathNamesForVolumeNameW) {
-
-        return DllKernel32.pFindNextVolumeW(FindHandle, VolumeName, BufferLength);
-    } else {
-        PYORI_LIB_FIND_VOLUME_CONTEXT FindContext = (PYORI_LIB_FIND_VOLUME_CONTEXT)FindHandle;
-        TCHAR ProbeString[sizeof("A:\\")];
-        DWORD DriveType;
-
-        while(TRUE) {
-            if (FindContext->NextDriveLetter + 'A' > 'Z') {
-                SetLastError(ERROR_NO_MORE_FILES);
-                return FALSE;
-            }
-
-            ProbeString[0] = (TCHAR)(FindContext->NextDriveLetter + 'A');
-            ProbeString[1] = ':';
-            ProbeString[2] = '\\';
-            ProbeString[3] = '\0';
-
-            DriveType = GetDriveType(ProbeString);
-            if (DriveType != DRIVE_UNKNOWN &&
-                DriveType != DRIVE_NO_ROOT_DIR) {
-
-                if (BufferLength >= sizeof(ProbeString)/sizeof(ProbeString[0])) {
-                    memcpy(VolumeName, ProbeString, (sizeof(ProbeString)/sizeof(ProbeString[0]) - 1) * sizeof(TCHAR));
-                    VolumeName[sizeof(ProbeString)/sizeof(ProbeString[0]) - 1] = '\0';
-                    FindContext->NextDriveLetter++;
-                    return TRUE;
-                } else {
-                    SetLastError(ERROR_INSUFFICIENT_BUFFER);
-                    return FALSE;
-                }
-            }
-
-            FindContext->NextDriveLetter++;
-        }
-    }
-
-    return FALSE;
-}
-
-/**
- Close a handle returned from @ref YoriLibFindFirstVolume .
-
- @param FindHandle The handle to close.
-
- @return TRUE to indicate success, FALSE to indicate failure.
- */
-__success(return)
-BOOL
-YoriLibFindVolumeClose(
-    __in HANDLE FindHandle
-    )
-{
-    if (DllKernel32.pFindFirstVolumeW &&
-        DllKernel32.pFindNextVolumeW &&
-        DllKernel32.pFindVolumeClose &&
-        DllKernel32.pGetVolumePathNamesForVolumeNameW) {
-
-        return DllKernel32.pFindVolumeClose(FindHandle);
-    } else {
-        YoriLibFree(FindHandle);
-    }
-    return TRUE;
-}
-
-/**
- Returns the first volume on the system and a handle to use for subsequent
- volumes with @ref YoriLibFindNextVolume .  This handle must be closed with
- @ref YoriLibFindVolumeClose.
-
- @param VolumeName On successful completion, populated with the path to the
-        first volume found.
-
- @param BufferLength Specifies the length, in characters, of the VolumeName
-        buffer.
-
- @return On successful completion, an opaque handle to use for subsequent
-         matches by calling @ref YoriLibFindNextVolume , and terminated by
-         calling @ref YoriLibFindVolumeClose .  On failure,
-         INVALID_HANDLE_VALUE.
- */
-__success(return != INVALID_HANDLE_VALUE)
-HANDLE
-YoriLibFindFirstVolume(
-    __out LPWSTR VolumeName,
-    __in DWORD BufferLength
-    )
-{
-
-    //
-    //  Windows 2000 supports mount points but doesn't provide the API
-    //  needed to find a human name for them, so we treat it like NT4
-    //  and only look for drive letter paths.  Not including mount points
-    //  seems like a lesser evil than giving the user volume GUIDs.
-    //
-
-    if (DllKernel32.pFindFirstVolumeW &&
-        DllKernel32.pFindNextVolumeW &&
-        DllKernel32.pFindVolumeClose &&
-        DllKernel32.pGetVolumePathNamesForVolumeNameW) {
-
-        return DllKernel32.pFindFirstVolumeW(VolumeName, BufferLength);
-    } else {
-        PYORI_LIB_FIND_VOLUME_CONTEXT FindContext;
-
-        FindContext = YoriLibMalloc(sizeof(YORI_LIB_FIND_VOLUME_CONTEXT));
-        if (FindContext == NULL) {
-            return INVALID_HANDLE_VALUE;
-        }
-
-        FindContext->NextDriveLetter = 0;
-
-        if (YoriLibFindNextVolume((HANDLE)FindContext, VolumeName, BufferLength)) {
-            return (HANDLE)FindContext;
-        } else {
-            YoriLibFindVolumeClose((HANDLE)FindContext);
-        }
-    }
-    return INVALID_HANDLE_VALUE;
-}
-
-/**
- Wrapper that calls GetDiskFreeSpaceEx if present, and if not uses 64 bit
- math to calculate total and free disk space up to the limit (which should
- be around 8Tb with a 4Kb cluster size.)
-
- @param DirectoryName Specifies the drive or directory to calculate free
-        space for.
-
- @param BytesAvailable Optionally points to a location to receive the amount
-        of allocatable space on successful completion.
-
- @param TotalBytes Optionally points to a location to receive the amount
-        of total space on successful completion.
-
- @param FreeBytes Optionally points to a location to receive the amount
-        of unused space on successful completion.
-
- @return TRUE to indicate successful completion, FALSE to indicate failure.
- */
-__success(return)
-BOOL
-YoriLibGetDiskFreeSpace(
-    __in LPCTSTR DirectoryName,
-    __out_opt PLARGE_INTEGER BytesAvailable,
-    __out_opt PLARGE_INTEGER TotalBytes,
-    __out_opt PLARGE_INTEGER FreeBytes
-    )
-{
-    LARGE_INTEGER LocalBytesAvailable;
-    LARGE_INTEGER LocalTotalBytes;
-    LARGE_INTEGER LocalFreeBytes;
-    DWORD LocalSectorsPerCluster;
-    DWORD LocalBytesPerSector;
-    LARGE_INTEGER LocalAllocationSize;
-    LARGE_INTEGER LocalNumberOfFreeClusters;
-    LARGE_INTEGER LocalTotalNumberOfClusters;
-    BOOL Result;
-
-    if (DllKernel32.pGetDiskFreeSpaceExW != NULL) {
-        Result = DllKernel32.pGetDiskFreeSpaceExW(DirectoryName,
-                                                  &LocalBytesAvailable,
-                                                  &LocalTotalBytes,
-                                                  &LocalFreeBytes);
-        if (!Result) {
-            return FALSE;
-        }
-    } else {
-
-        LocalNumberOfFreeClusters.HighPart = 0;
-        LocalTotalNumberOfClusters.HighPart = 0;
-
-        Result = GetDiskFreeSpace(DirectoryName,
-                                  &LocalSectorsPerCluster,
-                                  &LocalBytesPerSector,
-                                  &LocalNumberOfFreeClusters.LowPart,
-                                  &LocalTotalNumberOfClusters.LowPart);
-
-        if (!Result) {
-            return FALSE;
-        }
-
-        LocalAllocationSize.QuadPart = LocalSectorsPerCluster * LocalBytesPerSector;
-
-        LocalBytesAvailable.QuadPart = LocalAllocationSize.QuadPart * LocalNumberOfFreeClusters.QuadPart;
-        LocalFreeBytes.QuadPart = LocalBytesAvailable.QuadPart;
-        LocalTotalBytes.QuadPart = LocalAllocationSize.QuadPart * LocalTotalNumberOfClusters.QuadPart;
-    }
-
-    if (BytesAvailable != NULL) {
-        BytesAvailable->QuadPart = LocalBytesAvailable.QuadPart;
-    }
-    if (TotalBytes != NULL) {
-        TotalBytes->QuadPart = LocalTotalBytes.QuadPart;
-    }
-    if (FreeBytes != NULL) {
-        FreeBytes->QuadPart = LocalFreeBytes.QuadPart;
-    }
-
-    return TRUE;
-}
-
 
 // vim:sw=4:ts=4:et:

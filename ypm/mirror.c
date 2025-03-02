@@ -121,39 +121,31 @@ YpmMirrorListHelp(VOID)
  */
 DWORD
 YpmMirrorInstall(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     YORI_STRING Arg;
     PYORI_STRING MirrorSource = NULL;
     PYORI_STRING MirrorTarget = NULL;
 
-    if (ArgC < 3) {
-        YpmMirrorInstallHelp();
-        return EXIT_FAILURE;
-    }
-
-    MirrorSource = &ArgV[1];
-    MirrorTarget = &ArgV[2];
-
-    for (i = 3; i < ArgC; i++) {
+    for (i = 1; i < ArgC; i++) {
 
         ArgumentUnderstood = FALSE;
         ASSERT(YoriLibIsStringNullTerminated(&ArgV[i]));
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 YpmMirrorInstallHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2021"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 ArgumentUnderstood = TRUE;
                 StartArg = i + 1;
                 break;
@@ -168,6 +160,14 @@ YpmMirrorInstall(
             YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("Argument not understood, ignored: %y\n"), &ArgV[i]);
         }
     }
+
+    if (StartArg == 0 || StartArg + 1 >= ArgC) {
+        YpmMirrorInstallHelp();
+        return EXIT_FAILURE;
+    }
+
+    MirrorSource = &ArgV[StartArg];
+    MirrorTarget = &ArgV[StartArg + 1];
 
     YoriPkgAddNewMirror(MirrorSource, MirrorTarget, TRUE);
 
@@ -185,37 +185,30 @@ YpmMirrorInstall(
  */
 DWORD
 YpmMirrorDelete(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     YORI_STRING Arg;
     PYORI_STRING MirrorSource = NULL;
 
-    if (ArgC < 2) {
-        YpmMirrorDeleteHelp();
-        return EXIT_FAILURE;
-    }
-
-    MirrorSource = &ArgV[1];
-
-    for (i = 2; i < ArgC; i++) {
+    for (i = 1; i < ArgC; i++) {
 
         ArgumentUnderstood = FALSE;
         ASSERT(YoriLibIsStringNullTerminated(&ArgV[i]));
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 YpmMirrorDeleteHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2021"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 ArgumentUnderstood = TRUE;
                 StartArg = i + 1;
                 break;
@@ -230,6 +223,13 @@ YpmMirrorDelete(
             YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("Argument not understood, ignored: %y\n"), &ArgV[i]);
         }
     }
+
+    if (StartArg == 0 || StartArg >= ArgC) {
+        YpmMirrorDeleteHelp();
+        return EXIT_FAILURE;
+    }
+
+    MirrorSource = &ArgV[StartArg];
 
     YoriPkgDeleteMirror(MirrorSource);
 
@@ -247,13 +247,13 @@ YpmMirrorDelete(
  */
 DWORD
 YpmMirrorList(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     YORI_STRING Arg;
 
     for (i = 1; i < ArgC; i++) {
@@ -263,13 +263,13 @@ YpmMirrorList(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 YpmMirrorListHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2021"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 ArgumentUnderstood = TRUE;
                 StartArg = i + 1;
                 break;

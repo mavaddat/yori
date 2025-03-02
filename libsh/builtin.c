@@ -102,14 +102,14 @@ YoriLibShLoadDll(
 {
     PYORI_LIBSH_LOADED_MODULE FoundEntry = NULL;
     PYORI_LIST_ENTRY ListEntry;
-    DWORD DllNameLength;
+    YORI_ALLOC_SIZE_T DllNameLength;
     DWORD OldErrorMode;
 
     if (YoriLibShBuiltinGlobal.LoadedModules.Next != NULL) {
         ListEntry = YoriLibGetNextListEntry(&YoriLibShBuiltinGlobal.LoadedModules, NULL);
         while (ListEntry != NULL) {
             FoundEntry = CONTAINING_RECORD(ListEntry, YORI_LIBSH_LOADED_MODULE, ListEntry);
-            if (YoriLibCompareStringWithLiteralInsensitive(&FoundEntry->DllName, DllName) == 0) {
+            if (YoriLibCompareStringLitIns(&FoundEntry->DllName, DllName) == 0) {
                 FoundEntry->ReferenceCount++;
                 return FoundEntry;
             }
@@ -118,7 +118,7 @@ YoriLibShLoadDll(
         }
     }
 
-    DllNameLength = _tcslen(DllName);
+    DllNameLength = (YORI_ALLOC_SIZE_T)_tcslen(DllName);
     FoundEntry = YoriLibMalloc(sizeof(YORI_LIBSH_LOADED_MODULE) + (DllNameLength + 1) * sizeof(TCHAR));
     if (FoundEntry == NULL) {
         return NULL;
@@ -138,7 +138,7 @@ YoriLibShLoadDll(
 
     OldErrorMode = SetErrorMode(SEM_FAILCRITICALERRORS);
 
-    FoundEntry->ModuleHandle = LoadLibrary(DllName);
+    FoundEntry->ModuleHandle = LoadLibraryEx(DllName, NULL, 0);
     if (FoundEntry->ModuleHandle == NULL) {
         SetErrorMode(OldErrorMode);
         YoriLibFree(FoundEntry);

@@ -179,7 +179,7 @@ YoriPkgDownloadRemotePackages(
 
 BOOL
 YoriPkgAppendInstallDirToPath(
-    __in PCYORI_STRING TargetDirectory,
+    __in_opt PCYORI_STRING TargetDirectory,
     __in BOOL AppendToUserPath,
     __in BOOL AppendToSystemPath
     );
@@ -192,5 +192,67 @@ YoriPkgAddUninstallEntry(
 
 BOOL
 YoriPkgUninstallAll(VOID);
+
+__success(return)
+BOOL
+YoriPkgGetTerminalProfilePath(
+    __out PYORI_STRING TerminalProfilePath
+    );
+
+__success(return)
+BOOL
+YoriPkgWriteTerminalProfile(
+    __in_opt PYORI_STRING YoriExeFullPath
+    );
+
+__success(return)
+BOOL
+YoriPkgCreateAppShortcut(
+    __in PCYORI_STRING ShortcutPath,
+    __in_opt PYORI_STRING YoriExeFullPath
+    );
+
+__success(return)
+BOOL
+YoriPkgCreateDesktopShortcut(
+    __in_opt PYORI_STRING YoriExeFullPath
+    );
+
+__success(return)
+BOOL
+YoriPkgCreateStartMenuShortcut(
+    __in_opt PYORI_STRING YoriExeFullPath
+    );
+
+__success(return)
+BOOL
+YoriPkgInstallYoriAsLoginShell(
+    __in_opt PYORI_STRING YoriExeFullPath
+    );
+
+__success(return)
+BOOL
+YoriPkgInstallYuiAsLoginShell(
+    __in_opt PYORI_STRING YoriExeFullPath
+    );
+
+__success(return)
+BOOL
+YoriPkgRestoreLoginShell(
+    VOID
+    );
+
+__success(return)
+BOOL
+YoriPkgInstallYoriAsOpenSSHShell(
+    __in_opt PYORI_STRING YoriExeFullPath
+    );
+
+__success(return)
+BOOL
+YoriPkgSetSchemeAsDefault(
+    __in PCYORI_STRING SchemeFile,
+    __in_opt PCYORI_STRING ConsoleTitle
+    );
 
 // vim:sw=4:ts=4:et:

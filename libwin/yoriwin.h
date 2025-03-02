@@ -4,7 +4,7 @@
  * Header for control and window toolkit routines that may be of value from
  * the shell as well as external tools.
  *
- * Copyright (c) 2019-2020 Malcolm J. Smith
+ * Copyright (c) 2019-2022 Malcolm J. Smith
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -51,6 +51,16 @@ typedef VOID YORI_WIN_NOTIFY(PYORI_WIN_CTRL_HANDLE);
  for a specific control.
  */
 typedef YORI_WIN_NOTIFY *PYORI_WIN_NOTIFY;
+
+/**
+ A list of possible color tables to use.
+ */
+typedef enum _YORI_WIN_COLOR_TABLE_ID {
+    YoriWinColorTableDefault = 0,
+    YoriWinColorTableVga = 1,
+    YoriWinColorTableNano = 2,
+    YoriWinColorTableMono = 3
+} YORI_WIN_COLOR_TABLE_ID;
 
 // BUTTON.C
 
@@ -112,22 +122,22 @@ __success(return)
 BOOLEAN
 YoriWinComboGetActiveOption(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __out PDWORD CurrentlyActiveIndex
+    __out PYORI_ALLOC_SIZE_T CurrentlyActiveIndex
     );
 
 __success(return)
 BOOLEAN
 YoriWinComboSetActiveOption(
     __inout PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __in DWORD ActiveOption
+    __in YORI_ALLOC_SIZE_T ActiveOption
     );
 
 __success(return)
 BOOLEAN
 YoriWinComboAddItems(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __in PYORI_STRING ListOptions,
-    __in DWORD NumberOptions
+    __in PCYORI_STRING ListOptions,
+    __in YORI_ALLOC_SIZE_T NumberOptions
     );
 
 BOOLEAN
@@ -187,6 +197,12 @@ YoriWinSetControlContext(
     __in PVOID Context
     );
 
+BOOLEAN
+YoriWinControlSetFocusOnMouseClick(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in BOOLEAN ReceiveFocusOnMouseClick
+    );
+
 // EDIT.C
 
 /**
@@ -210,6 +226,11 @@ YoriWinSetControlContext(
  */
 #define YORI_WIN_EDIT_STYLE_READ_ONLY       (0x0004)
 
+/**
+ The edit should only accept numeric input.
+ */
+#define YORI_WIN_EDIT_STYLE_NUMERIC         (0x0008)
+
 BOOLEAN
 YoriWinEditSelectionActive(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle
@@ -229,8 +250,8 @@ YoriWinEditGetSelectedText(
 VOID
 YoriWinEditSetSelectionRange(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __in DWORD StartOffset,
-    __in DWORD EndOffset
+    __in YORI_ALLOC_SIZE_T StartOffset,
+    __in YORI_ALLOC_SIZE_T EndOffset
     );
 
 BOOLEAN
@@ -256,6 +277,240 @@ YoriWinEditCreate(
     __in PYORI_WIN_CTRL_HANDLE ParentHandle,
     __in PSMALL_RECT Size,
     __in PYORI_STRING InitialText,
+    __in DWORD Style
+    );
+
+// HEXEDIT.C
+
+/**
+ A function prototype that can be invoked to deliver notification events
+ when the cursor is moved.
+ */
+typedef VOID YORI_WIN_NOTIFY_HEX_EDIT_CURSOR_MOVE(PYORI_WIN_CTRL_HANDLE, DWORDLONG, DWORD);
+
+/**
+ A pointer to a function that can be invoked to deliver notification events
+ when the cursor is moved.
+ */
+typedef YORI_WIN_NOTIFY_HEX_EDIT_CURSOR_MOVE *PYORI_WIN_NOTIFY_HEX_EDIT_CURSOR_MOVE;
+
+/**
+ The hex edit should display a vertical scroll bar.
+ */
+#define YORI_WIN_HEX_EDIT_STYLE_VSCROLLBAR    (0x0001)
+
+/**
+ The hex edit should be read only.
+ */
+#define YORI_WIN_HEX_EDIT_STYLE_READ_ONLY     (0x0002)
+
+/**
+ The hex edit should contain 32 bit offset values.
+ */
+#define YORI_WIN_HEX_EDIT_STYLE_OFFSET        (0x0004)
+
+/**
+ The hex edit should contain 64 bit offset values.
+ */
+#define YORI_WIN_HEX_EDIT_STYLE_LARGE_OFFSET  (0x0008)
+
+BOOLEAN
+YoriWinHexEditClear(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle
+    );
+
+DWORD
+YoriWinHexEditGetBytesPerWord(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle
+    );
+
+BOOLEAN
+YoriWinHexEditGetDataNoCopy(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __out PUCHAR *Buffer,
+    __out PYORI_ALLOC_SIZE_T BufferLength
+    );
+
+__success(return)
+BOOLEAN
+YoriWinHexEditGetSelectedData(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __out PVOID * Data,
+    __out PYORI_ALLOC_SIZE_T DataLength
+    );
+
+BOOLEAN
+YoriWinHexEditDeleteSelection(
+    __in PYORI_WIN_CTRL_HANDLE HexEdit
+    );
+
+BOOLEAN
+YoriWinHexEditGetModifyState(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle
+    );
+
+BOOLEAN
+YoriWinHexEditReposition(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in PSMALL_RECT CtrlRect
+    );
+
+BOOLEAN
+YoriWinHexEditSetBytesPerWord(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in UCHAR BytesPerWord
+    );
+
+BOOLEAN
+YoriWinHexEditSetStyle(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in DWORD NewStyle
+    );
+
+BOOLEAN
+YoriWinHexEditSetCaption(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in PYORI_STRING Caption
+    );
+
+VOID
+YoriWinHexEditSetColor(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in WORD Attributes,
+    __in WORD SelectedAttributes
+    );
+
+BOOLEAN
+YoriWinHexEditSetCursorMoveNotifyCallback(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in PYORI_WIN_NOTIFY_HEX_EDIT_CURSOR_MOVE NotifyCallback
+    );
+
+BOOLEAN
+YoriWinHexEditSetDataNoCopy(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in PUCHAR NewBuffer,
+    __in YORI_ALLOC_SIZE_T NewBufferAllocated,
+    __in YORI_ALLOC_SIZE_T NewBufferValid
+    );
+
+BOOLEAN
+YoriWinHexEditSetModifyState(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in BOOLEAN ModifyState
+    );
+
+BOOLEAN
+YoriWinHexEditSetReadOnly(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in BOOLEAN NewReadOnlyState
+    );
+
+__success(return)
+BOOLEAN
+YoriWinHexEditSetCursorLocation(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in BOOLEAN AsChar,
+    __in YORI_ALLOC_SIZE_T BufferOffset,
+    __in UCHAR BitShift
+    );
+
+__success(return)
+BOOLEAN
+YoriWinHexEditGetCursorLocation(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __out PBOOLEAN AsChar,
+    __out PYORI_ALLOC_SIZE_T BufferOffset,
+    __out PUCHAR BitShift
+    );
+
+__success(return)
+BOOLEAN
+YoriWinHexEditGetVisualCursorLocation(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __out PYORI_ALLOC_SIZE_T CursorOffset,
+    __out PYORI_ALLOC_SIZE_T CursorLine
+    );
+
+VOID
+YoriWinHexEditGetViewportLocation(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __out PYORI_ALLOC_SIZE_T ViewportLeft,
+    __out PYORI_ALLOC_SIZE_T ViewportTop
+    );
+
+VOID
+YoriWinHexEditSetViewportLocation(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in YORI_ALLOC_SIZE_T NewViewportLeft,
+    __in YORI_ALLOC_SIZE_T NewViewportTop
+    );
+
+VOID
+YoriWinHexEditClearSelection(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle
+    );
+
+BOOLEAN
+YoriWinHexEditSelectionActive(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle
+    );
+
+__success(return)
+BOOLEAN
+YoriWinHexEditSetSelectionRange(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in YORI_ALLOC_SIZE_T FirstByteOffset,
+    __in YORI_ALLOC_SIZE_T LastByteOffset
+    );
+
+__success(return)
+BOOLEAN
+YoriWinHexEditDeleteData(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in YORI_ALLOC_SIZE_T DataOffset,
+    __in YORI_ALLOC_SIZE_T Length
+    );
+
+__success(return)
+BOOLEAN
+YoriWinHexEditInsertData(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in YORI_ALLOC_SIZE_T DataOffset,
+    __in PVOID Data,
+    __in YORI_ALLOC_SIZE_T Length
+    );
+
+__success(return)
+BOOLEAN
+YoriWinHexEditReplaceData(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in YORI_ALLOC_SIZE_T DataOffset,
+    __in PVOID Data,
+    __in YORI_ALLOC_SIZE_T Length
+    );
+
+BOOLEAN
+YoriWinHexEditCutSelectedData(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle
+    );
+
+BOOLEAN
+YoriWinHexEditCopySelectedData(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle
+    );
+
+BOOLEAN
+YoriWinHexEditPasteData(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle
+    );
+
+PYORI_WIN_CTRL_HANDLE
+YoriWinHexEditCreate(
+    __in PYORI_WIN_WINDOW_HANDLE ParentHandle,
+    __in_opt PYORI_STRING Caption,
+    __in PSMALL_RECT Size,
+    __in UCHAR BytesPerWord,
     __in DWORD Style
     );
 
@@ -312,24 +567,25 @@ YoriWinLabelSetTextAttributes(
 
 VOID
 YoriWinLabelParseAccelerator(
-    __in PYORI_STRING RawString,
+    __in PCYORI_STRING RawString,
     __inout_opt PYORI_STRING ParsedString,
     __out_opt TCHAR* AcceleratorChar,
-    __out_opt PDWORD HighlightOffset,
-    __out_opt PDWORD DisplayLength
+    __out_opt PYORI_ALLOC_SIZE_T HighlightOffset,
+    __out_opt PYORI_ALLOC_SIZE_T DisplayLength
     );
 
-DWORD
+YORI_ALLOC_SIZE_T
 YoriWinLabelCountLinesRequiredForText(
+    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
     __in PYORI_STRING Text,
-    __in DWORD CtrlWidth,
-    __out_opt PDWORD MaximumWidth
+    __in YORI_ALLOC_SIZE_T CtrlWidth,
+    __out_opt PYORI_ALLOC_SIZE_T MaximumWidth
     );
 
 BOOLEAN
 YoriWinLabelSetCaption(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __in PYORI_STRING Caption
+    __in PCYORI_STRING Caption
     );
 
 BOOLEAN
@@ -344,12 +600,12 @@ YoriWinLabelReposition(
 /**
  The list should display a vertical scroll bar.
  */
-#define YORI_WIN_LIST_STYLE_VSCROLLBAR  (0x0001)
+#define YORI_WIN_LIST_STYLE_VSCROLLBAR       (0x0001)
 
 /**
  The list should support selection per row, not one per list
  */
-#define YORI_WIN_LIST_STYLE_MULTISELECT (0x0002)
+#define YORI_WIN_LIST_STYLE_MULTISELECT      (0x0002)
 
 /**
  The list should clear selection when losing focus
@@ -359,12 +615,23 @@ YoriWinLabelReposition(
 /**
  The list should display multiple items on one line
  */
-#define YORI_WIN_LIST_STYLE_HORIZONTAL  (0x0008)
+#define YORI_WIN_LIST_STYLE_HORIZONTAL       (0x0008)
 
 /**
  The list should not have a border around the control
  */
-#define YORI_WIN_LIST_STYLE_NO_BORDER   (0x0010)
+#define YORI_WIN_LIST_STYLE_NO_BORDER        (0x0010)
+
+/**
+ The list should display a horizontal scroll bar.
+ */
+#define YORI_WIN_LIST_STYLE_HSCROLLBAR       (0x0020)
+
+/**
+ The list should display a horizontal scroll bar but only when horizontal
+ scrolling is possible.
+ */
+#define YORI_WIN_LIST_STYLE_AUTO_HSCROLLBAR  (0x0040)
 
 PYORI_WIN_CTRL_HANDLE
 YoriWinListCreate(
@@ -382,20 +649,20 @@ __success(return)
 BOOLEAN
 YoriWinListGetActiveOption(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __out PDWORD CurrentlyActiveIndex
+    __out PYORI_ALLOC_SIZE_T CurrentlyActiveIndex
     );
 
 __success(return)
 BOOLEAN
 YoriWinListSetActiveOption(
     __inout PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __in DWORD ActiveOption
+    __in YORI_ALLOC_SIZE_T ActiveOption
     );
 
 BOOLEAN
 YoriWinListIsOptionSelected(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __in DWORD Index
+    __in YORI_ALLOC_SIZE_T Index
     );
 
 BOOLEAN
@@ -407,14 +674,14 @@ __success(return)
 BOOLEAN
 YoriWinListAddItems(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __in PYORI_STRING ListOptions,
-    __in DWORD NumberOptions
+    __in PCYORI_STRING ListOptions,
+    __in YORI_ALLOC_SIZE_T NumberOptions
     );
 
 BOOLEAN
 YoriWinListGetItemText(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __in DWORD Index,
+    __in YORI_ALLOC_SIZE_T Index,
     __inout PYORI_STRING Text
     );
 
@@ -437,7 +704,7 @@ YoriWinListSetSelectionNotifyCallback(
     );
 
 
-// *** MENUBAR.C ***
+// MENUBAR.C
 
 
 /**
@@ -453,7 +720,7 @@ typedef struct _YORI_WIN_MENU {
     /**
      The number of menu items contained within the menu.
      */
-    DWORD ItemCount;
+    YORI_ALLOC_SIZE_T ItemCount;
 } YORI_WIN_MENU, *PYORI_WIN_MENU;
 
 /**
@@ -549,19 +816,19 @@ YoriWinMenuBarReposition(
     __in PSMALL_RECT CtrlRect
     );
 
-// *** MLEDIT.C ***
+// MLEDIT.C
 
 /**
  A function prototype that can be invoked to deliver notification events
  when the cursor is moved.
  */
-typedef VOID YORI_WIN_NOTIFY_CURSOR_MOVE(PYORI_WIN_CTRL_HANDLE, DWORD, DWORD);
+typedef VOID YORI_WIN_NOTIFY_MULTILINE_EDIT_CURSOR_MOVE(PYORI_WIN_CTRL_HANDLE, DWORD, DWORD);
 
 /**
  A pointer to a function that can be invoked to deliver notification events
  when the cursor is moved.
  */
-typedef YORI_WIN_NOTIFY_CURSOR_MOVE *PYORI_WIN_NOTIFY_CURSOR_MOVE;
+typedef YORI_WIN_NOTIFY_MULTILINE_EDIT_CURSOR_MOVE *PYORI_WIN_NOTIFY_MULTILINE_EDIT_CURSOR_MOVE;
 
 /**
  The multiline edit should display a vertical scroll bar.
@@ -606,7 +873,7 @@ BOOLEAN
 YoriWinMultilineEditAppendLinesNoDataCopy(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
     __in PYORI_STRING NewLines,
-    __in DWORD NewLineCount
+    __in YORI_ALLOC_SIZE_T NewLineCount
     );
 
 BOOLEAN
@@ -627,20 +894,20 @@ YoriWinMultilineEditPasteText(
 VOID
 YoriWinMultilineEditSetSelectionRange(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __in DWORD StartLine,
-    __in DWORD StartOffset,
-    __in DWORD EndLine,
-    __in DWORD EndOffset
+    __in YORI_ALLOC_SIZE_T StartLine,
+    __in YORI_ALLOC_SIZE_T StartOffset,
+    __in YORI_ALLOC_SIZE_T EndLine,
+    __in YORI_ALLOC_SIZE_T EndOffset
     );
 
 __success(return)
 BOOLEAN
 YoriWinMultilineEditGetSelectionRange(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __out PDWORD StartLine,
-    __out PDWORD StartOffset,
-    __out PDWORD EndLine,
-    __out PDWORD EndOffset
+    __out PYORI_ALLOC_SIZE_T StartLine,
+    __out PYORI_ALLOC_SIZE_T StartOffset,
+    __out PYORI_ALLOC_SIZE_T EndLine,
+    __out PYORI_ALLOC_SIZE_T EndOffset
     );
 
 VOID
@@ -650,7 +917,16 @@ YoriWinMultilineEditSetColor(
     __in WORD SelectedAttributes
     );
 
-DWORD
+BOOLEAN
+YoriWinMultilineEditGetAutoIndent(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __out_opt PBOOLEAN AutoIndentEnabled,
+    __out_opt PBOOLEAN AutoIndentActive,
+    __out_opt PYORI_ALLOC_SIZE_T AutoIndentActiveLine,
+    __out_opt PYORI_ALLOC_SIZE_T AutoIndentActiveLength
+    );
+
+YORI_ALLOC_SIZE_T
 YoriWinMultilineEditGetLineCount(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle
     );
@@ -658,35 +934,35 @@ YoriWinMultilineEditGetLineCount(
 PYORI_STRING
 YoriWinMultilineEditGetLineByIndex(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __in DWORD Index
+    __in YORI_ALLOC_SIZE_T Index
     );
 
 VOID
 YoriWinMultilineEditGetCursorLocation(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __out PDWORD CursorOffset,
-    __out PDWORD CursorLine
+    __out PYORI_ALLOC_SIZE_T CursorOffset,
+    __out PYORI_ALLOC_SIZE_T CursorLine
     );
 
 VOID
 YoriWinMultilineEditSetCursorLocation(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __in DWORD NewCursorOffset,
-    __in DWORD NewCursorLine
+    __in YORI_ALLOC_SIZE_T NewCursorOffset,
+    __in YORI_ALLOC_SIZE_T NewCursorLine
     );
 
 VOID
 YoriWinMultilineEditGetViewportLocation(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __out PDWORD ViewportLeft,
-    __out PDWORD ViewportTop
+    __out PYORI_ALLOC_SIZE_T ViewportLeft,
+    __out PYORI_ALLOC_SIZE_T ViewportTop
     );
 
 VOID
 YoriWinMultilineEditSetViewportLocation(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __in DWORD NewViewportLeft,
-    __in DWORD NewViewportTop
+    __in YORI_ALLOC_SIZE_T NewViewportLeft,
+    __in YORI_ALLOC_SIZE_T NewViewportTop
     );
 
 BOOLEAN
@@ -705,14 +981,26 @@ __success(return)
 BOOLEAN
 YoriWinMultilineEditGetTabWidth(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __out PDWORD TabWidth
+    __out PYORI_ALLOC_SIZE_T TabWidth
     );
 
 __success(return)
 BOOLEAN
 YoriWinMultilineEditSetTabWidth(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __in DWORD TabWidth
+    __in YORI_ALLOC_SIZE_T TabWidth
+    );
+
+VOID
+YoriWinMultilineEditSetAutoIndent(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in BOOLEAN AutoIndentEnabled
+    );
+
+VOID
+YoriWinMultilineEditSetExpandTab(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in BOOLEAN ExpandTabEnabled
     );
 
 VOID
@@ -729,7 +1017,7 @@ YoriWinMultilineEditGetModifyState(
 BOOLEAN
 YoriWinMultilineEditSetCursorMoveNotifyCallback(
     __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __in PYORI_WIN_NOTIFY_CURSOR_MOVE NotifyCallback
+    __in PYORI_WIN_NOTIFY_MULTILINE_EDIT_CURSOR_MOVE NotifyCallback
     );
 
 BOOLEAN
@@ -758,6 +1046,12 @@ YoriWinMultilineEditReposition(
     __in PSMALL_RECT CtrlRect
     );
 
+BOOLEAN
+YoriWinMultilineEditSetReadOnly(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in BOOLEAN NewReadOnlyState
+    );
+
 PYORI_WIN_CTRL_HANDLE
 YoriWinMultilineEditCreate(
     __in PYORI_WIN_WINDOW_HANDLE ParentHandle,
@@ -766,7 +1060,35 @@ YoriWinMultilineEditCreate(
     __in DWORD Style
     );
 
-// *** WINDOW.C ***
+// RADIO.C
+
+BOOLEAN
+YoriWinRadioIsSelected(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle
+    );
+
+VOID
+YoriWinRadioSelect(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle
+    );
+
+BOOLEAN
+YoriWinRadioReposition(
+    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in PSMALL_RECT CtrlRect
+    );
+
+PYORI_WIN_CTRL_HANDLE
+YoriWinRadioCreate(
+    __in PYORI_WIN_WINDOW_HANDLE ParentHandle,
+    __in PSMALL_RECT Size,
+    __in PYORI_STRING Caption,
+    __in_opt PYORI_WIN_CTRL_HANDLE FirstRadioControl,
+    __in DWORD Style,
+    __in_opt PYORI_WIN_NOTIFY ToggleCallback
+    );
+
+// WINDOW.C
 
 /**
  A function prototype that can be invoked to deliver notification events
@@ -794,6 +1116,12 @@ YoriWinDestroyWindow(
 BOOLEAN
 YoriWinDisplayWindowContents(
     __in PYORI_WIN_WINDOW_HANDLE Window
+    );
+
+VOID
+YoriWinSetFocus(
+    __in PYORI_WIN_WINDOW_HANDLE Window,
+    __in_opt PYORI_WIN_CTRL_HANDLE Ctrl
     );
 
 BOOLEAN
@@ -843,7 +1171,7 @@ YoriWinCreateWindowEx(
     __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
     __in PSMALL_RECT WindowRect,
     __in DWORD Style,
-    __in_opt PYORI_STRING Title,
+    __in_opt PCYORI_STRING Title,
     __out PYORI_WIN_WINDOW_HANDLE *OutWindow
     );
 
@@ -856,7 +1184,7 @@ YoriWinCreateWindow(
     __in WORD DesiredWidth,
     __in WORD DesiredHeight,
     __in DWORD Style,
-    __in_opt PYORI_STRING Title,
+    __in_opt PCYORI_STRING Title,
     __out PYORI_WIN_WINDOW_HANDLE *OutWindow
     );
 
@@ -899,12 +1227,13 @@ YoriWinProcessInputForWindow(
     __out_opt PDWORD_PTR Result
     );
 
-// *** WINMGR.C ***
+// WINMGR.C
 
 __success(return)
 BOOLEAN
 YoriWinOpenWindowManager(
     __in BOOLEAN UseAlternateBuffer,
+    __in YORI_WIN_COLOR_TABLE_ID ColorTableId,
     __out PYORI_WIN_WINDOW_MANAGER_HANDLE *WinMgrHandle
     );
 
@@ -937,6 +1266,12 @@ YoriWinGetWinMgrInitialCursorLocation(
 
 VOID
 YoriWinCloseWindowManager(
+    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle
+    );
+
+__success(return)
+BOOLEAN
+YoriWinMgrProcessAllEvents(
     __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle
     );
 

@@ -78,8 +78,8 @@ __success(return)
 BOOLEAN
 EditOpts(
     __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
-    __in DWORD InitialTabWidth,
-    __out PDWORD NewTabWidth
+    __in YORI_ALLOC_SIZE_T InitialTabWidth,
+    __out PYORI_ALLOC_SIZE_T NewTabWidth
     )
 {
     PYORI_WIN_WINDOW_HANDLE Parent;
@@ -94,7 +94,7 @@ EditOpts(
 
     YoriLibConstantString(&Caption, _T("Options"));
 
-    if (!YoriWinCreateWindow(WinMgrHandle, 40, 11, 40, 11, YORI_WIN_WINDOW_STYLE_BORDER_SINGLE | YORI_WIN_WINDOW_STYLE_SHADOW_SOLID, &Caption, &Parent)) {
+    if (!YoriWinCreateWindow(WinMgrHandle, 38, 10, 38, 10, YORI_WIN_WINDOW_STYLE_BORDER_SINGLE | YORI_WIN_WINDOW_STYLE_SHADOW_SOLID, &Caption, &Parent)) {
         return FALSE;
     }
 
@@ -162,8 +162,8 @@ EditOpts(
     }
 
     if (Result) {
-        LONGLONG llTemp;
-        DWORD CharsConsumed;
+        YORI_MAX_SIGNED_T llTemp;
+        YORI_ALLOC_SIZE_T CharsConsumed;
 
         Caption.StartOfString = CaptionBuffer;
         Caption.LengthAllocated = sizeof(CaptionBuffer)/sizeof(CaptionBuffer[0]);
@@ -178,8 +178,8 @@ EditOpts(
             llTemp <= 64 &&
             llTemp >= 0) {
 
-            DWORD dwTemp;
-            dwTemp = (DWORD)llTemp;
+            YORI_ALLOC_SIZE_T dwTemp;
+            dwTemp = (YORI_ALLOC_SIZE_T)llTemp;
 
             *NewTabWidth = dwTemp;
         } else {

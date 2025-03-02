@@ -609,7 +609,11 @@ SetVerPumpDebugEvents(
                         ThreadContext.Eip = (DWORD_PTR)(LPVOID)Process->StartRoutine;
 #endif
 
-                        WriteProcessMemory(Process->hProcess, (LPVOID)Process->StartRoutine, &Process->FirstInstruction, sizeof(Process->FirstInstruction), &BytesWritten);
+                        WriteProcessMemory(Process->hProcess,
+                                           (LPVOID)Process->StartRoutine,
+                                           &Process->FirstInstruction,
+                                           sizeof(Process->FirstInstruction),
+                                           &BytesWritten);
                         FlushInstructionCache(Process->hProcess, Process->StartRoutine, 1);
 
                         SetThreadContext(Process->hInitialThread, &ThreadContext);
@@ -645,7 +649,11 @@ SetVerPumpDebugEvents(
 #endif
                             ThreadContext.Eip = (DWORD)(DWORD_PTR)(LPVOID)Process->StartRoutine;
                             DllKernel32.pWow64SetThreadContext(Process->hInitialThread, &ThreadContext);
-                            WriteProcessMemory(Process->hProcess, (LPVOID)Process->StartRoutine, &Process->FirstInstruction, sizeof(Process->FirstInstruction), &BytesWritten);
+                            WriteProcessMemory(Process->hProcess,
+                                               (LPVOID)Process->StartRoutine,
+                                               &Process->FirstInstruction,
+                                               sizeof(Process->FirstInstruction),
+                                               &BytesWritten);
                             FlushInstructionCache(Process->hProcess, Process->StartRoutine, 1);
                             Process->ProcessStarted = TRUE;
                         }
@@ -662,7 +670,11 @@ SetVerPumpDebugEvents(
 
 
 #if SETVER_DEBUG
-                YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("ExceptionCode %x Address %p ContinueStatus %x\n"), DbgEvent.u.Exception.ExceptionRecord.ExceptionCode, DbgEvent.u.Exception.ExceptionRecord.ExceptionAddress, dwContinueStatus);
+                YoriLibOutput(YORI_LIB_OUTPUT_STDOUT,
+                              _T("ExceptionCode %x Address %p ContinueStatus %x\n"),
+                              DbgEvent.u.Exception.ExceptionRecord.ExceptionCode,
+                              DbgEvent.u.Exception.ExceptionRecord.ExceptionAddress,
+                              dwContinueStatus);
 #endif
 
                 break;
@@ -704,7 +716,7 @@ SetVerPumpDebugEvents(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
@@ -714,14 +726,14 @@ ENTRYPOINT(
     PROCESS_INFORMATION ProcessInfo;
     STARTUPINFO StartupInfo;
     DWORD ExitCode;
-    BOOL ArgumentUnderstood;
-    DWORD StartArg = 0;
-    DWORD AppArg;
-    DWORD i;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T StartArg = 0;
+    YORI_ALLOC_SIZE_T AppArg;
+    YORI_ALLOC_SIZE_T i;
     YORI_STRING Arg;
     YORI_STRING WinVer;
-    LONGLONG llTemp;
-    DWORD CharsConsumed;
+    YORI_MAX_SIGNED_T llTemp;
+    YORI_ALLOC_SIZE_T CharsConsumed;
     SETVER_CONTEXT Context;
 
     for (i = 1; i < ArgC; i++) {
@@ -731,13 +743,13 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 SetVerHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2018-2019"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 StartArg = i + 1;
                 ArgumentUnderstood = TRUE;
                 break;
@@ -772,14 +784,14 @@ ENTRYPOINT(
 
     if (YoriLibStringToNumber(&WinVer, FALSE, &llTemp, &CharsConsumed)) {
         Context.AppVerMajor = (DWORD)llTemp;
-        WinVer.LengthInChars -= CharsConsumed;
+        WinVer.LengthInChars = WinVer.LengthInChars - CharsConsumed;
         WinVer.StartOfString += CharsConsumed;
         if (WinVer.LengthInChars > 0) {
             WinVer.LengthInChars -= 1;
             WinVer.StartOfString += 1;
             if (YoriLibStringToNumber(&WinVer, FALSE, &llTemp, &CharsConsumed)) {
                 Context.AppVerMinor = (DWORD)llTemp;
-                WinVer.LengthInChars -= CharsConsumed;
+                WinVer.LengthInChars = WinVer.LengthInChars - CharsConsumed;
                 WinVer.StartOfString += CharsConsumed;
                 if (WinVer.LengthInChars > 0) {
                     WinVer.LengthInChars -= 1;

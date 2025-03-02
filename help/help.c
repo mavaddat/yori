@@ -59,9 +59,12 @@ CHAR strHelpHelpText1[] =
         "\n"
         "For more information about a command, run <command> /?\n"
         "\n"
+        "AIRPLAN   Displays or updates airplane mode\n"
         "ALIAS     Displays or updates command aliases\n"
         "ASSOC     Display or edit file associations\n"
         "ATTRIB    Display or edit file attributes\n"
+        "BASE64    Encode or decode base64 text\n"
+        "BATTERY   Displays information about the system battery and power\n"
         "BUILTIN   Executes a command explicitly as a builtin\n"
         "CAB       Compress or decompress cabinet archives\n"
         "CAL       Display the calendar\n"
@@ -72,21 +75,17 @@ CHAR strHelpHelpText1[] =
         "CLS       Clears the console\n"
         "COLOR     Change the active color or all characters on the console\n"
         "COMPACT   Compress or decompress individual files\n"
+        "CONTOOL   Display console information\n"
         "COPY      Copies one or more files\n"
         "CSHOT     Captures previous output on the console and outputs it\n"
         "CUT       Outputs a portion of an input buffer of text\n"
         "CVTVT     Converts text with VT100 color escapes into another format\n"
-        "DATE      Outputs the system date and time in a specified format\n"
+        "DATE      Outputs the date and time in a specified format\n"
         "DF        Display disk free space\n"
         "DIR       Enumerate the contents of directories in a traditional way\n"
         "DIRCASE   Update case sensitivity behavior for a directory\n"
         "DIRENV    Apply environment changes from per-directory scripts\n"
         "DOS2UNIX  Convert line endings to UNIX (LF) form\n"
-        "DU        Display disk space used within a directory tree\n"
-        "ECHO      Outputs text\n"
-        "EDIT      Open a file for editing\n"
-        "ENV       Set environment variables and launch a program\n"
-        "ENVDIFF   Compare the environment to another environment\n"
         ;
 
 /**
@@ -94,12 +93,18 @@ CHAR strHelpHelpText1[] =
  */
 const
 CHAR strHelpHelpText2[] =
+        "DU        Display disk space used within a directory tree\n"
+        "ECHO      Outputs text\n"
+        "EDIT      Open a file for editing\n"
+        "ENV       Set environment variables and launch a program\n"
+        "ENVDIFF   Compare the environment to another environment\n"
         "ENDLOCAL  Pop a previous saved environment from the stack (only valid after\n"
         "            SETLOCAL)\n"
         "ERASE     Delete one or more files\n"
         "ERR       Display the text for a Windows error code\n"
         "EXIT      Exits the shell\n"
         "EXPR      Evaluate simple arithmetic expressions\n"
+        "EXTENTS   Output file system extents behind files\n"
         "FALSE     Return false\n"
         "FINFO     Output information about file metadata\n"
         "FG        Display the output of a background job in the foreground\n"
@@ -112,6 +117,14 @@ CHAR strHelpHelpText2[] =
         "HASH      Calculates the hash of a file or set of files\n"
         "HELP      Displays this help text\n"
         "HEXDUMP   Display a stream of data as hex\n"
+        ;
+
+/**
+ More text to display to the user about Yori and its tools.
+ */
+const
+CHAR strHelpHelpText3[] =
+        "HEXEDIT   Edit files as hex\n"
         "HILITE    Output the contents of one or more files with highlight on lines\n"
         "            matching specified criteria\n"
         "ICONV     Convert the character encoding of one or more files\n"
@@ -122,13 +135,6 @@ CHAR strHelpHelpText2[] =
         "JOB       Displays or updates background job status\n"
         "KILL      Terminate one or more processes\n"
         "LINES     Count the number of lines in one or more files\n"
-        ;
-
-/**
- More text to display to the user about Yori and its tools.
- */
-const
-CHAR strHelpHelpText3[] =
         "LSOF      Display which processes have a file in use\n"
         "MEM       Display memory usage information\n"
         "MKDIR     Creates directories\n"
@@ -137,9 +143,17 @@ CHAR strHelpHelpText3[] =
         "MOUNT     Mounts or unmounts an ISO image\n"
         "MOVE      Moves or renames one or more files\n"
         "NICE      Runs a child program at low priority\n"
+        "OBJDIR    Enumerate object manager directories\n"
         "OSVER     Outputs the operating system version in a specified format\n"
         "PATH      Converts relative paths into decomposable full paths\n"
         "PAUSE     Prompt the user to press any key before continuing\n"
+        ;
+
+/**
+ More text to display to the user about Yori and its tools.
+ */
+const
+CHAR strHelpHelpText4[] =
         "PETOOL    Manage PE executable files\n"
         "POPD      Pop a previous current directory from the stack (only valid after\n"
         "            PUSHD)\n"
@@ -155,22 +169,23 @@ CHAR strHelpHelpText3[] =
         "SETLOCAL  Push the current directory and environment onto a saved stack\n"
         "SETVER    Lie about Windows version and launch a program\n"
         "SHIFT     Shift command arguments left by one (only valid in scripts)\n"
-        ;
-
-/**
- More text to display to the user about Yori and its tools.
- */
-const
-CHAR strHelpHelpText4[] =
         "SHUTDN    Shutdown, reboot or logoff the system\n"
         "SLEEP     Waits for a specified number of seconds\n"
         "SLMENU    Display a menu of items from input and output the user selection\n"
+        "SPEAK     Output text as speech\n"
         "SPLIT     Split a file into pieces\n"
         "SPONGE    Read input into memory then output, allowing rewrite of input\n"
         "START     Ask the shell to open a file\n"
         "STRCMP    Compare two strings\n"
         "STRIDE    Output lines periodically from input stream\n"
         "SYNC      Flush a file, directory or volume\n"
+        ;
+
+/**
+ More text to display to the user about Yori and its tools.
+ */
+const
+CHAR strHelpHelpText5[] =
         "TAIL      Output the final lines of one or more files\n"
         "TEE       Output the contents of standard input to standard output and a file\n"
         "TIMETHIS  Time how long a program takes to execute\n"
@@ -187,6 +202,7 @@ CHAR strHelpHelpText4[] =
         "WINPOS    Set window size or position\n"
         "YCHARMAP  Display the character map\n"
         "YDBG      Debug processes\n"
+        "YREGEDIT  Registry editor\n"
         "YORI      Launch the Yori shell\n"
         "YPM       Install, uninstall, or update software packages\n"
         "YS        Executes a Yori script\n"
@@ -201,7 +217,8 @@ HelpText(VOID)
     YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("%hs"), strHelpHelpText1);
     YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("%hs"), strHelpHelpText2);
     YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("%hs"), strHelpHelpText3);
-    YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("%hs\n"), strHelpHelpText4);
+    YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("%hs"), strHelpHelpText4);
+    YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("%hs\n"), strHelpHelpText5);
     return TRUE;
 }
 
@@ -229,12 +246,12 @@ HelpText(VOID)
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
     YORI_STRING Arg;
 
     for (i = 1; i < ArgC; i++) {
@@ -244,10 +261,10 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 HelpHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2018"));
                 return EXIT_SUCCESS;
             }

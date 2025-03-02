@@ -44,7 +44,7 @@ YORILIB_HTML_GENERATE_CONTEXT CvtvtHtmlGenerateContext;
 BOOL
 CvtvtHtmlInitializeStream(
     __in HANDLE hOutput,
-    __inout PDWORDLONG Context
+    __inout PYORI_MAX_UNSIGNED_T Context
     )
 {
     YORI_STRING OutputString;
@@ -56,7 +56,7 @@ CvtvtHtmlInitializeStream(
         return FALSE;
     }
 
-    YoriLibOutputTextToMultibyteDevice(hOutput, &OutputString);
+    YoriLibOutputTextToMbyteDev(hOutput, &OutputString);
     YoriLibFreeStringContents(&OutputString);
     return TRUE;
 }
@@ -74,7 +74,7 @@ CvtvtHtmlInitializeStream(
 BOOL
 CvtvtHtmlEndStream(
     __in HANDLE hOutput,
-    __inout PDWORDLONG Context
+    __inout PYORI_MAX_UNSIGNED_T Context
     )
 {
     YORI_STRING OutputString;
@@ -86,7 +86,7 @@ CvtvtHtmlEndStream(
         return FALSE;
     }
 
-    YoriLibOutputTextToMultibyteDevice(hOutput, &OutputString);
+    YoriLibOutputTextToMbyteDev(hOutput, &OutputString);
     YoriLibFreeStringContents(&OutputString);
 
     return TRUE;
@@ -110,11 +110,11 @@ BOOL
 CvtvtHtmlProcessAndOutputText(
     __in HANDLE hOutput,
     __in PCYORI_STRING String,
-    __inout PDWORDLONG Context
+    __inout PYORI_MAX_UNSIGNED_T Context
     )
 {
     YORI_STRING TextString;
-    DWORD BufferSizeNeeded;
+    YORI_ALLOC_SIZE_T BufferSizeNeeded;
 
     UNREFERENCED_PARAMETER(Context);
 
@@ -134,7 +134,7 @@ CvtvtHtmlProcessAndOutputText(
         return FALSE;
     }
 
-    YoriLibOutputTextToMultibyteDevice(hOutput, &TextString);
+    YoriLibOutputTextToMbyteDev(hOutput, &TextString);
 
     YoriLibFreeStringContents(&TextString);
     return TRUE;
@@ -158,11 +158,11 @@ BOOL
 CvtvtHtmlProcessAndOutputEscape(
     __in HANDLE hOutput,
     __in PCYORI_STRING String,
-    __inout PDWORDLONG Context
+    __inout PYORI_MAX_UNSIGNED_T Context
     )
 {
     YORI_STRING TextString;
-    DWORD BufferSizeNeeded;
+    YORI_ALLOC_SIZE_T BufferSizeNeeded;
     YORILIB_HTML_GENERATE_CONTEXT DummyGenerateContext;
 
     UNREFERENCED_PARAMETER(Context);
@@ -184,7 +184,7 @@ CvtvtHtmlProcessAndOutputEscape(
         return FALSE;
     }
 
-    YoriLibOutputTextToMultibyteDevice(hOutput, &TextString);
+    YoriLibOutputTextToMbyteDev(hOutput, &TextString);
 
     YoriLibFreeStringContents(&TextString);
     return TRUE;

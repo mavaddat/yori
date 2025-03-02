@@ -3,7 +3,7 @@
  *
  * Yori shell shutdown the system.
  *
- * Copyright (c) 2019 Malcolm J. Smith
+ * Copyright (c) 2019-2024 Malcolm J. Smith
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -35,9 +35,12 @@ CHAR strShutdownHelpText[] =
         "\n"
         "Shutdown the system.\n"
         "\n"
-        "SHUTDN [-license] [-f] [-k|-l|-r|-s [-p]]\n"
+        "SHUTDN [-license] [-f] [-d|-e|-h|-k|-l|-r|-s [-p]]\n"
         "\n"
+        "   -d             Disconnect the current session\n"
+        "   -e             Sleep the system\n"
         "   -f             Force the action without waiting for programs to close cleanly\n"
+        "   -h             Hibernates the system\n"
         "   -k             Lock the current session\n"
         "   -l             Log off the current user\n"
         "   -p             Turn off power after shutdown, if supported\n"
@@ -59,47 +62,6 @@ ShutdownHelp(VOID)
 }
 
 /**
- If the privilege for shutting down the system is available to the process,
- enable it.
-
- @return TRUE to indicate the privilege was enabled, FALSE if it was not.
- */
-BOOL
-ShutdownEnableShutdownPrivilege(VOID)
-{
-    TOKEN_PRIVILEGES TokenPrivileges;
-    LUID ShutdownLuid;
-    HANDLE TokenHandle;
-
-    YoriLibLoadAdvApi32Functions();
-    if (DllAdvApi32.pLookupPrivilegeValueW == NULL ||
-        DllAdvApi32.pOpenProcessToken == NULL ||
-        DllAdvApi32.pAdjustTokenPrivileges == NULL) {
-
-        return FALSE;
-    }
-
-    if (!DllAdvApi32.pLookupPrivilegeValueW(NULL, SE_SHUTDOWN_NAME, &ShutdownLuid)) {
-        return FALSE;
-    }
-
-    if (!DllAdvApi32.pOpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES, &TokenHandle)) {
-        return FALSE;
-    }
-
-    TokenPrivileges.PrivilegeCount = 1;
-    TokenPrivileges.Privileges[0].Luid = ShutdownLuid;
-    TokenPrivileges.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
-    if (!DllAdvApi32.pAdjustTokenPrivileges(TokenHandle, FALSE, &TokenPrivileges, 0, NULL, 0)) {
-        CloseHandle(TokenHandle);
-        return FALSE;
-    }
-    CloseHandle(TokenHandle);
-
-    return TRUE;
-}
-
-/**
  The set of operations supported by this command.
  */
 typedef enum _SHUTDN_OP {
@@ -107,7 +69,10 @@ typedef enum _SHUTDN_OP {
     ShutdownOpLogoff = 1,
     ShutdownOpShutdown = 2,
     ShutdownOpReboot = 3,
-    ShutdownOpLock = 4
+    ShutdownOpLock = 4,
+    ShutdownOpDisconnect = 5,
+    ShutdownOpSleep = 6,
+    ShutdownOpHibernate = 7,
 } SHUTDN_OP;
 
 #ifdef YORI_BUILTIN
@@ -134,19 +99,19 @@ typedef enum _SHUTDN_OP {
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
+    BOOLEAN ArgumentUnderstood;
     BOOL Result;
-    DWORD i;
-    DWORD StartArg = 0;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     YORI_STRING Arg;
     SHUTDN_OP Op;
     LPTSTR ErrText;
-    BOOL Force;
-    BOOL Powerdown;
+    BOOLEAN Force;
+    BOOLEAN Powerdown;
     DWORD ShutdownOptions;
     DWORD Err;
 
@@ -161,29 +126,38 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 ShutdownHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
-                YoriLibDisplayMitLicense(_T("2019"));
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
+                YoriLibDisplayMitLicense(_T("2019-2024"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("f")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("d")) == 0) {
+                Op = ShutdownOpDisconnect;
+                ArgumentUnderstood = TRUE;
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("e")) == 0) {
+                Op = ShutdownOpSleep;
+                ArgumentUnderstood = TRUE;
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("f")) == 0) {
                 Force = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("k")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("h")) == 0) {
+                Op = ShutdownOpHibernate;
+                ArgumentUnderstood = TRUE;
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("k")) == 0) {
                 Op = ShutdownOpLock;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("l")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("l")) == 0) {
                 Op = ShutdownOpLogoff;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("p")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("p")) == 0) {
                 Powerdown = TRUE;
                 Op = ShutdownOpShutdown;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("r")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("r")) == 0) {
                 Op = ShutdownOpReboot;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("s")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("s")) == 0) {
                 Op = ShutdownOpShutdown;
                 ArgumentUnderstood = TRUE;
             }
@@ -199,9 +173,10 @@ ENTRYPOINT(
     }
 
     YoriLibLoadAdvApi32Functions();
+    YoriLibLoadPowrprofFunctions();
     YoriLibLoadUser32Functions();
 
-    ShutdownEnableShutdownPrivilege();
+    YoriLibEnableShutdownPrivilege();
 
     Result = TRUE;
 
@@ -223,6 +198,7 @@ ENTRYPOINT(
                 ErrText = YoriLibGetWinErrorText(GetLastError());
                 YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("Logoff failed: %s"), ErrText);
                 YoriLibFreeWinErrorText(ErrText);
+                return EXIT_FAILURE;
             }
             break;
         case ShutdownOpReboot:
@@ -251,6 +227,7 @@ ENTRYPOINT(
                 ErrText = YoriLibGetWinErrorText(Err);
                 YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("Reboot failed: %s"), ErrText);
                 YoriLibFreeWinErrorText(ErrText);
+                return EXIT_FAILURE;
             }
             break;
         case ShutdownOpShutdown:
@@ -267,7 +244,8 @@ ENTRYPOINT(
                 if (Powerdown) {
                     ShutdownOptions = ShutdownOptions | EWX_POWEROFF;
                 }
-                if (!DllUser32.pExitWindowsEx(ShutdownOptions, 0)) {
+                Result = DllUser32.pExitWindowsEx(ShutdownOptions, 0);
+                if (!Result) {
                     Err = GetLastError();
                 }
             } else {
@@ -285,6 +263,7 @@ ENTRYPOINT(
                 ErrText = YoriLibGetWinErrorText(Err);
                 YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("Shutdown failed: %s"), ErrText);
                 YoriLibFreeWinErrorText(ErrText);
+                return EXIT_FAILURE;
             }
             break;
         case ShutdownOpLock:
@@ -293,6 +272,62 @@ ENTRYPOINT(
                 return EXIT_FAILURE;
             }
             DllUser32.pLockWorkStation();
+            break;
+        case ShutdownOpDisconnect:
+            YoriLibLoadWtsApi32Functions();
+            if (DllWtsApi32.pWTSDisconnectSession == NULL) {
+                YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("shutdn: OS support not present\n"));
+                return EXIT_FAILURE;
+            }
+
+            Result = DllWtsApi32.pWTSDisconnectSession(WTS_CURRENT_SERVER_HANDLE, WTS_CURRENT_SESSION, FALSE);
+            if (!Result) {
+                Err = GetLastError();
+                ErrText = YoriLibGetWinErrorText(Err);
+                YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("Disconnect failed: %s"), ErrText);
+                YoriLibFreeWinErrorText(ErrText);
+                return EXIT_FAILURE;
+            }
+            break;
+        case ShutdownOpSleep:
+            if (DllKernel32.pSetSystemPowerState == NULL) {
+                YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("shutdn: OS support not present\n"));
+                return EXIT_FAILURE;
+            }
+            if (DllPowrprof.pIsPwrSuspendAllowed != NULL &&
+                !DllPowrprof.pIsPwrSuspendAllowed()) {
+
+                YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("shutdn: system does not support sleep\n"));
+                return EXIT_FAILURE;
+            }
+            Result = DllKernel32.pSetSystemPowerState(TRUE, Force);
+            if (!Result) {
+                Err = GetLastError();
+                ErrText = YoriLibGetWinErrorText(Err);
+                YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("Sleep failed: %s"), ErrText);
+                YoriLibFreeWinErrorText(ErrText);
+                return EXIT_FAILURE;
+            }
+            break;
+        case ShutdownOpHibernate:
+            if (DllKernel32.pSetSystemPowerState == NULL) {
+                YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("shutdn: OS support not present\n"));
+                return EXIT_FAILURE;
+            }
+            if (DllPowrprof.pIsPwrHibernateAllowed != NULL &&
+                !DllPowrprof.pIsPwrHibernateAllowed()) {
+
+                YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("shutdn: system does not support hibernate\n"));
+                return EXIT_FAILURE;
+            }
+            Result = DllKernel32.pSetSystemPowerState(FALSE, Force);
+            if (!Result) {
+                Err = GetLastError();
+                ErrText = YoriLibGetWinErrorText(Err);
+                YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("Hibernate failed: %s"), ErrText);
+                YoriLibFreeWinErrorText(ErrText);
+                return EXIT_FAILURE;
+            }
             break;
     }
 

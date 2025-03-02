@@ -45,6 +45,42 @@ typedef struct _YORI_DLL_NAME_MAP {
 } YORI_DLL_NAME_MAP, *PYORI_DLL_NAME_MAP;
 
 /**
+ Convert a file name into a fully specified path to the System32 directory.
+
+ @param FileName Pointer to a string containing the file name component.
+
+ @param FullPath On successful completion, updated to contain a newly
+        allocated string that is fully specified to the System32 directory.
+        The caller is expected to free this with
+        @ref YoriLibFreeStringContents.
+
+ @return TRUE to indicate success, FALSE to indicate failure.
+ */
+__success(return)
+BOOLEAN
+YoriLibFullPathToSystemDirectory(
+    __in PCYORI_STRING FileName,
+    __out PYORI_STRING FullPath
+    )
+{
+    YORI_ALLOC_SIZE_T LengthRequired;
+    LengthRequired = (YORI_ALLOC_SIZE_T)GetSystemDirectory(NULL, 0);
+
+    if (!YoriLibAllocateString(FullPath, LengthRequired + 1 + FileName->LengthInChars + 1)) {
+        return FALSE;
+    }
+
+    LengthRequired = (YORI_ALLOC_SIZE_T)GetSystemDirectory(FullPath->StartOfString, LengthRequired);
+    if (LengthRequired == 0) {
+        YoriLibFreeStringContents(FullPath);
+        return FALSE;
+    }
+
+    FullPath->LengthInChars = LengthRequired + YoriLibSPrintf(&FullPath->StartOfString[LengthRequired], _T("\\%y"), FileName);
+    return TRUE;
+}
+
+/**
  Load a DLL from the System32 directory.
 
  @param DllName Pointer to the name of the DLL to load.
@@ -56,27 +92,21 @@ YoriLibLoadLibraryFromSystemDirectory(
     __in LPCTSTR DllName
     )
 {
-    DWORD LengthRequired;
     YORI_STRING YsDllName;
     YORI_STRING FullPath;
     HMODULE DllModule;
 
     YoriLibConstantString(&YsDllName, DllName);
-    LengthRequired = GetSystemDirectory(NULL, 0);
-
-    if (!YoriLibAllocateString(&FullPath, LengthRequired + 1 + YsDllName.LengthInChars + 1)) {
+    if (!YoriLibFullPathToSystemDirectory(&YsDllName, &FullPath)) {
         return NULL;
     }
 
-    FullPath.LengthInChars = GetSystemDirectory(FullPath.StartOfString, LengthRequired);
-    if (FullPath.LengthInChars == 0) {
-        YoriLibFreeStringContents(&FullPath);
-        return NULL;
+    DllModule = NULL;
+    if (DllKernel32.pLoadLibraryW != NULL) {
+        DllModule = DllKernel32.pLoadLibraryW(FullPath.StartOfString);
+    } else if (DllKernel32.pLoadLibraryExW != NULL) {
+        DllModule = DllKernel32.pLoadLibraryExW(FullPath.StartOfString, NULL, 0);
     }
-
-    FullPath.LengthInChars += YoriLibSPrintf(&FullPath.StartOfString[FullPath.LengthInChars], _T("\\%y"), &YsDllName);
-
-    DllModule = LoadLibrary(FullPath.StartOfString);
 
     YoriLibFreeStringContents(&FullPath);
     return DllModule;
@@ -106,10 +136,14 @@ YoriLibLoadNtDllFunctions(VOID)
     if (DllNtDll.hDll == NULL) {
         return FALSE;
     }
+    DllNtDll.pNtOpenDirectoryObject = (PNT_OPEN_DIRECTORY_OBJECT)GetProcAddress(DllNtDll.hDll, "NtOpenDirectoryObject");
+    DllNtDll.pNtOpenSymbolicLinkObject = (PNT_OPEN_SYMBOLIC_LINK_OBJECT)GetProcAddress(DllNtDll.hDll, "NtOpenSymbolicLinkObject");
+    DllNtDll.pNtQueryDirectoryObject = (PNT_QUERY_DIRECTORY_OBJECT)GetProcAddress(DllNtDll.hDll, "NtQueryDirectoryObject");
     DllNtDll.pNtQueryInformationFile = (PNT_QUERY_INFORMATION_FILE)GetProcAddress(DllNtDll.hDll, "NtQueryInformationFile");
     DllNtDll.pNtQueryInformationProcess = (PNT_QUERY_INFORMATION_PROCESS)GetProcAddress(DllNtDll.hDll, "NtQueryInformationProcess");
     DllNtDll.pNtQueryInformationThread = (PNT_QUERY_INFORMATION_THREAD)GetProcAddress(DllNtDll.hDll, "NtQueryInformationThread");
     DllNtDll.pNtQueryObject = (PNT_QUERY_OBJECT)GetProcAddress(DllNtDll.hDll, "NtQueryObject");
+    DllNtDll.pNtQuerySymbolicLinkObject = (PNT_QUERY_SYMBOLIC_LINK_OBJECT)GetProcAddress(DllNtDll.hDll, "NtQuerySymbolicLinkObject");
     DllNtDll.pNtQuerySystemInformation = (PNT_QUERY_SYSTEM_INFORMATION)GetProcAddress(DllNtDll.hDll, "NtQuerySystemInformation");
     DllNtDll.pNtSetInformationFile = (PNT_SET_INFORMATION_FILE)GetProcAddress(DllNtDll.hDll, "NtSetInformationFile");
     DllNtDll.pNtSystemDebugControl = (PNT_SYSTEM_DEBUG_CONTROL)GetProcAddress(DllNtDll.hDll, "NtSystemDebugControl");
@@ -129,6 +163,8 @@ YORI_KERNEL32_FUNCTIONS DllKernel32;
 CONST YORI_DLL_NAME_MAP DllKernel32Symbols[] = {
     {(FARPROC *)&DllKernel32.pAddConsoleAliasW, "AddConsoleAliasW"},
     {(FARPROC *)&DllKernel32.pAssignProcessToJobObject, "AssignProcessToJobObject"},
+    {(FARPROC *)&DllKernel32.pCopyFileW, "CopyFileW"},
+    {(FARPROC *)&DllKernel32.pCopyFileExW, "CopyFileExW"},
     {(FARPROC *)&DllKernel32.pCreateHardLinkW, "CreateHardLinkW"},
     {(FARPROC *)&DllKernel32.pCreateJobObjectW, "CreateJobObjectW"},
     {(FARPROC *)&DllKernel32.pCreateSymbolicLinkW, "CreateSymbolicLinkW"},
@@ -141,6 +177,7 @@ CONST YORI_DLL_NAME_MAP DllKernel32Symbols[] = {
     {(FARPROC *)&DllKernel32.pGetCompressedFileSizeW, "GetCompressedFileSizeW"},
     {(FARPROC *)&DllKernel32.pGetConsoleAliasesLengthW, "GetConsoleAliasesLengthW"},
     {(FARPROC *)&DllKernel32.pGetConsoleAliasesW, "GetConsoleAliasesW"},
+    {(FARPROC *)&DllKernel32.pGetConsoleDisplayMode, "GetConsoleDisplayMode"},
     {(FARPROC *)&DllKernel32.pGetConsoleScreenBufferInfoEx, "GetConsoleScreenBufferInfoEx"},
     {(FARPROC *)&DllKernel32.pGetConsoleProcessList, "GetConsoleProcessList"},
     {(FARPROC *)&DllKernel32.pGetConsoleWindow, "GetConsoleWindow"},
@@ -150,34 +187,69 @@ CONST YORI_DLL_NAME_MAP DllKernel32Symbols[] = {
     {(FARPROC *)&DllKernel32.pGetEnvironmentStringsW, "GetEnvironmentStringsW"},
     {(FARPROC *)&DllKernel32.pGetFileInformationByHandleEx, "GetFileInformationByHandleEx"},
     {(FARPROC *)&DllKernel32.pGetFinalPathNameByHandleW, "GetFinalPathNameByHandleW"},
+    {(FARPROC *)&DllKernel32.pGetLargestConsoleWindowSize, "GetLargestConsoleWindowSize"},
     {(FARPROC *)&DllKernel32.pGetLogicalProcessorInformation, "GetLogicalProcessorInformation"},
     {(FARPROC *)&DllKernel32.pGetLogicalProcessorInformationEx, "GetLogicalProcessorInformationEx"},
     {(FARPROC *)&DllKernel32.pGetNativeSystemInfo, "GetNativeSystemInfo"},
+    {(FARPROC *)&DllKernel32.pGetPrivateProfileIntW, "GetPrivateProfileIntW"},
+    {(FARPROC *)&DllKernel32.pGetPrivateProfileSectionW, "GetPrivateProfileSectionW"},
     {(FARPROC *)&DllKernel32.pGetPrivateProfileSectionNamesW, "GetPrivateProfileSectionNamesW"},
+    {(FARPROC *)&DllKernel32.pGetPrivateProfileStringW, "GetPrivateProfileStringW"},
     {(FARPROC *)&DllKernel32.pGetProcessIoCounters, "GetProcessIoCounters"},
     {(FARPROC *)&DllKernel32.pGetProductInfo, "GetProductInfo"},
+    {(FARPROC *)&DllKernel32.pGetSystemPowerStatus, "GetSystemPowerStatus"},
     {(FARPROC *)&DllKernel32.pGetTickCount64, "GetTickCount64"},
     {(FARPROC *)&DllKernel32.pGetVersionExW, "GetVersionExW"},
     {(FARPROC *)&DllKernel32.pGetVolumePathNamesForVolumeNameW, "GetVolumePathNamesForVolumeNameW"},
     {(FARPROC *)&DllKernel32.pGetVolumePathNameW, "GetVolumePathNameW"},
+    {(FARPROC *)&DllKernel32.pGlobalLock, "GlobalLock"},
+    {(FARPROC *)&DllKernel32.pGlobalMemoryStatus, "GlobalMemoryStatus"},
     {(FARPROC *)&DllKernel32.pGlobalMemoryStatusEx, "GlobalMemoryStatusEx"},
+    {(FARPROC *)&DllKernel32.pGlobalSize, "GlobalSize"},
+    {(FARPROC *)&DllKernel32.pGlobalUnlock, "GlobalUnlock"},
     {(FARPROC *)&DllKernel32.pInterlockedCompareExchange, "InterlockedCompareExchange"},
     {(FARPROC *)&DllKernel32.pIsWow64Process, "IsWow64Process"},
     {(FARPROC *)&DllKernel32.pIsWow64Process2, "IsWow64Process2"},
+    {(FARPROC *)&DllKernel32.pLoadLibraryW, "LoadLibraryW"},
+    {(FARPROC *)&DllKernel32.pLoadLibraryExW, "LoadLibraryExW"},
     {(FARPROC *)&DllKernel32.pOpenThread, "OpenThread"},
     {(FARPROC *)&DllKernel32.pQueryFullProcessImageNameW, "QueryFullProcessImageNameW"},
     {(FARPROC *)&DllKernel32.pQueryInformationJobObject, "QueryInformationJobObject"},
     {(FARPROC *)&DllKernel32.pRegisterApplicationRestart, "RegisterApplicationRestart"},
     {(FARPROC *)&DllKernel32.pReplaceFileW, "ReplaceFileW"},
     {(FARPROC *)&DllKernel32.pRtlCaptureStackBackTrace, "RtlCaptureStackBackTrace"},
+    {(FARPROC *)&DllKernel32.pSetConsoleDisplayMode, "SetConsoleDisplayMode"},
     {(FARPROC *)&DllKernel32.pSetConsoleScreenBufferInfoEx, "SetConsoleScreenBufferInfoEx"},
+    {(FARPROC *)&DllKernel32.pSetConsoleScreenBufferSize, "SetConsoleScreenBufferSize"},
     {(FARPROC *)&DllKernel32.pSetCurrentConsoleFontEx, "SetCurrentConsoleFontEx"},
     {(FARPROC *)&DllKernel32.pSetFileInformationByHandle, "SetFileInformationByHandle"},
     {(FARPROC *)&DllKernel32.pSetInformationJobObject, "SetInformationJobObject"},
+    {(FARPROC *)&DllKernel32.pSetSystemPowerState, "SetSystemPowerState"},
+    {(FARPROC *)&DllKernel32.pWritePrivateProfileStringW, "WritePrivateProfileStringW"},
     {(FARPROC *)&DllKernel32.pWow64DisableWow64FsRedirection, "Wow64DisableWow64FsRedirection"},
     {(FARPROC *)&DllKernel32.pWow64GetThreadContext, "Wow64GetThreadContext"},
     {(FARPROC *)&DllKernel32.pWow64SetThreadContext, "Wow64SetThreadContext"},
 };
+
+/**
+ Try to resolve function pointers for kernel32 functions which could be in
+ the specified DLL module.
+
+ @param hDll The DLL to load functions from.
+ */
+VOID
+YoriLibLoadKernel32FunctionsFromDll(
+    __in HMODULE hDll
+    )
+{
+    DWORD Count;
+
+    for (Count = 0; Count < sizeof(DllKernel32Symbols)/sizeof(DllKernel32Symbols[0]); Count++) {
+        if (*(DllKernel32Symbols[Count].FnPtr) == NULL) {
+            *(DllKernel32Symbols[Count].FnPtr) = GetProcAddress(hDll, DllKernel32Symbols[Count].FnName);
+        }
+    }
+}
 
 
 /**
@@ -190,19 +262,69 @@ CONST YORI_DLL_NAME_MAP DllKernel32Symbols[] = {
 BOOL
 YoriLibLoadKernel32Functions(VOID)
 {
-    DWORD Count;
-    if (DllKernel32.hDll != NULL) {
+    if (DllKernel32.hDllKernelBase != NULL ||
+        DllKernel32.hDllKernel32 != NULL) {
         return TRUE;
     }
 
-    DllKernel32.hDll = GetModuleHandle(_T("KERNEL32"));
-    if (DllKernel32.hDll == NULL) {
+    //
+    //  Try to resolve everything that can be resolved against kernelbase
+    //  directly.
+    //
+
+    DllKernel32.hDllKernelBase = GetModuleHandle(_T("KERNELBASE"));
+    if (DllKernel32.hDllKernelBase != NULL) {
+        YoriLibLoadKernel32FunctionsFromDll(DllKernel32.hDllKernelBase);
+    }
+
+    //
+    //  On a kernelbase only build, kernel32 is not part of the import table.
+    //  Nonetheless on mainstream editions it gets mapped into the process
+    //  automatically, so GetModuleHandle succeeds.
+    //
+    //  On editions without kernel32, hopefully this will fail, and it'll
+    //  be forced to load and probe the legacy DLL instead.
+    //
+
+    DllKernel32.hDllKernel32 = GetModuleHandle(_T("KERNEL32"));
+    if (DllKernel32.hDllKernel32 != NULL) {
+        YoriLibLoadKernel32FunctionsFromDll(DllKernel32.hDllKernel32);
+    } else {
+        DllKernel32.hDllKernel32Legacy = YoriLibLoadLibraryFromSystemDirectory(_T("KERNEL32LEGACY.DLL"));
+        if (DllKernel32.hDllKernel32Legacy != NULL) {
+            YoriLibLoadKernel32FunctionsFromDll(DllKernel32.hDllKernel32Legacy);
+        }
+    }
+
+
+    return TRUE;
+}
+
+/**
+ A structure containing pointers to crypt32.dll functions that can be used if
+ they are found but programs do not have a hard dependency on.
+ */
+YORI_CRYPT32_FUNCTIONS DllCrypt32;
+
+/**
+ Load pointers to all optional crypt32.dll functions.
+
+ @return TRUE to indicate success, FALSE to indicate failure.
+ */
+BOOL
+YoriLibLoadCrypt32Functions(VOID)
+{
+    if (DllCrypt32.hDll != NULL) {
+        return TRUE;
+    }
+
+    DllCrypt32.hDll = YoriLibLoadLibraryFromSystemDirectory(_T("CRYPT32.DLL"));
+    if (DllCrypt32.hDll == NULL) {
         return FALSE;
     }
 
-    for (Count = 0; Count < sizeof(DllKernel32Symbols)/sizeof(DllKernel32Symbols[0]); Count++) {
-        *(DllKernel32Symbols[Count].FnPtr) = GetProcAddress(DllKernel32.hDll, DllKernel32Symbols[Count].FnName);
-    }
+    DllCrypt32.pCryptBinaryToStringW = (PCRYPT_BINARY_TO_STRINGW)GetProcAddress(DllCrypt32.hDll, "CryptBinaryToStringW");
+    DllCrypt32.pCryptStringToBinaryW = (PCRYPT_STRING_TO_BINARYW)GetProcAddress(DllCrypt32.hDll, "CryptStringToBinaryW");
 
     return TRUE;
 }
@@ -290,6 +412,7 @@ YoriLibLoadImageHlpFunctions(VOID)
         return FALSE;
     }
 
+    DllImageHlp.pCheckSumMappedFile = (PCHECK_SUM_MAPPED_FILE)GetProcAddress(DllImageHlp.hDll, "CheckSumMappedFile");
     DllImageHlp.pMapFileAndCheckSumW = (PMAP_FILE_AND_CHECKSUMW)GetProcAddress(DllImageHlp.hDll, "MapFileAndCheckSumW");
 
     return TRUE;
@@ -321,7 +444,43 @@ YoriLibLoadOle32Functions(VOID)
 
     DllOle32.pCoCreateInstance = (PCO_CREATE_INSTANCE)GetProcAddress(DllOle32.hDll, "CoCreateInstance");
     DllOle32.pCoInitialize = (PCO_INITIALIZE)GetProcAddress(DllOle32.hDll, "CoInitialize");
+    DllOle32.pCoLockObjectExternal = (PCO_LOCK_OBJECT_EXTERNAL)GetProcAddress(DllOle32.hDll, "CoLockObjectExternal");
     DllOle32.pCoTaskMemFree = (PCO_TASK_MEM_FREE)GetProcAddress(DllOle32.hDll, "CoTaskMemFree");
+    DllOle32.pOleInitialize = (POLE_INITIALIZE)GetProcAddress(DllOle32.hDll, "OleInitialize");
+    DllOle32.pOleUninitialize = (POLE_UNINITIALIZE)GetProcAddress(DllOle32.hDll, "OleUninitialize");
+    DllOle32.pRegisterDragDrop = (PREGISTER_DRAG_DROP)GetProcAddress(DllOle32.hDll, "RegisterDragDrop");
+    DllOle32.pRevokeDragDrop = (PREVOKE_DRAG_DROP)GetProcAddress(DllOle32.hDll, "RevokeDragDrop");
+
+    return TRUE;
+}
+
+/**
+ A structure containing pointers to powrprof.dll functions that can be used if
+ they are found but programs do not have a hard dependency on.
+ */
+YORI_POWRPROF_FUNCTIONS DllPowrprof;
+
+/**
+ Load pointers to all optional powrprof.dll functions.
+
+ @return TRUE to indicate success, FALSE to indicate failure.
+ */
+BOOL
+YoriLibLoadPowrprofFunctions(VOID)
+{
+
+    if (DllPowrprof.hDll != NULL) {
+        return TRUE;
+    }
+
+    DllPowrprof.hDll = YoriLibLoadLibraryFromSystemDirectory(_T("POWRPROF.DLL"));
+    if (DllPowrprof.hDll == NULL) {
+        return FALSE;
+    }
+
+    DllPowrprof.pIsPwrHibernateAllowed = (PIS_PWR_SUSPEND_ALLOWED)GetProcAddress(DllPowrprof.hDll, "IsPwrHibernateAllowed");
+    DllPowrprof.pIsPwrSuspendAllowed = (PIS_PWR_SUSPEND_ALLOWED)GetProcAddress(DllPowrprof.hDll, "IsPwrSuspendAllowed");
+    DllPowrprof.pSetSuspendState = (PSET_SUSPEND_STATE)GetProcAddress(DllPowrprof.hDll, "SetSuspendState");
 
     return TRUE;
 }
@@ -384,7 +543,6 @@ YoriLibLoadShell32Functions(VOID)
         return FALSE;
     }
 
-    DllShell32.pSHAppBarMessage = (PSH_APP_BAR_MESSAGE)GetProcAddress(DllShell32.hDll, "SHAppBarMessage");
     DllShell32.pSHBrowseForFolderW = (PSH_BROWSE_FOR_FOLDERW)GetProcAddress(DllShell32.hDll, "SHBrowseForFolderW");
     DllShell32.pSHFileOperationW = (PSH_FILE_OPERATIONW)GetProcAddress(DllShell32.hDll, "SHFileOperationW");
     DllShell32.pSHGetKnownFolderPath = (PSH_GET_KNOWN_FOLDER_PATH)GetProcAddress(DllShell32.hDll, "SHGetKnownFolderPath");
@@ -424,60 +582,31 @@ YoriLibLoadShfolderFunctions(VOID)
 }
 
 /**
- A structure containing pointers to user32.dll functions that can be used if
+ A structure containing pointers to userenv.dll functions that can be used if
  they are found but programs do not have a hard dependency on.
  */
-YORI_USER32_FUNCTIONS DllUser32;
+YORI_USERENV_FUNCTIONS DllUserEnv;
 
 /**
- Load pointers to all optional user32.dll functions.
+ Load pointers to all optional userenv.dll functions.
 
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 BOOL
-YoriLibLoadUser32Functions(VOID)
+YoriLibLoadUserEnvFunctions(VOID)
 {
-    if (DllUser32.hDll != NULL) {
+
+    if (DllUserEnv.hDll != NULL) {
         return TRUE;
     }
 
-    DllUser32.hDll = YoriLibLoadLibraryFromSystemDirectory(_T("USER32.DLL"));
-    if (DllUser32.hDll == NULL) {
+    DllUserEnv.hDll = YoriLibLoadLibraryFromSystemDirectory(_T("USERENV.DLL"));
+    if (DllUserEnv.hDll == NULL) {
         return FALSE;
     }
 
-    DllUser32.pCascadeWindows = (PCASCADE_WINDOWS)GetProcAddress(DllUser32.hDll, "CascadeWindows");
-    DllUser32.pCloseClipboard = (PCLOSE_CLIPBOARD)GetProcAddress(DllUser32.hDll, "CloseClipboard");
-    DllUser32.pDdeClientTransaction = (PDDE_CLIENT_TRANSACTION)GetProcAddress(DllUser32.hDll, "DdeClientTransaction");
-    DllUser32.pDdeConnect = (PDDE_CONNECT)GetProcAddress(DllUser32.hDll, "DdeConnect");
-    DllUser32.pDdeCreateDataHandle = (PDDE_CREATE_DATA_HANDLE)GetProcAddress(DllUser32.hDll, "DdeCreateDataHandle");
-    DllUser32.pDdeCreateStringHandleW = (PDDE_CREATE_STRING_HANDLEW)GetProcAddress(DllUser32.hDll, "DdeCreateStringHandleW");
-    DllUser32.pDdeDisconnect = (PDDE_DISCONNECT)GetProcAddress(DllUser32.hDll, "DdeDisconnect");
-    DllUser32.pDdeFreeStringHandle = (PDDE_FREE_STRING_HANDLE)GetProcAddress(DllUser32.hDll, "DdeFreeStringHandle");
-    DllUser32.pDdeInitializeW = (PDDE_INITIALIZEW)GetProcAddress(DllUser32.hDll, "DdeInitializeW");
-    DllUser32.pDdeUninitialize = (PDDE_UNINITIALIZE)GetProcAddress(DllUser32.hDll, "DdeUninitialize");
-    DllUser32.pEmptyClipboard = (PEMPTY_CLIPBOARD)GetProcAddress(DllUser32.hDll, "EmptyClipboard");
-    DllUser32.pEnumClipboardFormats = (PENUM_CLIPBOARD_FORMATS)GetProcAddress(DllUser32.hDll, "EnumClipboardFormats");
-    DllUser32.pExitWindowsEx = (PEXIT_WINDOWS_EX)GetProcAddress(DllUser32.hDll, "ExitWindowsEx");
-    DllUser32.pFindWindowW = (PFIND_WINDOWW)GetProcAddress(DllUser32.hDll, "FindWindowW");
-    DllUser32.pGetClipboardData = (PGET_CLIPBOARD_DATA)GetProcAddress(DllUser32.hDll, "GetClipboardData");
-    DllUser32.pGetClipboardFormatNameW = (PGET_CLIPBOARD_FORMAT_NAMEW)GetProcAddress(DllUser32.hDll, "GetClipboardFormatNameW");
-    DllUser32.pGetClientRect = (PGET_CLIENT_RECT)GetProcAddress(DllUser32.hDll, "GetClientRect");
-    DllUser32.pGetDesktopWindow = (PGET_DESKTOP_WINDOW)GetProcAddress(DllUser32.hDll, "GetDesktopWindow");
-    DllUser32.pGetKeyboardLayout = (PGET_KEYBOARD_LAYOUT)GetProcAddress(DllUser32.hDll, "GetKeyboardLayout");
-    DllUser32.pGetWindowRect = (PGET_WINDOW_RECT)GetProcAddress(DllUser32.hDll, "GetWindowRect");
-    DllUser32.pLockWorkStation = (PLOCK_WORKSTATION)GetProcAddress(DllUser32.hDll, "LockWorkStation");
-    DllUser32.pMoveWindow = (PMOVE_WINDOW)GetProcAddress(DllUser32.hDll, "MoveWindow");
-    DllUser32.pOpenClipboard = (POPEN_CLIPBOARD)GetProcAddress(DllUser32.hDll, "OpenClipboard");
-    DllUser32.pRegisterClipboardFormatW = (PREGISTER_CLIPBOARD_FORMATW)GetProcAddress(DllUser32.hDll, "RegisterClipboardFormatW");
-    DllUser32.pRegisterShellHookWindow = (PREGISTER_SHELL_HOOK_WINDOW)GetProcAddress(DllUser32.hDll, "RegisterShellHookWindow");
-    DllUser32.pSendMessageTimeoutW = (PSEND_MESSAGE_TIMEOUTW)GetProcAddress(DllUser32.hDll, "SendMessageTimeoutW");
-    DllUser32.pSetClipboardData = (PSET_CLIPBOARD_DATA)GetProcAddress(DllUser32.hDll, "SetClipboardData");
-    DllUser32.pSetForegroundWindow = (PSET_FOREGROUND_WINDOW)GetProcAddress(DllUser32.hDll, "SetForegroundWindow");
-    DllUser32.pSetWindowTextW = (PSET_WINDOW_TEXTW)GetProcAddress(DllUser32.hDll, "SetWindowTextW");
-    DllUser32.pShowWindow = (PSHOW_WINDOW)GetProcAddress(DllUser32.hDll, "ShowWindow");
-    DllUser32.pTileWindows = (PTILE_WINDOWS)GetProcAddress(DllUser32.hDll, "TileWindows");
-
+    DllUserEnv.pCreateEnvironmentBlock = (PCREATE_ENVIRONMENT_BLOCK)GetProcAddress(DllUserEnv.hDll, "CreateEnvironmentBlock");
+    DllUserEnv.pDestroyEnvironmentBlock = (PDESTROY_ENVIRONMENT_BLOCK)GetProcAddress(DllUserEnv.hDll, "DestroyEnvironmentBlock");
     return TRUE;
 }
 
@@ -588,6 +717,79 @@ YoriLibLoadWinBrandFunctions(VOID)
 }
 
 /**
+ A structure containing pointers to wlanapi.dll functions that can be used if
+ they are found but programs do not have a hard dependency on.
+ */
+YORI_WLANAPI_FUNCTIONS DllWlanApi;
+
+/**
+ Load pointers to all optional WlanApi.dll functions.
+
+ @return TRUE to indicate success, FALSE to indicate failure.
+ */
+BOOL
+YoriLibLoadWlanApiFunctions(VOID)
+{
+
+    if (DllWlanApi.hDll != NULL) {
+        return TRUE;
+    }
+
+    DllWlanApi.hDll = YoriLibLoadLibraryFromSystemDirectory(_T("WLANAPI.DLL"));
+    if (DllWlanApi.hDll == NULL) {
+        return FALSE;
+    }
+
+    DllWlanApi.pWlanCloseHandle = (PWLAN_CLOSE_HANDLE)GetProcAddress(DllWlanApi.hDll, "WlanCloseHandle");
+    DllWlanApi.pWlanConnect = (PWLAN_CONNECT)GetProcAddress(DllWlanApi.hDll, "WlanConnect");
+    DllWlanApi.pWlanDisconnect = (PWLAN_DISCONNECT)GetProcAddress(DllWlanApi.hDll, "WlanDisconnect");
+    DllWlanApi.pWlanEnumInterfaces = (PWLAN_ENUM_INTERFACES)GetProcAddress(DllWlanApi.hDll, "WlanEnumInterfaces");
+    DllWlanApi.pWlanFreeMemory = (PWLAN_FREE_MEMORY)GetProcAddress(DllWlanApi.hDll, "WlanFreeMemory");
+    DllWlanApi.pWlanGetAvailableNetworkList = (PWLAN_GET_AVAILABLE_NETWORK_LIST)GetProcAddress(DllWlanApi.hDll, "WlanGetAvailableNetworkList");
+    DllWlanApi.pWlanOpenHandle = (PWLAN_OPEN_HANDLE)GetProcAddress(DllWlanApi.hDll, "WlanOpenHandle");
+    DllWlanApi.pWlanRegisterNotification = (PWLAN_REGISTER_NOTIFICATION)GetProcAddress(DllWlanApi.hDll, "WlanRegisterNotification");
+    DllWlanApi.pWlanScan = (PWLAN_SCAN)GetProcAddress(DllWlanApi.hDll, "WlanScan");
+    return TRUE;
+}
+
+
+/**
+ A structure containing pointers to wsock32.dll functions that can be used if
+ they are found but programs do not have a hard dependency on.
+ */
+YORI_WSOCK32_FUNCTIONS DllWsock32;
+
+/**
+ Load pointers to all optional Wsock32.dll functions.
+
+ @return TRUE to indicate success, FALSE to indicate failure.
+ */
+BOOL
+YoriLibLoadWsock32Functions(VOID)
+{
+
+    if (DllWsock32.hDll != NULL) {
+        return TRUE;
+    }
+
+    DllWsock32.hDll = YoriLibLoadLibraryFromSystemDirectory(_T("WSOCK32.DLL"));
+    if (DllWsock32.hDll == NULL) {
+        return FALSE;
+    }
+
+    DllWsock32.pclosesocket = (PCLOSE_SOCKET_FN)GetProcAddress(DllWsock32.hDll, "closesocket");
+    DllWsock32.pconnect = (PCONNECT_FN)GetProcAddress(DllWsock32.hDll, "connect");
+    DllWsock32.pgethostbyname = (PGETHOSTBYNAME)GetProcAddress(DllWsock32.hDll, "gethostbyname");
+    DllWsock32.precv = (PRECV_FN)GetProcAddress(DllWsock32.hDll, "recv");
+    DllWsock32.psend = (PSEND_FN)GetProcAddress(DllWsock32.hDll, "send");
+    DllWsock32.psocket = (PSOCKET_FN)GetProcAddress(DllWsock32.hDll, "socket");
+    DllWsock32.pWSACleanup = (PWSA_CLEANUP)GetProcAddress(DllWsock32.hDll, "WSACleanup");
+    DllWsock32.pWSAStartup = (PWSA_STARTUP)GetProcAddress(DllWsock32.hDll, "WSAStartup");
+
+    return TRUE;
+}
+
+/**
  A structure containing pointers to wtsapi32.dll functions that can be used if
  they are found but programs do not have a hard dependency on.
  */
@@ -612,6 +814,8 @@ YoriLibLoadWtsApi32Functions(VOID)
     }
 
     DllWtsApi32.pWTSDisconnectSession = (PWTS_DISCONNECT_SESSION)GetProcAddress(DllWtsApi32.hDll, "WTSDisconnectSession");
+    DllWtsApi32.pWTSRegisterSessionNotification = (PWTS_REGISTER_SESSION_NOTIFICATION)GetProcAddress(DllWtsApi32.hDll, "WTSRegisterSessionNotification");
+    DllWtsApi32.pWTSUnRegisterSessionNotification = (PWTS_UNREGISTER_SESSION_NOTIFICATION)GetProcAddress(DllWtsApi32.hDll, "WTSUnRegisterSessionNotification");
 
     return TRUE;
 }

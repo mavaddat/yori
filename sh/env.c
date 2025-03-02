@@ -34,7 +34,7 @@
  @return TRUE to indicate the character is an environment variable marker,
          FALSE if it is a regular character.
  */
-BOOL
+BOOLEAN
 YoriShIsEnvironmentVariableChar(
     __in TCHAR Char
     )
@@ -43,6 +43,156 @@ YoriShIsEnvironmentVariableChar(
         return TRUE;
     }
     return FALSE;
+}
+
+/**
+ Obtain the current directory with a trailing slash using the same API
+ semantics as GetCurrentDirectory.  This is used because %__CD__% includes a
+ trailing slash, has very bad memory bugs on XP, and isn't implemented before
+ that, so doing this manually allows us to implement it consistently and
+ hopefully correctly.
+
+ @param Size The size of Buffer, in TCHARs.
+
+ @param Buffer A buffer to populate with the current directory on successful
+        completion.
+
+ @return The number of characters copied.  If this is less than Size, the
+         operation is successful.  If it's greater than Size, the buffer is
+         insufficient and the returned number of characters is needed.  If
+         it's zero, a failure occurred.  Note that these APIs will count the
+         NULL character when indicating a required buffer length, but do not
+         count the NULL character when completing successfully.
+ */
+__success(return != 0 && return < Size)
+YORI_ALLOC_SIZE_T
+YoriShGetCurrentDirectoryWithTrailingSlash(
+    __in YORI_ALLOC_SIZE_T Size,
+    __out_ecount_part_opt(Size, return + 1) _When_(Size > 0, __out_ecount_part(Size, return + 1)) LPTSTR Buffer
+    )
+{
+    YORI_STRING CurDir;
+    YORI_ALLOC_SIZE_T LengthNeeded;
+    YORI_ALLOC_SIZE_T Index;
+    BOOLEAN AddSlash;
+    LPTSTR EndPtr;
+
+    YoriLibInitEmptyString(&CurDir);
+    if (!YoriLibGetCurrentDirectory(&CurDir)) {
+        return 0;
+    }
+
+    AddSlash = FALSE;
+    LengthNeeded = CurDir.LengthInChars;
+
+    if (CurDir.LengthInChars > 0 &&
+        !YoriLibIsSep(CurDir.StartOfString[CurDir.LengthInChars - 1])) {
+
+        LengthNeeded++;
+        AddSlash = TRUE;
+    }
+
+    if (Size > LengthNeeded) {
+
+        //
+        //  Manually copy so Prefast can see what we did
+        //
+
+        EndPtr = Buffer;
+        for (Index = 0; Index < CurDir.LengthInChars; Index++) {
+            *EndPtr = CurDir.StartOfString[Index];
+            EndPtr++;
+        }
+        if (AddSlash) {
+            *EndPtr = '\\';
+            EndPtr++;
+        }
+        *EndPtr = '\0';
+    } else {
+        if (Size > 0) {
+            *Buffer = '\0';
+        }
+        LengthNeeded++;
+    }
+
+    YoriLibFreeStringContents(&CurDir);
+    return LengthNeeded;
+}
+
+/**
+ Obtain the application directory with a trailing slash using the same API
+ semantics as GetCurrentDirectory.  This is used because %__APPDIR__% includes
+ a trailing slash, has very bad memory bugs on XP, and isn't implemented before
+ that, so doing this manually allows us to implement it consistently and
+ hopefully correctly.
+
+ @param Size The size of Buffer, in TCHARs.
+
+ @param Buffer A buffer to populate with the current directory on successful
+        completion.
+
+ @return The number of characters copied.  If this is less than Size, the
+         operation is successful.  If it's greater than Size, the buffer is
+         insufficient and the returned number of characters is needed.  If
+         it's zero, a failure occurred.  Note that these APIs will count the
+         NULL character when indicating a required buffer length, but do not
+         count the NULL character when completing successfully.
+ */
+__success(return != 0 && return < Size)
+YORI_ALLOC_SIZE_T
+YoriShGetAppDirectoryWithTrailingSlash(
+    __in YORI_ALLOC_SIZE_T Size,
+    __out_ecount_part_opt(Size, return + 1) _When_(Size > 0, __out_ecount_part(Size, return + 1)) LPTSTR Buffer
+    )
+{
+    YORI_STRING AppDir;
+    YORI_ALLOC_SIZE_T LengthNeeded;
+    LPTSTR FinalSlash;
+    LPTSTR EndPtr;
+    YORI_ALLOC_SIZE_T Index;
+
+    YoriLibInitEmptyString(&AppDir);
+
+    if (!YoriLibAllocateString(&AppDir, 32768)) {
+        return 0;
+    }
+
+    AppDir.LengthInChars = (YORI_ALLOC_SIZE_T)GetModuleFileName(NULL, AppDir.StartOfString, AppDir.LengthAllocated);
+    if (AppDir.LengthInChars == 0) {
+        YoriLibFreeStringContents(&AppDir);
+        return 0;
+    }
+
+    FinalSlash = YoriLibFindRightMostCharacter(&AppDir, '\\');
+    if (FinalSlash == NULL) {
+        YoriLibFreeStringContents(&AppDir);
+        return 0;
+    }
+
+    AppDir.LengthInChars = (YORI_ALLOC_SIZE_T)(FinalSlash - AppDir.StartOfString + 1);
+    LengthNeeded = AppDir.LengthInChars;
+
+    if (Size > AppDir.LengthInChars) {
+
+        //
+        //  Manually copy so Prefast can see what we did
+        //
+
+        EndPtr = Buffer;
+        for (Index = 0; Index < AppDir.LengthInChars; Index++) {
+            *EndPtr = AppDir.StartOfString[Index];
+            EndPtr++;
+        }
+        *EndPtr = '\0';
+    } else {
+        if (Size > 0) {
+            *Buffer = '\0';
+        }
+        LengthNeeded++;
+    }
+
+    YoriLibFreeStringContents(&AppDir);
+    return LengthNeeded;
 }
 
 //
@@ -75,23 +225,27 @@ YoriShIsEnvironmentVariableChar(
          is too small, the number of characters needed (including NULL.)
  */
 __success(return != 0)
-DWORD
+YORI_ALLOC_SIZE_T
 YoriShGetEnvironmentVariableWithoutSubstitution(
     __in LPCTSTR Name,
-    __out_opt LPTSTR Variable,
-    __in DWORD Size,
+    __out_opt _When_(Size > 0, __out) LPTSTR Variable,
+    __in YORI_ALLOC_SIZE_T Size,
     __out_opt PDWORD Generation
     )
 {
-    DWORD Length;
+    YORI_ALLOC_SIZE_T Length;
     TCHAR NumString[12];
 
     //
     //  Query the variable and/or length required.
     //
 
-    if (_tcsicmp(Name, _T("CD")) == 0) {
-        Length = GetCurrentDirectory(Size, Variable);
+    if (_tcsicmp(Name, _T("__APPDIR__")) == 0) {
+        Length = YoriShGetAppDirectoryWithTrailingSlash(Size, Variable);
+    } else if (_tcsicmp(Name, _T("CD")) == 0) {
+        Length = (YORI_ALLOC_SIZE_T)GetCurrentDirectory(Size, Variable);
+    } else if (tcsicmp(Name, _T("__CD__")) == 0) {
+        Length = YoriShGetCurrentDirectoryWithTrailingSlash(Size, Variable);
     } else if (tcsicmp(Name, _T("ERRORLEVEL")) == 0) {
         if (Variable != NULL) {
             Length = YoriLibSPrintfS(Variable, Size, _T("%i"), YoriShGlobal.ErrorLevel);
@@ -115,7 +269,7 @@ YoriShGetEnvironmentVariableWithoutSubstitution(
         }
     } else {
 
-        Length = GetEnvironmentVariable(Name, Variable, Size);
+        Length = (YORI_ALLOC_SIZE_T)GetEnvironmentVariable(Name, Variable, Size);
     }
 
     if (Generation != NULL) {
@@ -160,22 +314,22 @@ YoriShGetEnvironmentVariableWithoutSubstitution(
                                // ReturnedSize > Size
 #endif
 __success(return)
-BOOL
+BOOLEAN
 YoriShGetEnvironmentVariable(
     __in LPCTSTR Name,
     __out_ecount_opt(Size) LPTSTR Variable,
-    __in DWORD Size,
-    __out PDWORD ReturnedSize,
+    __in YORI_ALLOC_SIZE_T Size,
+    __out PYORI_ALLOC_SIZE_T ReturnedSize,
     __out_opt PDWORD Generation
     )
 {
-    DWORD DataLength;
+    YORI_ALLOC_SIZE_T DataLength;
     LPTSTR DataVariable;
     LPTSTR ColonPtr;
     LPTSTR EqualsPtr;
     LPTSTR RawName;
-    DWORD RawNameLength;
-    DWORD ProcessedLength;
+    YORI_ALLOC_SIZE_T RawNameLength;
+    YORI_ALLOC_SIZE_T ProcessedLength;
 
     __analysis_assume(Size == 0 || Variable != NULL);
 
@@ -200,7 +354,7 @@ YoriShGetEnvironmentVariable(
     //  be NULL terminated and we can call into the OS APIs.
     //
 
-    RawNameLength = (DWORD)(ColonPtr - Name);
+    RawNameLength = (YORI_ALLOC_SIZE_T)(ColonPtr - Name);
     RawName = YoriLibMalloc((RawNameLength + 1) * sizeof(TCHAR));
     if (RawName == NULL) {
         return FALSE;
@@ -234,7 +388,7 @@ YoriShGetEnvironmentVariable(
     //
 
     if (Variable != NULL || EqualsPtr != NULL) {
-        DWORD FinalDataLength;
+        YORI_ALLOC_SIZE_T FinalDataLength;
         DataVariable = YoriLibMalloc(DataLength * sizeof(TCHAR));
         if (DataVariable == NULL) {
             YoriLibFree(RawName);
@@ -254,11 +408,11 @@ YoriShGetEnvironmentVariable(
 
     if (ColonPtr[0] == '~') {
         YORI_STRING SubstringString;
-        DWORD CharsConsumed;
-        LONGLONG RequestedOffset;
-        LONGLONG RequestedLength;
-        ULONG ActualOffset;
-        ULONG ActualLength;
+        YORI_ALLOC_SIZE_T CharsConsumed;
+        YORI_MAX_SIGNED_T RequestedOffset;
+        YORI_MAX_SIGNED_T RequestedLength;
+        YORI_ALLOC_SIZE_T ActualOffset;
+        YORI_ALLOC_SIZE_T ActualLength;
 
         RequestedOffset = 0;
         RequestedLength = DataLength - 1;
@@ -275,7 +429,7 @@ YoriShGetEnvironmentVariable(
 
         if (CharsConsumed < SubstringString.LengthInChars) {
             SubstringString.StartOfString += CharsConsumed;
-            SubstringString.LengthInChars -= CharsConsumed;
+            SubstringString.LengthInChars = SubstringString.LengthInChars - CharsConsumed;
 
             if (SubstringString.StartOfString[0] == ',' && SubstringString.LengthInChars > 1) {
                 SubstringString.StartOfString++;
@@ -301,25 +455,25 @@ YoriShGetEnvironmentVariable(
         //
 
         if (RequestedOffset >= 0) {
-            if (RequestedOffset < DataLength) {
-                ActualOffset = (ULONG)RequestedOffset;
+            if ((YORI_MAX_UNSIGNED_T)RequestedOffset < DataLength) {
+                ActualOffset = (YORI_ALLOC_SIZE_T)RequestedOffset;
             } else {
                 ActualOffset = 0;
                 RequestedLength = 0;
             }
         } else {
             RequestedOffset = RequestedOffset * -1;
-            if (RequestedOffset > DataLength) {
+            if ((YORI_MAX_UNSIGNED_T)RequestedOffset > DataLength) {
                 ActualOffset = 0;
                 RequestedLength = 0;
             } else {
-                ActualOffset = (DWORD)(DataLength - RequestedOffset);
+                ActualOffset = (YORI_ALLOC_SIZE_T)(DataLength - RequestedOffset);
             }
         }
 
         if (RequestedLength < 0) {
             RequestedLength = RequestedLength * -1;
-            if (RequestedLength > DataLength) {
+            if ((YORI_MAX_UNSIGNED_T)RequestedLength > DataLength) {
                 RequestedLength = DataLength;
             }
 
@@ -327,7 +481,7 @@ YoriShGetEnvironmentVariable(
         }
 
         if (ActualOffset + RequestedLength < DataLength) {
-            ActualLength = (ULONG)RequestedLength;
+            ActualLength = (YORI_ALLOC_SIZE_T)RequestedLength;
         } else {
             ActualLength = DataLength - ActualOffset;
         }
@@ -353,12 +507,12 @@ YoriShGetEnvironmentVariable(
         YORI_STRING ReplaceExpr;
         YORI_STRING RawVariable;
         PYORI_STRING FoundMatch;
-        DWORD FoundAt;
-        DWORD CurrentOffset;
+        YORI_ALLOC_SIZE_T FoundAt;
+        YORI_ALLOC_SIZE_T CurrentOffset;
 
         YoriLibInitEmptyString(&SearchExpr);
         SearchExpr.StartOfString = ColonPtr;
-        SearchExpr.LengthInChars = (DWORD)(EqualsPtr - ColonPtr);
+        SearchExpr.LengthInChars = (YORI_ALLOC_SIZE_T)(EqualsPtr - ColonPtr);
         YoriLibConstantString(&ReplaceExpr, EqualsPtr + 1);
 
         if (SearchExpr.LengthInChars == 0) {
@@ -369,21 +523,21 @@ YoriShGetEnvironmentVariable(
 
         YoriLibConstantString(&RawVariable, DataVariable);
         CurrentOffset = 0;
-        FoundMatch = YoriLibFindFirstMatchingSubstring(&RawVariable, 1, &SearchExpr, &FoundAt);
+        FoundMatch = YoriLibFindFirstMatchSubstr(&RawVariable, 1, &SearchExpr, &FoundAt);
         while (FoundMatch) {
             if (Variable != NULL && CurrentOffset + FoundAt < Size) {
                 memcpy(Variable + CurrentOffset, RawVariable.StartOfString, FoundAt * sizeof(TCHAR));
             }
-            CurrentOffset += FoundAt;
+            CurrentOffset = CurrentOffset + FoundAt;
             if (Variable != NULL && CurrentOffset + ReplaceExpr.LengthInChars < Size) {
                 memcpy(Variable + CurrentOffset,
                        ReplaceExpr.StartOfString,
                        ReplaceExpr.LengthInChars * sizeof(TCHAR));
             }
-            CurrentOffset += ReplaceExpr.LengthInChars;
+            CurrentOffset = CurrentOffset + ReplaceExpr.LengthInChars;
             RawVariable.StartOfString += FoundAt + SearchExpr.LengthInChars;
             RawVariable.LengthInChars -= FoundAt + SearchExpr.LengthInChars;
-            FoundMatch = YoriLibFindFirstMatchingSubstring(&RawVariable, 1, &SearchExpr, &FoundAt);
+            FoundMatch = YoriLibFindFirstMatchSubstr(&RawVariable, 1, &SearchExpr, &FoundAt);
         }
         if (Variable != NULL && CurrentOffset + RawVariable.LengthInChars < Size) {
             memcpy(Variable + CurrentOffset,
@@ -391,7 +545,7 @@ YoriShGetEnvironmentVariable(
                    RawVariable.LengthInChars * sizeof(TCHAR));
         }
 
-        CurrentOffset += RawVariable.LengthInChars;
+        CurrentOffset = CurrentOffset + RawVariable.LengthInChars;
         if (Variable != NULL && CurrentOffset < Size) {
             Variable[CurrentOffset] = '\0';
             ProcessedLength = CurrentOffset;
@@ -429,14 +583,14 @@ YoriShGetEnvironmentVariable(
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 __success(return)
-BOOL
+BOOLEAN
 YoriShAllocateAndGetEnvironmentVariable(
     __in LPCTSTR Name,
     __out PYORI_STRING Value,
     __out_opt PDWORD Generation
     )
 {
-    DWORD LengthNeeded;
+    YORI_ALLOC_SIZE_T LengthNeeded;
 
     if (Generation != NULL) {
         *Generation = YoriShGlobal.EnvironmentGeneration;
@@ -473,15 +627,15 @@ YoriShAllocateAndGetEnvironmentVariable(
          returns FALSE to indicate that the variable was not found.
  */
 __success(return)
-BOOL
+BOOLEAN
 YoriShGetEnvironmentVariableYS(
     __in PYORI_STRING VariableName,
     __out PYORI_STRING Value
     )
 {
     LPTSTR NullTerminatedVariable;
-    BOOL AllocatedVariable;
-    DWORD LengthNeeded;
+    BOOLEAN AllocatedVariable;
+    YORI_ALLOC_SIZE_T LengthNeeded;
 
     if (YoriLibIsStringNullTerminated(VariableName)) {
         NullTerminatedVariable = VariableName->StartOfString;
@@ -549,17 +703,17 @@ YoriShGetEnvironmentVariableYS(
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 __success(return)
-BOOL
+BOOLEAN
 YoriShGetEnvironmentExpandedText(
     __in PYORI_STRING Name,
     __in TCHAR Seperator,
     __inout PYORI_STRING Result,
-    __out PDWORD ReturnedSize
+    __out PYORI_ALLOC_SIZE_T ReturnedSize
     )
 {
-    DWORD EnvVarCopied;
+    YORI_ALLOC_SIZE_T EnvVarCopied;
     LPTSTR EnvVarName;
-    DWORD ReturnValue;
+    YORI_ALLOC_SIZE_T ReturnValue;
 
     EnvVarName = YoriLibCStringFromYoriString(Name);
     if (EnvVarName == NULL) {
@@ -609,18 +763,18 @@ YoriShGetEnvironmentExpandedText(
          indicate a failure to expand.
  */
 __success(return)
-BOOL
+BOOLEAN
 YoriShExpandEnvironmentVariables(
     __in PYORI_STRING Expression,
     __out PYORI_STRING ResultingExpression,
-    __inout_opt PDWORD CurrentOffset
+    __inout_opt PYORI_ALLOC_SIZE_T CurrentOffset
     )
 {
-    DWORD SrcIndex;
-    DWORD EndVarIndex;
-    DWORD DestIndex;
-    DWORD ExpandResult;
-    DWORD LocalCurrentOffset;
+    YORI_ALLOC_SIZE_T SrcIndex;
+    YORI_ALLOC_SIZE_T EndVarIndex;
+    YORI_ALLOC_SIZE_T DestIndex;
+    YORI_ALLOC_SIZE_T ExpandResult;
+    YORI_ALLOC_SIZE_T LocalCurrentOffset;
     BOOLEAN CurrentOffsetFound = FALSE;
     BOOLEAN VariableExpanded;
     BOOLEAN AnyVariableExpanded = FALSE;
@@ -676,7 +830,7 @@ YoriShExpandEnvironmentVariables(
                         return FALSE;
                     }
 
-                    DestIndex += ExpandResult;
+                    DestIndex = DestIndex + ExpandResult;
                     SrcIndex = EndVarIndex;
                     VariableExpanded = TRUE;
                     AnyVariableExpanded = TRUE;
@@ -778,7 +932,7 @@ YoriShExpandEnvironmentVariables(
                     }
 
                     SrcIndex = EndVarIndex;
-                    DestIndex += ExpandResult;
+                    DestIndex = DestIndex + ExpandResult;
                     VariableExpanded = TRUE;
                     break;
                 }
@@ -841,7 +995,7 @@ YoriShExpandEnvironmentVariables(
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 __success(return)
-BOOL
+BOOLEAN
 YoriShSetEnvironmentVariable(
     __in PYORI_STRING VariableName,
     __in_opt PYORI_STRING Value
@@ -849,8 +1003,8 @@ YoriShSetEnvironmentVariable(
 {
     LPTSTR NullTerminatedVariable;
     LPTSTR NullTerminatedValue;
-    BOOL AllocatedVariable;
-    BOOL AllocatedValue;
+    BOOLEAN AllocatedVariable;
+    BOOLEAN AllocatedValue;
     BOOL Result;
 
     if (YoriLibIsStringNullTerminated(VariableName)) {
@@ -893,7 +1047,10 @@ YoriShSetEnvironmentVariable(
         YoriLibDereference(NullTerminatedValue);
     }
 
-    return Result;
+    if (Result) {
+        return TRUE;
+    }
+    return FALSE;
 }
 
 /**
@@ -905,7 +1062,7 @@ YoriShSetEnvironmentVariable(
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 __success(return)
-BOOL
+BOOLEAN
 YoriShSetEnvironmentStrings(
     __in PYORI_STRING NewEnv
     )

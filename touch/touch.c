@@ -3,7 +3,7 @@
  *
  * Yori create files or update timestamps
  *
- * Copyright (c) 2018 Malcolm J. Smith
+ * Copyright (c) 2018-2022 Malcolm J. Smith
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -35,7 +35,7 @@ CHAR strTouchHelpText[] =
         "\n"
         "Create files or update timestamps.\n"
         "\n"
-        "TOUCH [-license] [-a] [-b] [-c] [-e] [-f size] [-s] [-t <date and time>]\n"
+        "TOUCH [-license] [-a] [-b] [-c] [-e] [-f size] [-h] [-s] [-t <date and time>]\n"
         "      [-w] <file>...\n"
         "\n"
         "   -a             Update last access time\n"
@@ -43,6 +43,7 @@ CHAR strTouchHelpText[] =
         "   -c             Update create time\n"
         "   -e             Only update existing files\n"
         "   -f             Create new file with specified file size\n"
+        "   -h             Operate on links as opposed to link targets\n"
         "   -s             Process files from all subdirectories\n"
         "   -t             Specify the timestamp to set\n"
         "   -w             Update write time\n";
@@ -96,7 +97,12 @@ typedef struct _TOUCH_CONTEXT {
      If TRUE, only existing files should be modified, and no new files should
      be created.
      */
-    BOOL ExistingOnly;
+    BOOLEAN ExistingOnly;
+
+    /**
+     If TRUE, changes should be applied to links as opposed to link targets.
+     */
+    BOOLEAN NoFollowLinks;
 
 } TOUCH_CONTEXT, *PTOUCH_CONTEXT;
 
@@ -126,6 +132,7 @@ TouchFileFoundCallback(
 {
     HANDLE FileHandle;
     DWORD DesiredAccess;
+    DWORD OpenFlags;
     PTOUCH_CONTEXT TouchContext = (PTOUCH_CONTEXT)Context;
 
     UNREFERENCED_PARAMETER(Depth);
@@ -138,12 +145,17 @@ TouchFileFoundCallback(
         DesiredAccess |= GENERIC_WRITE;
     }
 
+    OpenFlags = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS;
+    if (TouchContext->NoFollowLinks) {
+        OpenFlags = OpenFlags | FILE_FLAG_OPEN_REPARSE_POINT;
+    }
+
     FileHandle = CreateFile(FilePath->StartOfString,
                             DesiredAccess,
                             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                             NULL,
                             TouchContext->ExistingOnly?OPEN_EXISTING:OPEN_ALWAYS,
-                            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS,
+                            OpenFlags,
                             NULL);
 
     if (FileHandle == NULL || FileHandle == INVALID_HANDLE_VALUE) {
@@ -211,19 +223,19 @@ TouchFileFoundCallback(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
-    DWORD MatchFlags;
-    BOOL Recursive = FALSE;
-    BOOL BasicEnumeration = FALSE;
-    BOOL UpdateLastAccess = FALSE;
-    BOOL UpdateCreationTime = FALSE;
-    BOOL UpdateWriteTime = FALSE;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
+    WORD MatchFlags;
+    BOOLEAN Recursive = FALSE;
+    BOOLEAN BasicEnumeration = FALSE;
+    BOOLEAN UpdateLastAccess = FALSE;
+    BOOLEAN UpdateCreationTime = FALSE;
+    BOOLEAN UpdateWriteTime = FALSE;
     SYSTEMTIME CurrentSystemTime;
     FILETIME TimestampToUse;
     TOUCH_CONTEXT TouchContext;
@@ -243,40 +255,50 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 TouchHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
-                YoriLibDisplayMitLicense(_T("2018"));
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
+                YoriLibDisplayMitLicense(_T("2018-2022"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("a")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("a")) == 0) {
                 UpdateLastAccess = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("b")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("b")) == 0) {
                 BasicEnumeration = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("c")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("c")) == 0) {
                 UpdateCreationTime = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("e")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("e")) == 0) {
                 TouchContext.ExistingOnly = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("f")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("f")) == 0) {
                 if (i + 1 < ArgC) {
                     TouchContext.NewFileSize = YoriLibStringToFileSize(&ArgV[i + 1]);
                     ArgumentUnderstood = TRUE;
                     i++;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("s")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("h")) == 0) {
+                TouchContext.NoFollowLinks = TRUE;
+                ArgumentUnderstood = TRUE;
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("s")) == 0) {
                 Recursive = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("t")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("t")) == 0) {
                 if (i + 1 < ArgC) {
                     SYSTEMTIME NewTime;
                     FILETIME LocalNewTime;
                     ZeroMemory(&NewTime, sizeof(NewTime));
                     if (YoriLibStringToDateTime(&ArgV[i + 1], &NewTime)) {
-                        YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("Setting time to %i/%i/%i:%i:%i:%i\n"), NewTime.wYear, NewTime.wMonth, NewTime.wDay, NewTime.wHour, NewTime.wMinute, NewTime.wSecond);
+                        YoriLibOutput(YORI_LIB_OUTPUT_STDOUT,
+                                      _T("Setting time to %i/%i/%i:%i:%i:%i\n"),
+                                      NewTime.wYear,
+                                      NewTime.wMonth,
+                                      NewTime.wDay,
+                                      NewTime.wHour,
+                                      NewTime.wMinute,
+                                      NewTime.wSecond);
                         if (!SystemTimeToFileTime(&NewTime, &LocalNewTime) || !LocalFileTimeToFileTime(&LocalNewTime, &TimestampToUse)) {
                             YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("Could not parse time: %y\n"), &ArgV[i + 1]);
                         }
@@ -284,10 +306,10 @@ ENTRYPOINT(
                     }
                     i++;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("w")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("w")) == 0) {
                 UpdateWriteTime = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 StartArg = i + 1;
                 ArgumentUnderstood = TRUE;
                 break;

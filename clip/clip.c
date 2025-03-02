@@ -67,7 +67,7 @@ ClipHelp(VOID)
  strings.  The zero padding helps keep computation sane.
  Dummy because it is only used to count its size, not used as a string.
  */
-static const CHAR DummyHeader[] = 
+const CHAR ClipDummyHeader[] = 
                   "Version:0.9\n"
                   "StartHTML:12345678\n"
                   "EndHTML:12345678\n"
@@ -77,31 +77,31 @@ static const CHAR DummyHeader[] =
 /**
  The length of the header, in bytes.
  */
-#define HTMLCLIP_HDR_SIZE (sizeof(DummyHeader)-1)
+#define HTMLCLIP_HDR_SIZE (sizeof(ClipDummyHeader)-1)
 
 /**
  A string indicating the start of a fragment.
  Dummy because it is only used to count its size, not used as a string.
  */
-static const CHAR DummyFragStart[] = 
+const CHAR ClipDummyFragStart[] = 
                   "<!--StartFragment-->";
 
 /**
  The length of the fragment start string, in bytes.
  */
-#define HTMLCLIP_FRAGSTART_SIZE (sizeof(DummyFragStart)-1)
+#define HTMLCLIP_FRAGSTART_SIZE (sizeof(ClipDummyFragStart)-1)
 
 /**
  A string indicating the end of a fragment.
  Dummy because it is only used to count its size, not used as a string.
  */
-static const CHAR DummyFragEnd[] = 
+const CHAR ClipDummyFragEnd[] = 
                   "<!--EndFragment-->";
 
 /**
  The length of the fragment end string, in bytes.
  */
-#define HTMLCLIP_FRAGEND_SIZE (sizeof(DummyFragEnd)-1)
+#define HTMLCLIP_FRAGEND_SIZE (sizeof(ClipDummyFragEnd)-1)
 
 /**
  The maximum amount of data to buffer from a pipe before acting upon it.  The
@@ -139,11 +139,12 @@ ClipCopyAsHtml(
     __in DWORD FileSize
     )
 {
-    DWORD  AllocSize;
+    YORI_ALLOC_SIZE_T AllocSize;
+    DWORD  DesiredSize;
     HANDLE hMem;
     PUCHAR pMem;
     DWORD  BytesTransferred;
-    DWORD  CurrentOffset;
+    YORI_ALLOC_SIZE_T CurrentOffset;
     UINT   ClipFmt;
     DWORD  Err;
     LPTSTR ErrText;
@@ -152,13 +153,17 @@ ClipCopyAsHtml(
     //  Allocate space to copy the file or pipe contents.
     //
 
-    AllocSize = FileSize + HTMLCLIP_HDR_SIZE + HTMLCLIP_FRAGSTART_SIZE + HTMLCLIP_FRAGEND_SIZE + 2;
+    DesiredSize = FileSize + HTMLCLIP_HDR_SIZE + HTMLCLIP_FRAGSTART_SIZE + HTMLCLIP_FRAGEND_SIZE + 2;
+    if (!YoriLibIsSizeAllocatable(DesiredSize)) {
+        return FALSE;
+    }
+    AllocSize = (YORI_ALLOC_SIZE_T)DesiredSize;
     hMem = GlobalAlloc(GMEM_MOVEABLE|GMEM_DDESHARE, AllocSize);
     if (hMem == NULL) {
         return FALSE;
     }
 
-    pMem = GlobalLock(hMem);
+    pMem = DllKernel32.pGlobalLock(hMem);
     if (pMem == NULL) {
         GlobalFree(hMem);
         return FALSE;
@@ -192,7 +197,7 @@ ClipCopyAsHtml(
     //
 
     while (ReadFile(hFile, pMem + HTMLCLIP_HDR_SIZE + HTMLCLIP_FRAGSTART_SIZE + 1 + CurrentOffset, FileSize - CurrentOffset, &BytesTransferred, NULL)) {
-        CurrentOffset += BytesTransferred;
+        CurrentOffset = CurrentOffset + (YORI_ALLOC_SIZE_T)BytesTransferred;
 
         //
         //  If we're reading from the pipe and have exceeded our storage,
@@ -250,15 +255,15 @@ ClipCopyAsHtml(
 
     YoriLibSPrintfA((PCHAR)(pMem + FileSize + HTMLCLIP_HDR_SIZE + HTMLCLIP_FRAGSTART_SIZE + 1),
                     "%s",
-                    DummyFragEnd);
+                    ClipDummyFragEnd);
 
-    GlobalUnlock(hMem);
+    DllKernel32.pGlobalUnlock(hMem);
 
     //
     //  Send the buffer to the clipboard.
     //
 
-    if (!DllUser32.pOpenClipboard(NULL)) {
+    if (!YoriLibOpenClipboard()) {
         Err = GetLastError();
         ErrText = YoriLibGetWinErrorText(Err);
         YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("clip: could not open clipboard: %s\n"), ErrText);
@@ -311,11 +316,11 @@ ClipCopyAsRtf(
     )
 {
     LPSTR  AnsiBuffer;
-    DWORD  AllocSize;
+    YORI_ALLOC_SIZE_T AllocSize;
     HANDLE hMem;
     PCHAR  pMem;
     DWORD  BytesTransferred;
-    DWORD  CurrentOffset;
+    YORI_ALLOC_SIZE_T CurrentOffset;
     DWORD  Err;
     LPTSTR ErrText;
     UINT   ClipFmt;
@@ -324,7 +329,10 @@ ClipCopyAsRtf(
     //  Allocate space to copy the file or pipe contents.
     //
 
-    AllocSize = FileSize + 1;
+    if (!YoriLibIsSizeAllocatable(FileSize + 1)) {
+        return FALSE;
+    }
+    AllocSize = (YORI_ALLOC_SIZE_T)(FileSize + 1);
     AnsiBuffer = YoriLibMalloc(AllocSize);
     if (AnsiBuffer == NULL) {
         return FALSE;
@@ -341,7 +349,7 @@ ClipCopyAsRtf(
     //
 
     while (ReadFile(hFile, AnsiBuffer + CurrentOffset, FileSize - CurrentOffset, &BytesTransferred, NULL)) {
-        CurrentOffset += BytesTransferred;
+        CurrentOffset = CurrentOffset + (YORI_ALLOC_SIZE_T)BytesTransferred;
 
         //
         //  If we're reading from the pipe and have exceeded our storage,
@@ -375,7 +383,7 @@ ClipCopyAsRtf(
         return FALSE;
     }
 
-    pMem = GlobalLock(hMem);
+    pMem = DllKernel32.pGlobalLock(hMem);
     if (pMem == NULL) {
         GlobalFree(hMem);
         YoriLibFree(AnsiBuffer);
@@ -397,7 +405,7 @@ ClipCopyAsRtf(
     }
 
     pMem[AllocSize] = '\0';
-    GlobalUnlock(hMem);
+    DllKernel32.pGlobalUnlock(hMem);
 
     YoriLibFree(AnsiBuffer);
 
@@ -405,7 +413,7 @@ ClipCopyAsRtf(
     //  Send the buffer to the clipboard.
     //
 
-    if (!DllUser32.pOpenClipboard(NULL)) {
+    if (!YoriLibOpenClipboard()) {
         Err = GetLastError();
         ErrText = YoriLibGetWinErrorText(Err);
         YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("clip: could not open clipboard: %s\n"), ErrText);
@@ -466,11 +474,11 @@ ClipCopyAsText(
     )
 {
     LPSTR  AnsiBuffer;
-    DWORD  AllocSize;
+    YORI_ALLOC_SIZE_T AllocSize;
     HANDLE hMem;
     PTCHAR pMem;
     DWORD  BytesTransferred;
-    DWORD  CurrentOffset;
+    YORI_ALLOC_SIZE_T CurrentOffset;
     DWORD  Err;
     LPTSTR ErrText;
 
@@ -478,7 +486,10 @@ ClipCopyAsText(
     //  Allocate space to copy the file or pipe contents.
     //
 
-    AllocSize = FileSize + 1;
+    if (!YoriLibIsSizeAllocatable(FileSize + 1)) {
+        return FALSE;
+    }
+    AllocSize = (YORI_ALLOC_SIZE_T)(FileSize + 1);
     AnsiBuffer = YoriLibMalloc(AllocSize);
     if (AnsiBuffer == NULL) {
         return FALSE;
@@ -495,7 +506,7 @@ ClipCopyAsText(
     //
 
     while (ReadFile(hFile, AnsiBuffer + CurrentOffset, FileSize - CurrentOffset, &BytesTransferred, NULL)) {
-        CurrentOffset += BytesTransferred;
+        CurrentOffset = CurrentOffset + (YORI_ALLOC_SIZE_T)BytesTransferred;
 
         //
         //  If we're reading from the pipe and have exceeded our storage,
@@ -529,7 +540,7 @@ ClipCopyAsText(
         return FALSE;
     }
 
-    pMem = GlobalLock(hMem);
+    pMem = DllKernel32.pGlobalLock(hMem);
     if (pMem == NULL) {
         GlobalFree(hMem);
         YoriLibFree(AnsiBuffer);
@@ -548,7 +559,7 @@ ClipCopyAsText(
     YoriLibMultibyteInput(AnsiBuffer, CurrentOffset, pMem, AllocSize);
 
     pMem[AllocSize] = '\0';
-    GlobalUnlock(hMem);
+    DllKernel32.pGlobalUnlock(hMem);
 
     YoriLibFree(AnsiBuffer);
 
@@ -556,7 +567,7 @@ ClipCopyAsText(
     //  Send the buffer to the clipboard.
     //
 
-    if (!DllUser32.pOpenClipboard(NULL)) {
+    if (!YoriLibOpenClipboard()) {
         Err = GetLastError();
         ErrText = YoriLibGetWinErrorText(Err);
         YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("clip: could not open clipboard: %s\n"), ErrText);
@@ -618,7 +629,7 @@ ClipFindFormatByName(
         FoundFormatName[sizeof(FoundFormatName)/sizeof(FoundFormatName[0]) - 1] = '\0';
 
         if (FoundFormatName[0] != '\0' &&
-            YoriLibCompareStringWithLiteralInsensitive(SearchFormatName, FoundFormatName) == 0) {
+            YoriLibCompareStringLitIns(SearchFormatName, FoundFormatName) == 0) {
 
             return Format;
         }
@@ -666,14 +677,14 @@ ClipExtractHtmlRange(
     for (Index = 0; Index < BufferLength; Index++) {
         if (Buffer[Index] == '\n') {
             if (HeaderValueStart != NULL) {
-                if (strnicmp(HeaderNameStart, "StartHTML", HeaderNameLength) == 0) {
-                    StartOffset = atoi(HeaderValueStart);
+                if (strnicmp((PCHAR)HeaderNameStart, "StartHTML", HeaderNameLength) == 0) {
+                    StartOffset = atoi((PCHAR)HeaderValueStart);
                     if (StartOffset >= BufferLength) {
                         StartOffset = 0;
                     }
                 }
-                if (strnicmp(HeaderNameStart, "EndHTML", HeaderNameLength) == 0) {
-                    EndOffset = atoi(HeaderValueStart);
+                if (strnicmp((PCHAR)HeaderNameStart, "EndHTML", HeaderNameLength) == 0) {
+                    EndOffset = atoi((PCHAR)HeaderValueStart);
                     if (EndOffset > BufferLength) {
                         EndOffset = 0;
                     }
@@ -740,7 +751,7 @@ ClipPasteSpecifiedFormat(
     //  Open the clipboard and fetch its contents.
     //
 
-    if (!DllUser32.pOpenClipboard(NULL)) {
+    if (!YoriLibOpenClipboard()) {
         Err = GetLastError();
         ErrText = YoriLibGetWinErrorText(Err);
         YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("clip: could not open clipboard: %s\n"), ErrText);
@@ -771,8 +782,8 @@ ClipPasteSpecifiedFormat(
     }
 
     CurrentOffset = 0;
-    BufferSize = (DWORD)GlobalSize(hMem);
-    pMem = GlobalLock(hMem);
+    BufferSize = (DWORD)DllKernel32.pGlobalSize(hMem);
+    pMem = DllKernel32.pGlobalLock(hMem);
     if (pMem == NULL) {
         Err = GetLastError();
         if (Err != ERROR_SUCCESS) {
@@ -783,7 +794,7 @@ ClipPasteSpecifiedFormat(
         return FALSE;
     }
     if (FormatString != NULL &&
-        YoriLibCompareStringWithLiteralInsensitive(FormatString, _T("HTML Format")) == 0) {
+        YoriLibCompareStringLitIns(FormatString, _T("HTML Format")) == 0) {
         pMem = ClipExtractHtmlRange(pMem, BufferSize);
         if (pMem != NULL) {
             YoriLibOutputToDevice(hFile, 0, _T("%hs"), pMem);
@@ -793,7 +804,7 @@ ClipPasteSpecifiedFormat(
     } else {
         YoriLibOutputToDevice(hFile, 0, _T("%hs"), pMem);
     }
-    GlobalUnlock(hMem);
+    DllKernel32.pGlobalUnlock(hMem);
 
     DllUser32.pCloseClipboard();
     return TRUE;
@@ -820,7 +831,7 @@ ClipPreserveText(VOID)
     //  Open the clipboard and fetch its contents.
     //
 
-    if (!DllUser32.pOpenClipboard(NULL)) {
+    if (!YoriLibOpenClipboard()) {
         Err = GetLastError();
         ErrText = YoriLibGetWinErrorText(Err);
         YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("clip: could not open clipboard: %s\n"), ErrText);
@@ -837,14 +848,14 @@ ClipPreserveText(VOID)
     }
 
     CurrentOffset = 0;
-    BufferSize = (DWORD)GlobalSize(hMem);
-    pMem = GlobalLock(hMem);
+    BufferSize = (DWORD)DllKernel32.pGlobalSize(hMem);
+    pMem = DllKernel32.pGlobalLock(hMem);
 
     if (!DllUser32.pEmptyClipboard()) {
         Err = GetLastError();
         ErrText = YoriLibGetWinErrorText(Err);
         YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("clip: could not empty clipboard: %s\n"), ErrText);
-        GlobalUnlock(hMem);
+        DllKernel32.pGlobalUnlock(hMem);
         DllUser32.pCloseClipboard();
         return FALSE;
     }
@@ -853,12 +864,12 @@ ClipPreserveText(VOID)
         Err = GetLastError();
         ErrText = YoriLibGetWinErrorText(Err);
         YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("clip: could not set clipboard data: %s\n"), ErrText);
-        GlobalUnlock(hMem);
+        DllKernel32.pGlobalUnlock(hMem);
         DllUser32.pCloseClipboard();
         return FALSE;
     }
 
-    GlobalUnlock(hMem);
+    DllKernel32.pGlobalUnlock(hMem);
 
     DllUser32.pCloseClipboard();
     return TRUE;
@@ -879,7 +890,7 @@ ClipEmptyClipboard(VOID)
     //  Open and empty the clipboard.
     //
 
-    if (!DllUser32.pOpenClipboard(NULL)) {
+    if (!YoriLibOpenClipboard()) {
         Err = GetLastError();
         ErrText = YoriLibGetWinErrorText(Err);
         YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("clip: could not open clipboard: %s\n"), ErrText);
@@ -917,7 +928,7 @@ ClipListFormats(VOID)
     //  Open and empty the clipboard.
     //
 
-    if (!DllUser32.pOpenClipboard(NULL)) {
+    if (!YoriLibOpenClipboard()) {
         Err = GetLastError();
         ErrText = YoriLibGetWinErrorText(Err);
         YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("clip: could not open clipboard: %s\n"), ErrText);
@@ -1028,17 +1039,17 @@ typedef enum _CLIP_OPERATION {
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
     HANDLE hFile = NULL;
-    DWORD  Err;
+    DWORD Err;
     LPTSTR ErrText;
-    DWORD  FileSize = 0;
+    DWORD FileSize = 0;
     CLIP_OPERATION Op;
-    BOOL   OpenedFile = FALSE;
-    DWORD  CurrentArg;
+    BOOLEAN OpenedFile = FALSE;
+    YORI_ALLOC_SIZE_T CurrentArg;
     YORI_STRING Arg;
     DWORD  Result;
 
@@ -1051,48 +1062,48 @@ ENTRYPOINT(
         if (YoriLibIsCommandLineOption(&ArgV[CurrentArg], &Arg)) {
             BOOL ArgParsed = FALSE;
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 ClipHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2015-2020"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("e")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("e")) == 0) {
                 if (Op == ClipOperationUnknown) {
                     ArgParsed = TRUE;
                     Op = ClipOperationEmpty;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("h")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("h")) == 0) {
                 if (Op == ClipOperationUnknown) {
                     ArgParsed = TRUE;
                     Op = ClipOperationCopyHtml;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("l")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("l")) == 0) {
                 if (Op == ClipOperationUnknown) {
                     ArgParsed = TRUE;
                     Op = ClipOperationListFormats;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("p")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("p")) == 0) {
                 if (Op == ClipOperationUnknown) {
                     ArgParsed = TRUE;
                     Op = ClipOperationPasteText;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("ph")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("ph")) == 0) {
                 if (Op == ClipOperationUnknown) {
                     ArgParsed = TRUE;
                     Op = ClipOperationPasteHTML;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("pr")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("pr")) == 0) {
                 if (Op == ClipOperationUnknown) {
                     ArgParsed = TRUE;
                     Op = ClipOperationPasteRichText;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("r")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("r")) == 0) {
                 if (Op == ClipOperationUnknown) {
                     ArgParsed = TRUE;
                     Op = ClipOperationCopyRtf;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("t")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("t")) == 0) {
                 if (Op == ClipOperationUnknown) {
                     ArgParsed = TRUE;
                     Op = ClipOperationPreserveText;
@@ -1189,7 +1200,10 @@ ENTRYPOINT(
 
     YoriLibLoadUser32Functions();
     Result = EXIT_SUCCESS;
-    if (DllUser32.pCloseClipboard == NULL ||
+    if (DllKernel32.pGlobalLock == NULL ||
+        DllKernel32.pGlobalSize == NULL ||
+        DllKernel32.pGlobalUnlock == NULL ||
+        DllUser32.pCloseClipboard == NULL ||
         DllUser32.pEmptyClipboard == NULL ||
         DllUser32.pEnumClipboardFormats == NULL ||
         DllUser32.pGetClipboardData == NULL ||

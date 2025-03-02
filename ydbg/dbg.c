@@ -172,6 +172,7 @@ YDbgBuildThreadArrayForProcessId(
     PYORI_SYSTEM_THREAD_INFORMATION CurrentThread;
     DWORD Index;
     PHANDLE LocalHandleArray;
+    DWORD BytesRequired;
 
     if (!YoriLibGetSystemProcessList(&ProcessInfo)) {
         return FALSE;
@@ -195,14 +196,19 @@ YDbgBuildThreadArrayForProcessId(
         return FALSE;
     }
 
-    LocalHandleArray = YoriLibMalloc(CurrentEntry->NumberOfThreads * sizeof(HANDLE));
+    BytesRequired = CurrentEntry->NumberOfThreads * sizeof(HANDLE);
+    if (!YoriLibIsSizeAllocatable(BytesRequired)) {
+        YoriLibFree(ProcessInfo);
+        return FALSE;
+    }
+    LocalHandleArray = YoriLibMalloc((YORI_ALLOC_SIZE_T)BytesRequired);
     if (LocalHandleArray == NULL) {
         YoriLibFree(ProcessInfo);
         return FALSE;
     }
 
     CurrentThread = (PYORI_SYSTEM_THREAD_INFORMATION)(CurrentEntry + 1);
-    for (Index = 0; Index < CurrentEntry->NumberOfThreads; Index++) {
+    for (Index = 0; Index < (YORI_ALLOC_SIZE_T)CurrentEntry->NumberOfThreads; Index++) {
 
         //
         // Ask for all access to the thread including access rights that may
@@ -248,7 +254,7 @@ YDbgDumpProcessKernelStacks(
 {
     YORI_SYSDBG_TRIAGE_DUMP_CONTROL Ctrl;
     PVOID Buffer;
-    DWORD BufferLength;
+    YORI_ALLOC_SIZE_T BufferLength;
     LONG NtStatus;
     HANDLE FileHandle;
     DWORD LastError;
@@ -276,7 +282,7 @@ YDbgDumpProcessKernelStacks(
     //  Allocate space in memory to store the dump contents.
     //
 
-    BufferLength = 4 * 1024 * 1024;
+    BufferLength = YoriLibMaximumAllocationInRange(60 * 1024, 4 * 1024 * 1024);
     Buffer = YoriLibMalloc(BufferLength);
     if (Buffer == NULL) {
         return FALSE;
@@ -422,7 +428,7 @@ YDbgDumpKernel(
         return FALSE;
     }
 
-    YoriLibCancelEnable();
+    YoriLibCancelEnable(FALSE);
 
     Ctrl.Version = 1;
     Ctrl.File = FileHandle;
@@ -435,16 +441,16 @@ YDbgDumpKernel(
 
     Result = TRUE;
     NtStatus = DllNtDll.pNtSystemDebugControl(37, &Ctrl, sizeof(Ctrl), NULL, 0, &BytesWritten);
-    if (NtStatus == 0xc0000120) {
+    if (NtStatus == STATUS_CANCELLED) {
         YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("ydbg: operation cancelled\n"));
         Result = FALSE;
-    } else if (NtStatus == 0xc0000354) {
+    } else if (NtStatus == STATUS_DEBUGGER_INACTIVE) {
         YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("ydbg: this operation requires debugging enabled with 'bcdedit /debug on' followed by a reboot\n"));
         Result = FALSE;
-    } else if (NtStatus == 0xc0000003) {
+    } else if (NtStatus == STATUS_INVALID_INFO_CLASS) {
         YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("ydbg: OS support not present\n"));
         Result = FALSE;
-    } else if (NtStatus == 0xc0000002) {
+    } else if (NtStatus == STATUS_NOT_IMPLEMENTED) {
         YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("ydbg: 64 bit kernel dumps can only be generated from a 64 bit process\n"));
         Result = FALSE;
     } else if (NtStatus != 0) {
@@ -685,7 +691,11 @@ YDbgPumpDebugEvents(
                         BufferLengthInBytes = BufferLengthInBytes * sizeof(WCHAR);
                     }
 
-                    Buffer = YoriLibMalloc(BufferLengthInBytes);
+                    if (!YoriLibIsSizeAllocatable(BufferLengthInBytes)) {
+                        break;
+                    }
+
+                    Buffer = YoriLibMalloc((YORI_ALLOC_SIZE_T)BufferLengthInBytes);
                     if (Buffer == NULL) {
                         break;
                     }
@@ -706,7 +716,7 @@ YDbgPumpDebugEvents(
                     YoriLibInitEmptyString(&OutputString);
                     if (DbgEvent.u.DebugString.fUnicode) {
                         OutputString.StartOfString = (LPTSTR)Buffer;
-                        OutputString.LengthInChars = BufferLengthInBytes / sizeof(WCHAR);
+                        OutputString.LengthInChars = (YORI_ALLOC_SIZE_T)(BufferLengthInBytes / sizeof(WCHAR));
                     } else {
                         Buffer[StringLengthInBytes] = '\0';
                         YoriLibYPrintf(&OutputString, _T("%hs"), Buffer);
@@ -725,16 +735,16 @@ YDbgPumpDebugEvents(
                     if (DisplayLoaderSnaps) {
                         YORI_STRING SearchText;
                         YoriLibConstantString(&SearchText, _T("- Ldrp"));
-                        if (YoriLibFindFirstMatchingSubstring(&OutputString, 1, &SearchText, NULL)) {
+                        if (YoriLibFindFirstMatchSubstr(&OutputString, 1, &SearchText, NULL)) {
                             DisplayString = FALSE;
                         }
                         if (!DisplayString) {
                             YoriLibConstantString(&SearchText, _T("ERROR"));
-                            if (YoriLibFindFirstMatchingSubstring(&OutputString, 1, &SearchText, NULL)) {
+                            if (YoriLibFindFirstMatchSubstr(&OutputString, 1, &SearchText, NULL)) {
                                 DisplayString = TRUE;
                             }
                             YoriLibConstantString(&SearchText, _T("WARNING"));
-                            if (YoriLibFindFirstMatchingSubstring(&OutputString, 1, &SearchText, NULL)) {
+                            if (YoriLibFindFirstMatchSubstr(&OutputString, 1, &SearchText, NULL)) {
                                 DisplayString = TRUE;
                             }
                         }
@@ -799,7 +809,7 @@ YDbgBuildIFEOPathFromExecutable(
     __out PYORI_STRING RegPath
     )
 {
-    DWORD Index;
+    YORI_ALLOC_SIZE_T Index;
     YORI_STRING FileName;
 
     YoriLibInitEmptyString(&FileName);
@@ -1015,7 +1025,7 @@ DWORD
 YDbgDebugChildProcess(
     __in BOOLEAN EnableLoaderSnaps,
     __in BOOLEAN CreateNewWindow,
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
@@ -1153,19 +1163,19 @@ typedef enum _YDBG_OP {
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 1;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 1;
     YORI_STRING Arg;
     YDBG_OP Op;
     DWORD ProcessPid = 0;
     PYORI_STRING FileName = NULL;
-    LONGLONG llTemp;
-    DWORD CharsConsumed;
+    YORI_MAX_SIGNED_T llTemp;
+    YORI_ALLOC_SIZE_T CharsConsumed;
     DWORD ExitResult;
     BOOLEAN EnableLoaderSnaps;
     BOOLEAN CreateNewWindow;
@@ -1181,20 +1191,20 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 YDbgHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2018-2021"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("c")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("c")) == 0) {
                 if (ArgC > i + 1) {
                     Op = YDbgOperationCompleteDump;
                     FileName = &ArgV[i + 1];
                     ArgumentUnderstood = TRUE;
                     i += 1;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("d")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("d")) == 0) {
                 if (ArgC > i + 2) {
                     Op = YDbgOperationProcessDump;
                     if (!YoriLibStringToNumber(&ArgV[i + 1], TRUE, &llTemp, &CharsConsumed)) {
@@ -1206,21 +1216,21 @@ ENTRYPOINT(
                     ArgumentUnderstood = TRUE;
                     i += 2;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("e")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("e")) == 0) {
                 if (ArgC > i + 1) {
                     Op = YDbgOperationDebugChildProcess;
                     StartArg = i + 1;
                     ArgumentUnderstood = TRUE;
                     break;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("k")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("k")) == 0) {
                 if (ArgC > i + 1) {
                     Op = YDbgOperationKernelDump;
                     FileName = &ArgV[i + 1];
                     ArgumentUnderstood = TRUE;
                     i += 1;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("ks")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("ks")) == 0) {
                 if (ArgC > i + 2) {
                     Op = YDbgOperationProcessKernelStacks;
                     if (!YoriLibStringToNumber(&ArgV[i + 1], TRUE, &llTemp, &CharsConsumed)) {
@@ -1232,10 +1242,10 @@ ENTRYPOINT(
                     ArgumentUnderstood = TRUE;
                     i += 2;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("l")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("l")) == 0) {
                 EnableLoaderSnaps = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("w")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("w")) == 0) {
                 CreateNewWindow = TRUE;
                 ArgumentUnderstood = TRUE;
             }

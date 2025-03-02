@@ -76,19 +76,19 @@ GetHelp(VOID)
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 1;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 1;
     YORI_STRING NewFileName;
-    LPTSTR ExistingUrlName;
-    YoriLibUpdError Error;
-    TCHAR szAgent[64];
+    PYORI_STRING ExistingUrlName;
+    YORI_LIB_UPDATE_ERROR Error;
+    YORI_STRING Agent;
     YORI_STRING Arg;
-    BOOL NewerOnly = FALSE;
+    BOOLEAN NewerOnly = FALSE;
     SYSTEMTIME ExistingFileTime;
 
     for (i = 1; i < ArgC; i++) {
@@ -97,16 +97,16 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 GetHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("n")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("n")) == 0) {
                 NewerOnly = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2017-2019"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 ArgumentUnderstood = TRUE;
                 StartArg = i + 1;
                 break;
@@ -153,6 +153,7 @@ ENTRYPOINT(
             GetFileTime(hFile, &CreateTime, &LastAccessTime, &LastWriteTime);
             if (!FileTimeToSystemTime(&LastWriteTime, &ExistingFileTime)) {
                 YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("get: failed obtain time from file\n"));
+                YoriLibFreeStringContents(&NewFileName);
                 CloseHandle(hFile);
                 return EXIT_FAILURE;
             }
@@ -160,11 +161,20 @@ ENTRYPOINT(
         }
     }
 
-    ExistingUrlName = ArgV[StartArg].StartOfString;
+    ExistingUrlName = &ArgV[StartArg];
 
-    YoriLibSPrintf(szAgent, _T("YGet %i.%02i\r\n"), YORI_VER_MAJOR, YORI_VER_MINOR);
-    Error = YoriLibUpdateBinaryFromUrl(ExistingUrlName, NewFileName.StartOfString, szAgent, NewerOnly?&ExistingFileTime:NULL);
+    YoriLibInitEmptyString(&Agent);
+    YoriLibYPrintf(&Agent, _T("YGet %i.%02i\r\n"), YORI_VER_MAJOR, YORI_VER_MINOR);
+    if (Agent.StartOfString == NULL) {
+        YoriLibFreeStringContents(&NewFileName);
+        return EXIT_FAILURE;
+    }
+    Error = YoriLibUpdateBinaryFromUrl(ExistingUrlName,
+                                       &NewFileName,
+                                       &Agent,
+                                       NewerOnly?&ExistingFileTime:NULL);
     YoriLibFreeStringContents(&NewFileName);
+    YoriLibFreeStringContents(&Agent);
     if (Error != YoriLibUpdErrorSuccess) {
         YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("get: failed to download: %s\n"), YoriLibUpdateErrorString(Error));
         return EXIT_FAILURE;

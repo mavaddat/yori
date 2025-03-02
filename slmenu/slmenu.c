@@ -3,7 +3,7 @@
  *
  * Yori shell single line menu
  *
- * Copyright (c) 2018-2021 Malcolm J. Smith
+ * Copyright (c) 2018-2024 Malcolm J. Smith
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -26,8 +26,8 @@
 
 #include <yoripch.h>
 #include <yorilib.h>
-#include <yoricall.h>
 #include <yoriwin.h>
+#include <yoridlg.h>
 
 /**
  Help text to display to the user.
@@ -37,9 +37,10 @@ CHAR strSlmenuHelpText[] =
         "\n"
         "Displays a menu based on standard input and displays selection to output."
         "\n"
-        "SLMENU [-license] [-b|-t|-l <lines>] [-p <text>]\n"
+        "SLMENU [-license] [-b|-t|-l <lines>|-f] [-p <text>]\n"
         "\n"
         "   -b             Display single line at the bottom of the window\n"
+        "   -f             Display a full screen list\n"
         "   -l <lines>     Display in multiple lines and specify the number of lines\n" 
         "   -p <text>      Display prompt text before items\n" 
         "   -t             Display single line at the top of the window\n";
@@ -72,13 +73,26 @@ typedef struct _SLMENU_CONTEXT {
     /**
      The number of elements allocated in StringArray.
      */
-    DWORD StringsAllocated;
+    YORI_ALLOC_SIZE_T StringsAllocated;
 
     /**
      The number of strings populated in the StringArray.
      */
-    DWORD StringCount;
+    YORI_ALLOC_SIZE_T StringCount;
+
+    /**
+     The string that was most recently searched for.
+     */
+    YORI_STRING SearchString;
+
 } SLMENU_CONTEXT, *PSLMENU_CONTEXT;
+
+/**
+ A list of well known control IDs.
+ */
+typedef enum _SLMENU_CONTROLS {
+    SlmenuControlList = 1
+} SLMENU_CONTROLS;
 
 /**
  A callback invoked when the ok button is clicked.
@@ -111,6 +125,88 @@ SlmenuCancelButtonClicked(
 }
 
 /**
+ A callback invoked when the find button is clicked.
+
+ @param Ctrl Pointer to the button that was clicked.
+ */
+VOID
+SlmenuFindButtonClicked(
+    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    )
+{
+    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORI_WIN_CTRL_HANDLE List;
+    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr;
+    PSLMENU_CONTEXT MenuContext;
+    YORI_STRING Title;
+    BOOLEAN MatchCase;
+    YORI_STRING Text;
+    YORI_ALLOC_SIZE_T ActiveIndex;
+    YORI_ALLOC_SIZE_T SearchIndex;
+
+    Parent = YoriWinGetControlParent(Ctrl);
+    WinMgr = YoriWinGetWindowManagerHandle(Parent);
+    MenuContext = YoriWinGetControlContext(Parent);
+
+    YoriLibConstantString(&Title, _T("Find"));
+    YoriLibInitEmptyString(&Text);
+
+    if (!YoriDlgFindText(WinMgr,
+                         &Title,
+                         &MenuContext->SearchString,
+                         &MatchCase,
+                         &Text)) {
+
+        return;
+    }
+
+    List = YoriWinFindControlById(Parent, SlmenuControlList);
+    ASSERT(List != NULL);
+
+    //
+    //  If nothing is selected, start from the top, and search to the end.
+    //
+
+    if (!YoriWinListGetActiveOption(List, &ActiveIndex)) {
+        for (SearchIndex = 0; SearchIndex < MenuContext->StringCount; SearchIndex++) {
+            if (YoriLibFindFirstMatchSubstrIns(&MenuContext->StringArray[SearchIndex], 1, &Text, NULL) != NULL) {
+                break;
+            }
+        }
+
+    } else {
+
+        //
+        //  If something is selected, search from the next item to the end.
+        //  If it's still not found, start from the top up to the selected
+        //  item.
+        //
+
+        for (SearchIndex = ActiveIndex + 1; SearchIndex < MenuContext->StringCount; SearchIndex++) {
+            if (YoriLibFindFirstMatchSubstrIns(&MenuContext->StringArray[SearchIndex], 1, &Text, NULL) != NULL) {
+                break;
+            }
+        }
+
+        if (SearchIndex == MenuContext->StringCount) {
+            for (SearchIndex = 0; SearchIndex < ActiveIndex; SearchIndex++) {
+                if (YoriLibFindFirstMatchSubstrIns(&MenuContext->StringArray[SearchIndex], 1, &Text, NULL) != NULL) {
+                    break;
+                }
+            }
+        }
+    }
+
+    if (SearchIndex < MenuContext->StringCount) {
+        YoriWinListSetActiveOption(List, SearchIndex);
+    }
+
+    YoriLibFreeStringContents(&MenuContext->SearchString);
+    YoriLibCloneString(&MenuContext->SearchString, &Text);
+    YoriLibFreeStringContents(&Text);
+}
+
+/**
  The set of locations where a single line menu can be displayed.
  */
 typedef enum _SLMENU_LOCATION {
@@ -138,17 +234,17 @@ typedef enum _SLMENU_LOCATION {
 WORD
 SlmenuCalculateColumnWidthForItems(
     __in PYORI_STRING MenuOptions,
-    __in DWORD NumberOptions,
-    __in DWORD ControlWidth
+    __in YORI_ALLOC_SIZE_T NumberOptions,
+    __in YORI_ALLOC_SIZE_T ControlWidth
     )
 {
-    DWORD LongestItem;
-    DWORD AverageNameLength;
+    YORI_ALLOC_SIZE_T LongestItem;
+    YORI_ALLOC_SIZE_T AverageNameLength;
     DWORD TotalLength;
-    DWORD ColumnWidth;
-    DWORD ColumnCount;
+    YORI_ALLOC_SIZE_T ColumnWidth;
+    YORI_ALLOC_SIZE_T ColumnCount;
 
-    DWORD Index;
+    YORI_ALLOC_SIZE_T Index;
 
     TotalLength = 0;
     LongestItem = 0;
@@ -159,7 +255,7 @@ SlmenuCalculateColumnWidthForItems(
         }
     }
 
-    AverageNameLength = TotalLength / NumberOptions;
+    AverageNameLength = (YORI_ALLOC_SIZE_T)(TotalLength / NumberOptions);
 
     //
     //  The item width contains two padding characters, so add those here.
@@ -185,9 +281,7 @@ SlmenuCalculateColumnWidthForItems(
 /**
  Display a popup window containing a list of items.
 
- @param MenuOptions Pointer to an array of list items.
-
- @param NumberOptions The number of elements within the array.
+ @param MenuContext Pointer to the application context.
 
  @param Location The location to display the line.
 
@@ -203,11 +297,10 @@ SlmenuCalculateColumnWidthForItems(
 __success(return)
 BOOL
 SlmenuCreateSinglelineMenu(
-    __in PYORI_STRING MenuOptions,
-    __in DWORD NumberOptions,
+    __in PSLMENU_CONTEXT MenuContext,
     __in SLMENU_LOCATION Location,
     __in_opt PYORI_STRING Title,
-    __out PDWORD ActiveOption
+    __out PYORI_ALLOC_SIZE_T ActiveOption
     )
 {
     PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr;
@@ -220,42 +313,54 @@ SlmenuCreateSinglelineMenu(
     WORD ButtonWidth;
     PYORI_WIN_CTRL_HANDLE Ctrl;
     DWORD_PTR Result;
-    SMALL_RECT WinMgrPos;
+    COORD WinMgrSize;
 
-    if (NumberOptions == 0) {
+    if (MenuContext->StringCount == 0) {
         return FALSE;
     }
 
-    if (!YoriWinOpenWindowManager(FALSE, &WinMgr)) {
+    if (!YoriWinOpenWindowManager(FALSE, YoriWinColorTableDefault, &WinMgr)) {
         return FALSE;
     }
 
-    if (!YoriWinGetWinMgrLocation(WinMgr, &WinMgrPos)) {
+    if (!YoriWinGetWinMgrDimensions(WinMgr, &WinMgrSize)) {
         YoriWinCloseWindowManager(WinMgr);
         return FALSE;
     }
 
-    CtrlRect.Left = WinMgrPos.Left;
-    CtrlRect.Right = WinMgrPos.Right;
-    CtrlRect.Top = WinMgrPos.Top;
-    CtrlRect.Bottom = WinMgrPos.Top;
+    CtrlRect.Top = 0;
+    CtrlRect.Bottom = 0;
+    CtrlRect.Left = 0;
+    CtrlRect.Right = (SHORT)(WinMgrSize.X - 1);
 
     if (Location == SlmenuBottomLine) {
-        CtrlRect.Top = WinMgrPos.Bottom;
-        CtrlRect.Bottom = WinMgrPos.Bottom;
+        CtrlRect.Top = (SHORT)(WinMgrSize.Y - 1);
+        CtrlRect.Bottom = (SHORT)(WinMgrSize.Y - 1);
     } else if (Location == SlmenuCurrentLine ||
                Location == SlmenuCurrentLineRemainder) {
         COORD CursorLocation;
+        SMALL_RECT WinMgrPos;
+
+        if (!YoriWinGetWinMgrLocation(WinMgr, &WinMgrPos)) {
+            YoriWinCloseWindowManager(WinMgr);
+            return FALSE;
+        }
+
         if (!YoriWinGetWinMgrInitialCursorLocation(WinMgr, &CursorLocation)) {
             YoriWinCloseWindowManager(WinMgr);
             return FALSE;
         }
 
-        CtrlRect.Top = CursorLocation.Y;
-        CtrlRect.Bottom = CursorLocation.Y;
+        if (CursorLocation.Y < WinMgrPos.Top || CursorLocation.Y > WinMgrPos.Bottom) {
+            YoriWinCloseWindowManager(WinMgr);
+            return FALSE;
+        }
+
+        CtrlRect.Top = (SHORT)(CursorLocation.Y - WinMgrPos.Top);
+        CtrlRect.Bottom = (SHORT)(CursorLocation.Y - WinMgrPos.Top);
 
         if (Location == SlmenuCurrentLineRemainder) {
-            CtrlRect.Left = CursorLocation.X;
+            CtrlRect.Left = (SHORT)(CursorLocation.X - WinMgrPos.Left);
         }
     }
 
@@ -290,10 +395,10 @@ SlmenuCreateSinglelineMenu(
     }
 
     YoriWinGetClientSize(List, &WindowSize);
-    ButtonWidth = SlmenuCalculateColumnWidthForItems(MenuOptions, NumberOptions, WindowSize.X);
+    ButtonWidth = SlmenuCalculateColumnWidthForItems(MenuContext->StringArray, MenuContext->StringCount, WindowSize.X);
     YoriWinListSetHorizontalItemWidth(List, ButtonWidth);
 
-    if (!YoriWinListAddItems(List, MenuOptions, NumberOptions)) {
+    if (!YoriWinListAddItems(List, MenuContext->StringArray, MenuContext->StringCount)) {
         YoriWinDestroyWindow(Parent);
         YoriWinCloseWindowManager(WinMgr);
         return FALSE;
@@ -337,6 +442,8 @@ SlmenuCreateSinglelineMenu(
         return FALSE;
     }
 
+    YoriWinSetControlContext(Parent, MenuContext);
+
     Result = FALSE;
     if (!YoriWinProcessInputForWindow(Parent, &Result)) {
         Result = FALSE;
@@ -355,9 +462,7 @@ SlmenuCreateSinglelineMenu(
 /**
  Display a popup window containing a list of items.
 
- @param MenuOptions Pointer to an array of list items.
-
- @param NumberOptions The number of elements within the array.
+ @param MenuContext Pointer to the application context.
 
  @param Title The string to display on the title bar of the dialog.
 
@@ -374,11 +479,10 @@ SlmenuCreateSinglelineMenu(
 __success(return)
 BOOL
 SlmenuCreateMultilineMenu(
-    __in PYORI_STRING MenuOptions,
-    __in DWORD NumberOptions,
+    __in PSLMENU_CONTEXT MenuContext,
     __in PYORI_STRING Title,
-    __in DWORD DisplayLineCount,
-    __out PDWORD ActiveOption
+    __in YORI_ALLOC_SIZE_T DisplayLineCount,
+    __out PYORI_ALLOC_SIZE_T ActiveOption
     )
 {
     PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr;
@@ -393,19 +497,41 @@ SlmenuCreateMultilineMenu(
     DWORD_PTR Result;
     WORD WindowHeight;
 
-    if (NumberOptions == 0) {
+    if (MenuContext->StringCount == 0) {
         return FALSE;
     }
 
-    if (!YoriWinOpenWindowManager(FALSE, &WinMgr)) {
+    if (!YoriWinOpenWindowManager(FALSE, YoriWinColorTableDefault, &WinMgr)) {
         return FALSE;
     }
 
-    WindowHeight = (WORD)(DisplayLineCount + 9);
+    if (DisplayLineCount == 0) {
+        YoriWinGetWinMgrDimensions(WinMgr, &WindowSize);
+        WindowHeight = WindowSize.Y;
 
-    if (!YoriWinCreateWindow(WinMgr, 30, WindowHeight, 60, WindowHeight, YORI_WIN_WINDOW_STYLE_BORDER_SINGLE | YORI_WIN_WINDOW_STYLE_SHADOW_SOLID, Title, &Parent)) {
-        YoriWinCloseWindowManager(WinMgr);
-        return FALSE;
+        if (WindowSize.X < 40 || WindowSize.Y < 12) {
+            YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("slmenu: window size too small\n"));
+            YoriWinCloseWindowManager(WinMgr);
+            return FALSE;
+        }
+
+        if (!YoriWinCreateWindow(WinMgr, WindowSize.X, WindowSize.Y, WindowSize.X, WindowSize.Y, 0, NULL, &Parent)) {
+            YoriWinCloseWindowManager(WinMgr);
+            return FALSE;
+        }
+    } else {
+        WindowHeight = (WORD)(DisplayLineCount + 8);
+
+        if (WindowHeight < 12) {
+            YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("slmenu: window size too small\n"));
+            YoriWinCloseWindowManager(WinMgr);
+            return FALSE;
+        }
+
+        if (!YoriWinCreateWindow(WinMgr, 30, WindowHeight, 60, WindowHeight, YORI_WIN_WINDOW_STYLE_BORDER_SINGLE | YORI_WIN_WINDOW_STYLE_SHADOW_SOLID, Title, &Parent)) {
+            YoriWinCloseWindowManager(WinMgr);
+            return FALSE;
+        }
     }
 
     YoriWinGetClientSize(Parent, &WindowSize);
@@ -415,20 +541,21 @@ SlmenuCreateMultilineMenu(
     ListRect.Right = (SHORT)(WindowSize.X - 2);
     ListRect.Bottom = (SHORT)(WindowSize.Y - 3 - 1);
 
-    List = YoriWinListCreate(Parent, &ListRect, YORI_WIN_LIST_STYLE_VSCROLLBAR);
+    List = YoriWinListCreate(Parent, &ListRect, YORI_WIN_LIST_STYLE_VSCROLLBAR | YORI_WIN_LIST_STYLE_AUTO_HSCROLLBAR);
     if (List == NULL) {
         YoriWinDestroyWindow(Parent);
         YoriWinCloseWindowManager(WinMgr);
         return FALSE;
     }
 
-    if (!YoriWinListAddItems(List, MenuOptions, NumberOptions)) {
+    if (!YoriWinListAddItems(List, MenuContext->StringArray, MenuContext->StringCount)) {
         YoriWinDestroyWindow(Parent);
         YoriWinCloseWindowManager(WinMgr);
         return FALSE;
     }
 
     YoriWinListSetActiveOption(List, 0);
+    YoriWinSetControlId(List, SlmenuControlList);
 
     ButtonWidth = (WORD)(sizeof("Cancel") - 1 + 2);
 
@@ -465,6 +592,20 @@ SlmenuCreateMultilineMenu(
         YoriWinCloseWindowManager(WinMgr);
         return FALSE;
     }
+
+    ButtonArea.Left = (SHORT)(1);
+    ButtonArea.Right = (WORD)(ButtonArea.Left + ButtonWidth + 1);
+
+    YoriLibConstantString(&Caption, _T("&Find"));
+
+    Ctrl = YoriWinButtonCreate(Parent, &ButtonArea, &Caption, 0, SlmenuFindButtonClicked);
+    if (Ctrl == NULL) {
+        YoriWinDestroyWindow(Parent);
+        YoriWinCloseWindowManager(WinMgr);
+        return FALSE;
+    }
+
+    YoriWinSetControlContext(Parent, MenuContext);
 
     Result = FALSE;
     if (!YoriWinProcessInputForWindow(Parent, &Result)) {
@@ -503,13 +644,25 @@ SlmenuProcessStream(
     while (TRUE) {
 
         if (MenuContext->StringCount + 1 > MenuContext->StringsAllocated) {
-            DWORD NewStringsAllocated;
+            DWORD DesiredBytes;
+            DWORD RequiredBytes;
+            YORI_ALLOC_SIZE_T BytesToAllocate;
+            YORI_ALLOC_SIZE_T NewStringsAllocated;
             PYORI_STRING NewStrings;
 
-            NewStringsAllocated = MenuContext->StringsAllocated * 4;
-            if (NewStringsAllocated < 0x100) {
-                NewStringsAllocated = 0x100;
+            RequiredBytes = MenuContext->StringsAllocated;
+            if (RequiredBytes < 0x100) {
+                RequiredBytes = 0x100;
             }
+            DesiredBytes = RequiredBytes * 4 * sizeof(YORI_STRING);
+            RequiredBytes = (RequiredBytes + 1) * sizeof(YORI_STRING);
+
+            BytesToAllocate = YoriLibMaximumAllocationInRange(RequiredBytes, DesiredBytes);
+            NewStringsAllocated = BytesToAllocate / sizeof(YORI_STRING);
+            if (NewStringsAllocated == 0) {
+                return FALSE;
+            }
+
 
             NewStrings = YoriLibReferencedMalloc(NewStringsAllocated * sizeof(YORI_STRING));
             if (NewStrings == NULL) {
@@ -560,6 +713,8 @@ SlmenuCleanupContext(
     if (MenuContext->StringArray != NULL) {
         YoriLibDereference(MenuContext->StringArray);
     }
+
+    YoriLibFreeStringContents(&MenuContext->SearchString);
 }
 
 /**
@@ -595,21 +750,21 @@ typedef enum _SLMENU_OP {
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
     YORI_STRING Arg;
     SLMENU_OP Op;
     SLMENU_CONTEXT MenuContext;
     SLMENU_LOCATION Location;
     YORI_STRING Prompt;
     PYORI_STRING DisplayPrompt;
-    DWORD DisplayLineCount;
-    DWORD Index;
+    YORI_ALLOC_SIZE_T DisplayLineCount;
+    YORI_ALLOC_SIZE_T Index;
     DWORD Result;
 
     ZeroMemory(&MenuContext, sizeof(MenuContext));
@@ -627,30 +782,35 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 SlmenuHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
-                YoriLibDisplayMitLicense(_T("2021"));
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
+                YoriLibDisplayMitLicense(_T("2021-2024"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("b")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("b")) == 0) {
+                Op = SlmenuDisplaySinglelineMenu;
                 Location = SlmenuBottomLine;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("l")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("f")) == 0) {
+                Op = SlmenuDisplayMultilineMenu;
+                DisplayLineCount = 0;
+                ArgumentUnderstood = TRUE;
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("l")) == 0) {
 
                 if (i + 1 < ArgC) {
-                    LONGLONG llTemp;
-                    DWORD CharsConsumed;
+                    YORI_MAX_SIGNED_T llTemp;
+                    YORI_ALLOC_SIZE_T CharsConsumed;
                     if (YoriLibStringToNumber(&ArgV[i + 1], TRUE, &llTemp, &CharsConsumed) &&
                         CharsConsumed > 0)  {
 
-                        DisplayLineCount = (DWORD)llTemp;
+                        DisplayLineCount = (YORI_ALLOC_SIZE_T)llTemp;
                         Op = SlmenuDisplayMultilineMenu;
                         i++;
                         ArgumentUnderstood = TRUE;
                     }
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("p")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("p")) == 0) {
                 if (i + 1 < ArgC) {
                     Prompt.StartOfString = ArgV[i + 1].StartOfString;
                     Prompt.LengthInChars = ArgV[i + 1].LengthInChars;
@@ -658,7 +818,8 @@ ENTRYPOINT(
                     ArgumentUnderstood = TRUE;
                     DisplayPrompt = &Prompt;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("t")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("t")) == 0) {
+                Op = SlmenuDisplaySinglelineMenu;
                 Location = SlmenuTopLine;
                 ArgumentUnderstood = TRUE;
             }
@@ -683,7 +844,7 @@ ENTRYPOINT(
         }
 
         if (Result == EXIT_SUCCESS) {
-            if (!SlmenuCreateSinglelineMenu(MenuContext.StringArray, MenuContext.StringCount, Location, DisplayPrompt, &Index)) {
+            if (!SlmenuCreateSinglelineMenu(&MenuContext, Location, DisplayPrompt, &Index)) {
                 Result = EXIT_FAILURE;
             }
         }
@@ -703,7 +864,7 @@ ENTRYPOINT(
         }
 
         if (Result == EXIT_SUCCESS) {
-            if (!SlmenuCreateMultilineMenu(MenuContext.StringArray, MenuContext.StringCount, &Prompt, DisplayLineCount, &Index)) {
+            if (!SlmenuCreateMultilineMenu(&MenuContext, &Prompt, DisplayLineCount, &Index)) {
                 Result = EXIT_FAILURE;
             }
         }

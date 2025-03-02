@@ -285,7 +285,7 @@ MakeDoesTargetHaveMoreCommands(
 DWORD
 MakeProcessCd(
     __in PMAKE_CHILD_RECIPE ChildRecipe,
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
@@ -297,7 +297,7 @@ MakeProcessCd(
 
     YoriLibInitEmptyString(&NewCurrentDirectory);
 
-    if (!YoriLibGetFullPathNameRelativeTo(&ChildRecipe->CurrentDirectory, &ArgV[1], FALSE, &NewCurrentDirectory, NULL)) {
+    if (!YoriLibGetFullPathNameRelTo(&ChildRecipe->CurrentDirectory, &ArgV[1], FALSE, &NewCurrentDirectory, NULL)) {
         return EXIT_FAILURE;
     }
 
@@ -334,32 +334,82 @@ __success(return)
 BOOLEAN
 MakeProcessIf(
     __in PMAKE_CHILD_RECIPE ChildRecipe,
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[],
     __inout PYORI_STRING CmdToExec
     )
 {
-    DWORD Index;
+    YORI_ALLOC_SIZE_T Index;
     BOOLEAN Not;
     YORI_STRING FullPath;
     HANDLE FindHandle;
     WIN32_FIND_DATA FindData;
     BOOLEAN Found;
     BOOLEAN ConditionTrue;
+    BOOLEAN Insensitive;
 
     Not = FALSE;
+    Insensitive = FALSE;
 
     for (Index = 1; Index < ArgC; Index++) {
-        if (YoriLibCompareStringWithLiteralInsensitive(&ArgV[Index], _T("NOT")) == 0) {
+        if (YoriLibCompareStringLitIns(&ArgV[Index], _T("NOT")) == 0) {
             if (Not) {
                 Not = FALSE;
             } else {
                 Not = TRUE;
             }
-        } else if (YoriLibCompareStringWithLiteralInsensitive(&ArgV[Index], _T("EXIST")) == 0 &&
+        } else if (YoriLibCompareStringLitIns(&ArgV[Index], _T("EXIST")) == 0 &&
                    Index + 1 < ArgC) {
             break;
+        } else if (YoriLibCompareStringLitIns(&ArgV[Index], _T("/I")) == 0) {
+            Insensitive = TRUE;
         } else {
+            YORI_STRING EqualsOperator;
+            YORI_STRING FirstPart;
+            YORI_STRING SecondPart;
+            PYORI_STRING MatchingOperator;
+            YORI_ALLOC_SIZE_T OperatorIndex;
+
+            //
+            //  Perform simple string comparison.  If the strings indicate the
+            //  rest of the expression shouldn't be invoked, we don't need to
+            //  spawn CMD.
+            //
+
+            YoriLibConstantString(&EqualsOperator, _T("=="));
+            MatchingOperator = YoriLibFindFirstMatchSubstr(&ArgV[Index], 1, &EqualsOperator, &OperatorIndex);
+
+            ConditionTrue = FALSE;
+
+            if (MatchingOperator != NULL) {
+                YoriLibInitEmptyString(&FirstPart);
+                FirstPart.StartOfString = ArgV[Index].StartOfString;
+                FirstPart.LengthInChars = OperatorIndex;
+
+                YoriLibInitEmptyString(&SecondPart);
+                SecondPart.StartOfString = ArgV[Index].StartOfString + OperatorIndex + MatchingOperator->LengthInChars;
+                SecondPart.LengthInChars = ArgV[Index].LengthInChars - OperatorIndex - MatchingOperator->LengthInChars;
+
+                if (Insensitive) {
+                    if (YoriLibCompareStringIns(&FirstPart, &SecondPart) == 0) {
+                        ConditionTrue = TRUE;
+                    }
+                } else {
+                    if (YoriLibCompareString(&FirstPart, &SecondPart) == 0) {
+                        ConditionTrue = TRUE;
+                    }
+                }
+
+                if (Not) {
+                    ConditionTrue = (BOOLEAN)(!ConditionTrue);
+                }
+
+                if (!ConditionTrue) {
+                    YoriLibFreeStringContents(CmdToExec);
+                    return TRUE;
+                }
+            }
+
             return FALSE;
         }
     }
@@ -369,7 +419,7 @@ MakeProcessIf(
     }
 
     YoriLibInitEmptyString(&FullPath);
-    if (!YoriLibGetFullPathNameRelativeTo(&ChildRecipe->CurrentDirectory, &ArgV[Index + 1], TRUE, &FullPath, NULL)) {
+    if (!YoriLibGetFullPathNameRelTo(&ChildRecipe->CurrentDirectory, &ArgV[Index + 1], TRUE, &FullPath, NULL)) {
         return FALSE;
     }
 
@@ -522,11 +572,11 @@ MakeLaunchNextCmd(
         } else {
 
             DWORD Result = EXIT_SUCCESS;
-            if (YoriLibCompareStringWithLiteralInsensitive(&ExecContext->CmdToExec.ArgV[0], _T("IF")) == 0) {
+            if (YoriLibCompareStringLitIns(&ExecContext->CmdToExec.ArgV[0], _T("IF")) == 0) {
                 if (MakeProcessIf(ChildRecipe, ExecContext->CmdToExec.ArgC, ExecContext->CmdToExec.ArgV, &CmdToParse)) {
                     Reparse = TRUE;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&ExecContext->CmdToExec.ArgV[0], _T("CD")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&ExecContext->CmdToExec.ArgV[0], _T("CD")) == 0) {
                 Result = MakeProcessCd(ChildRecipe, ExecContext->CmdToExec.ArgC, ExecContext->CmdToExec.ArgV);
                 ExecutedBuiltin = TRUE;
                 ChildRecipe->ProcessHandle = NULL;
@@ -547,7 +597,7 @@ MakeLaunchNextCmd(
 
             if (!ExecutedBuiltin && !Reparse) {
                 for (Index = 0; Index < sizeof(MakePuntToCmd)/sizeof(MakePuntToCmd[0]); Index++) {
-                    if (YoriLibCompareStringWithLiteralInsensitive(&ExecContext->CmdToExec.ArgV[0], MakePuntToCmd[Index]) == 0) {
+                    if (YoriLibCompareStringLitIns(&ExecContext->CmdToExec.ArgV[0], MakePuntToCmd[Index]) == 0) {
                         PuntToCmd = TRUE;
                         break;
                     }
@@ -666,6 +716,30 @@ MakeLaunchNextCmd(
 }
 
 /**
+ Indicate that an entire recipe has completed.  This may have succeeded, or
+ may have failed partway.  This function needs to clean up regardless.
+
+ @param MakeContext Pointer to the make context.
+
+ @param ChildRecipe Pointer to the recipe to clean up for reuse.
+ */
+VOID
+MakeRecipeCompletion(
+    __in PMAKE_CONTEXT MakeContext,
+    __inout PMAKE_CHILD_RECIPE ChildRecipe
+    )
+{
+    UNREFERENCED_PARAMETER(MakeContext);
+
+    //
+    //  This recipe structure should not have child processes executing.
+    //
+
+    ASSERT(!ChildRecipe->CmdContextPresent);
+    YoriLibFreeStringContents(&ChildRecipe->CurrentDirectory);
+}
+
+/**
  Launch the recipe for the next ready target.
 
  @param MakeContext Pointer to the context.
@@ -684,6 +758,7 @@ MakeLaunchNextTarget(
 {
     PMAKE_TARGET Target;
     PYORI_LIST_ENTRY ListEntry;
+    BOOLEAN Result;
 
     //
     //  This recipe structure should be available for use.
@@ -734,31 +809,11 @@ MakeLaunchNextTarget(
 
     ASSERT(YoriLibIsStringNullTerminated(&ChildRecipe->CurrentDirectory));
 
-    return MakeLaunchNextCmd(MakeContext, ChildRecipe);
-}
-
-/**
- Indicate that an entire recipe has completed.  This may have succeeded, or
- may have failed partway.  This function needs to clean up regardless.
-
- @param MakeContext Pointer to the make context.
-
- @param ChildRecipe Pointer to the recipe to clean up for reuse.
- */
-VOID
-MakeRecipeCompletion(
-    __in PMAKE_CONTEXT MakeContext,
-    __inout PMAKE_CHILD_RECIPE ChildRecipe
-    )
-{
-    UNREFERENCED_PARAMETER(MakeContext);
-
-    //
-    //  This recipe structure should not have child processes executing.
-    //
-
-    ASSERT(!ChildRecipe->CmdContextPresent);
-    YoriLibFreeStringContents(&ChildRecipe->CurrentDirectory);
+    Result = MakeLaunchNextCmd(MakeContext, ChildRecipe);
+    if (!Result) {
+        MakeRecipeCompletion(MakeContext, ChildRecipe);
+    }
+    return Result;
 }
 
 /**
@@ -844,11 +899,11 @@ MakeProcessCompletion(
         if (ExitCode != 0) {
 
             if (!ChildRecipe->Cmd->IgnoreErrors) {
-                YoriLibVtSetConsoleTextAttribute(YORI_LIB_OUTPUT_STDOUT, (WORD)((DefaultColor & 0xF0) | FOREGROUND_RED | FOREGROUND_INTENSITY));
+                YoriLibVtSetConsoleTextAttr(YORI_LIB_OUTPUT_STDOUT, (WORD)((DefaultColor & 0xF0) | FOREGROUND_RED | FOREGROUND_INTENSITY));
                 YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("Error in target: %y\n"), &ChildRecipe->Target->HashEntry.Key);
                 Result = FALSE;
             } else {
-                YoriLibVtSetConsoleTextAttribute(YORI_LIB_OUTPUT_STDOUT, (WORD)((DefaultColor & 0xF0) | FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY));
+                YoriLibVtSetConsoleTextAttr(YORI_LIB_OUTPUT_STDOUT, (WORD)((DefaultColor & 0xF0) | FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY));
             }
 
             RestoreColor = TRUE;
@@ -882,7 +937,7 @@ MakeProcessCompletion(
         }
 
         if (RestoreColor) {
-            YoriLibVtSetConsoleTextAttribute(YORI_LIB_OUTPUT_STDOUT, YoriLibVtGetDefaultColor());
+            YoriLibVtSetConsoleTextAttr(YORI_LIB_OUTPUT_STDOUT, YoriLibVtGetDefaultColor());
         }
 
         //
@@ -953,7 +1008,7 @@ MakeExecuteRequiredTargets(
     )
 {
 
-    DWORD NumberActiveProcesses;
+    YORI_ALLOC_SIZE_T NumberActiveProcesses;
     DWORD Index;
     HANDLE *ProcessHandleArray;
     PMAKE_CHILD_RECIPE ChildRecipeArray;
@@ -1015,7 +1070,7 @@ MakeExecuteRequiredTargets(
             }
 
             if (Index == NumberActiveProcesses) {
-                Index = WaitForMultipleObjects(NumberActiveProcesses, ProcessHandleArray, FALSE, INFINITE);
+                Index = WaitForMultipleObjectsEx(NumberActiveProcesses, ProcessHandleArray, FALSE, INFINITE, FALSE);
                 Index = Index - WAIT_OBJECT_0;
             }
 
@@ -1052,7 +1107,7 @@ MakeExecuteRequiredTargets(
                     MakeRecipeCompletion(MakeContext, &ChildRecipeArray[Index]);
                 }
 
-                if (NumberActiveProcesses > Index + 1) {
+                if (NumberActiveProcesses > (YORI_ALLOC_SIZE_T)(Index + 1)) {
                     memmove(&ChildRecipeArray[Index],
                             &ChildRecipeArray[Index + 1],
                             (NumberActiveProcesses - Index - 1) * sizeof(MAKE_CHILD_RECIPE));
@@ -1103,13 +1158,20 @@ Drain:
             ProcessHandleArray[Index] = ChildRecipeArray[Index].ProcessHandle;
         }
 
-        if (Index == NumberActiveProcesses) {
-            Index = WaitForMultipleObjects(NumberActiveProcesses, ProcessHandleArray, FALSE, INFINITE);
-            Index = Index - WAIT_OBJECT_0;
+        //
+        //  If all have active processes, wait for one to complete, then clean
+        //  up the one that did.  If Index != NumberActiveProcesses, it means
+        //  no handle was found above, so there's nothing to wait for, and
+        //  the entry needs to be cleaned up.
+        //
 
-            MakeProcessCompletion(MakeContext, &ChildRecipeArray[Index]);
-            MakeRecipeCompletion(MakeContext, &ChildRecipeArray[Index]);
+        if (Index == NumberActiveProcesses) {
+            Index = WaitForMultipleObjectsEx(NumberActiveProcesses, ProcessHandleArray, FALSE, INFINITE, FALSE);
+            Index = Index - WAIT_OBJECT_0;
         }
+
+        MakeProcessCompletion(MakeContext, &ChildRecipeArray[Index]);
+        MakeRecipeCompletion(MakeContext, &ChildRecipeArray[Index]);
 
         if (NumberActiveProcesses > Index + 1) {
             memmove(&ChildRecipeArray[Index],

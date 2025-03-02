@@ -3,7 +3,7 @@
  *
  * Yori shell copy files
  *
- * Copyright (c) 2017-2021 Malcolm J. Smith
+ * Copyright (c) 2017-2022 Malcolm J. Smith
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -27,22 +27,6 @@
 #include <yoripch.h>
 #include <yorilib.h>
 
-#ifndef SE_CREATE_SYMBOLIC_LINK_NAME
-/**
- If the compilation environment hasn't defined it, define the privilege
- for creating symbolic links.
- */
-#define SE_CREATE_SYMBOLIC_LINK_NAME _T("SeCreateSymbolicLinkPrivilege")
-#endif
-
-#ifndef FILE_FLAG_OPEN_NO_RECALL
-/**
- If the compilation environment hasn't defined it, define the flag for not
- recalling objects from slow storage.
- */
-#define FILE_FLAG_OPEN_NO_RECALL 0x100000
-#endif
-
 /**
  Help text to display to the user.
  */
@@ -51,14 +35,15 @@ CHAR strCopyHelpText[] =
         "\n"
         "Copies one or more files.\n"
         "\n"
-        "COPY [-license] [-b] [-c:algorithm] [-l] [-n|-nt|-p] [-s] [-t] [-v] [-x exclude]\n"
-        "      <src>\n"
-        "COPY [-license] [-b] [-c:algorithm] [-l] [-n|-nt|-p] [-s] [-t] [-v] [-x exclude]\n"
-        "      <src> [<src> ...] <dest>\n"
+        "COPY [-license] [-b] [-c:algorithm] [-ds size] [-l] [-n|-nt|-p] [-s] [-t] [-v]\n"
+        "      [-x exclude] <src>\n"
+        "COPY [-license] [-b] [-c:algorithm] [-ds size] [-l] [-n|-nt|-p] [-s] [-t] [-v]\n"
+        "      [-x exclude] <src> [<src> ...] <dest>\n"
         "\n"
         "   -b             Use basic search criteria for files only\n"
         "   -c             Compress targets with specified algorithm.  Options are:\n"
         "                    lzx, ntfs, xp4k, xp8k, xp16k\n"
+        "   -ds            The size of the device, ignored for files\n"
         "   -l             Copy links as links rather than contents\n"
         "   -n             Copy new or files whose size have changed only\n"
         "   -nt            Copy new or files whose size or timestamps have changed only\n"
@@ -118,6 +103,12 @@ typedef struct _COPY_CONTEXT {
      State related to background compression of files after copy.
      */
     YORILIB_COMPRESS_CONTEXT CompressContext;
+
+    /**
+     The number of bytes to copy when copying to or from a device.  Zero
+     means copy until the end of the device.
+     */
+    LARGE_INTEGER DeviceSize;
 
     /**
      The file system attributes of the destination.  Used to determine if
@@ -291,19 +282,16 @@ CopyBuildDestinationPath(
             return FALSE;
         }
         DestWithFile.LengthInChars = YoriLibSPrintf(DestWithFile.StartOfString, _T("%y\\%y"), &CopyContext->Dest, RelativePathFromSource);
-        if (!YoriLibGetFullPathNameReturnAllocation(&DestWithFile, TRUE, FullDest, NULL)) {
+        if (!YoriLibGetFullPathNameAlloc(&DestWithFile, TRUE, FullDest, NULL)) {
             return FALSE;
         }
         YoriLibFreeStringContents(&DestWithFile);
     } else {
-        if (!YoriLibGetFullPathNameReturnAllocation(&CopyContext->Dest, TRUE, FullDest, NULL)) {
-            return FALSE;
-        }
         if (CopyContext->FilesCopied > 0) {
-            YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("Attempting to copy multiple files over a single file (%s)\n"), FullDest->StartOfString);
-            YoriLibFreeStringContents(FullDest);
+            YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("Attempting to copy multiple files over a single file (%y)\n"), &CopyContext->Dest);
             return FALSE;
         }
+        YoriLibCloneString(FullDest, &CopyContext->Dest);
     }
     return TRUE;
 }
@@ -444,6 +432,7 @@ CopyAsLink(
     HANDLE DestFileHandle;
     DWORD LastError;
     DWORD BytesReturned;
+    DWORD BytesToAllocate;
     LPTSTR ErrText;
 
     SourceFileHandle = CreateFile(SourceFileName,
@@ -510,7 +499,11 @@ CopyAsLink(
         }
     }
 
-    ReparseData = YoriLibMalloc(64 * 1024);
+    BytesToAllocate = 64 * 1024;
+    if (!YoriLibIsSizeAllocatable(BytesToAllocate)) {
+        BytesToAllocate = 32 * 1024;
+    }
+    ReparseData = YoriLibMalloc((YORI_ALLOC_SIZE_T)BytesToAllocate);
     if (ReparseData == NULL) {
         CloseHandle(DestFileHandle);
         CloseHandle(SourceFileHandle);
@@ -566,6 +559,8 @@ CopyAsLink(
  should not be used for files since it makes no attempt to preserve any kind
  of file metadata, but for devices file metadata is meaningless anyway.
 
+ @param CopyContext Pointer to the copy context, specifying device size.
+
  @param SourceFile Pointer to the source file/device name.
 
  @param DestFile Pointer to the destination file/device name.
@@ -574,6 +569,7 @@ CopyAsLink(
  */
 BOOL
 CopyAsDumbDataMove(
+    __in PCOPY_CONTEXT CopyContext,
     __in PYORI_STRING SourceFile,
     __in PYORI_STRING DestFile
     )
@@ -581,10 +577,12 @@ CopyAsDumbDataMove(
     PVOID Buffer;
     DWORD BytesCopied;
     DWORD BufferSize;
+    DWORD SectorSize;
     HANDLE SourceHandle;
     HANDLE DestHandle;
     DWORD LastError;
     LPTSTR ErrText;
+    LONGLONG TotalBytesCopied;
 
     SourceHandle = CreateFile(SourceFile->StartOfString,
                               GENERIC_READ,
@@ -630,17 +628,56 @@ CopyAsDumbDataMove(
         return FALSE;
     }
 
+    SectorSize = YoriLibGetHandleSectorSize(DestHandle);
+
     BufferSize = 64 * 1024;
-    Buffer = YoriLibMalloc(BufferSize);
+    if (!YoriLibIsSizeAllocatable(BufferSize)) {
+        BufferSize = 32 * 1024;
+    }
+    Buffer = YoriLibMalloc((YORI_ALLOC_SIZE_T)BufferSize);
     if (Buffer == NULL) {
         CloseHandle(SourceHandle);
         CloseHandle(DestHandle);
         return FALSE;
     }
 
+    if (SectorSize > BufferSize) {
+        SectorSize = BufferSize;
+    }
+
+    TotalBytesCopied = 0;
+
     while (ReadFile(SourceHandle, Buffer, BufferSize, &BytesCopied, NULL)) {
         if (BytesCopied == 0) {
             break;
+        }
+
+        if (CopyContext->DeviceSize.QuadPart != 0 &&
+            (TotalBytesCopied + BytesCopied) > CopyContext->DeviceSize.QuadPart) {
+
+            BytesCopied = (DWORD)(CopyContext->DeviceSize.QuadPart - TotalBytesCopied);
+
+        }
+
+        //
+        //  If the destination has a sector size requirement, round up to the
+        //  next whole sector
+        //
+
+        if (SectorSize != 0 &&
+            (BytesCopied % SectorSize) != 0) {
+
+            DWORD SectorOffset;
+            DWORD SectorRemaining;
+            DWORD BufferOffset;
+
+            SectorOffset = BytesCopied % SectorSize;
+            SectorRemaining = SectorSize - SectorOffset;
+
+            BufferOffset = (BytesCopied / SectorSize) * SectorSize + SectorOffset;
+
+            ZeroMemory(YoriLibAddToPointer(Buffer, BufferOffset), SectorRemaining);
+            BytesCopied = BytesCopied + SectorRemaining;
         }
 
         if (!WriteFile(DestHandle, Buffer, BytesCopied, &BytesCopied, NULL)) {
@@ -652,6 +689,13 @@ CopyAsDumbDataMove(
             CloseHandle(SourceHandle);
             CloseHandle(DestHandle);
             return FALSE;
+        }
+
+        TotalBytesCopied = TotalBytesCopied + BytesCopied;
+        if (CopyContext->DeviceSize.QuadPart != 0 &&
+            TotalBytesCopied >= CopyContext->DeviceSize.QuadPart) {
+
+            break;
         }
     }
 
@@ -738,9 +782,11 @@ CopyFileFoundCallback(
     YORI_STRING HumanDestPath;
     PYORI_STRING SourceNameToDisplay;
     PYORI_STRING DestNameToDisplay;
-    DWORD SlashesFound;
-    DWORD Index;
+    YORI_ALLOC_SIZE_T SlashesFound;
+    YORI_ALLOC_SIZE_T Index;
     DWORD LastError;
+
+    CopyContext->FilesFoundThisArg++;
 
     ASSERT(YoriLibIsStringNullTerminated(FilePath));
 
@@ -771,7 +817,6 @@ CopyFileFoundCallback(
     //
 
     if (CopyShouldExclude(CopyContext, &RelativePathFromSource, FileInfo)) {
-        CopyContext->FilesFoundThisArg++;
 
         if (CopyContext->Verbose) {
             if (YoriLibUnescapePath(FilePath, &HumanSourcePath)) {
@@ -785,8 +830,22 @@ CopyFileFoundCallback(
     }
 
     if (!CopyBuildDestinationPath(CopyContext, &RelativePathFromSource, &FullDest)) {
-        CopyContext->FilesFoundThisArg++;
         return FALSE;
+    }
+
+    //
+    //  This cannot detect all cases where two paths might refer to the same
+    //  file, but it can improve the experience if a user fails to specify
+    //  a destination (implying a relative path to a file in the current
+    //  directory should be copied to the current directory.)  It can't even
+    //  check for case insensitivity given NTFS can support case sensitive
+    //  paths.
+    //
+
+    if (YoriLibCompareString(&FullDest, FilePath) == 0) {
+        YoriLibFreeStringContents(&FullDest);
+        YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("Cannot copy file over itself: %y\n"), FilePath);
+        return TRUE;
     }
 
     DestNameToDisplay = &FullDest;
@@ -821,7 +880,7 @@ CopyFileFoundCallback(
                 }
             }
         } else if (CopyContext->DestinationIsDevice || YoriLibIsFileNameDeviceName(FilePath)) {
-            CopyAsDumbDataMove(FilePath, &FullDest);
+            CopyAsDumbDataMove(CopyContext, FilePath, &FullDest);
         } else {
             LastError = YoriLibCopyFile(FilePath, &FullDest);
             if (LastError != ERROR_SUCCESS) {
@@ -834,7 +893,7 @@ CopyFileFoundCallback(
                 //
 
                 if (LastError == ERROR_INVALID_PARAMETER) {
-                    CopyAsDumbDataMove(FilePath, &FullDest);
+                    CopyAsDumbDataMove(CopyContext, FilePath, &FullDest);
                 } else {
                     LPTSTR ErrText = YoriLibGetWinErrorText(LastError);
                     if (SourceNameToDisplay != &HumanSourcePath) {
@@ -863,52 +922,10 @@ CopyFileFoundCallback(
         CopyTimestamps(FileInfo, &FullDest);
     }
 
-    CopyContext->FilesFoundThisArg++;
     CopyContext->FilesCopied++;
     YoriLibFreeStringContents(&FullDest);
     YoriLibFreeStringContents(&HumanSourcePath);
     YoriLibFreeStringContents(&HumanDestPath);
-    return TRUE;
-}
-
-/**
- If the privilege for creating symbolic links is available to the process,
- enable it.
-
- @return TRUE to indicate the privilege was enabled, FALSE if it was not.
- */
-BOOL
-CopyEnableSymlinkPrivilege(VOID)
-{
-    TOKEN_PRIVILEGES TokenPrivileges;
-    LUID SymlinkLuid;
-    HANDLE TokenHandle;
-
-    YoriLibLoadAdvApi32Functions();
-    if (DllAdvApi32.pLookupPrivilegeValueW == NULL ||
-        DllAdvApi32.pOpenProcessToken == NULL ||
-        DllAdvApi32.pAdjustTokenPrivileges == NULL) {
-
-        return FALSE;
-    }
-
-    if (!DllAdvApi32.pLookupPrivilegeValueW(NULL, SE_CREATE_SYMBOLIC_LINK_NAME, &SymlinkLuid)) {
-        return FALSE;
-    }
-
-    if (!DllAdvApi32.pOpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES, &TokenHandle)) {
-        return FALSE;
-    }
-
-    TokenPrivileges.PrivilegeCount = 1;
-    TokenPrivileges.Privileges[0].Luid = SymlinkLuid;
-    TokenPrivileges.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
-    if (!DllAdvApi32.pAdjustTokenPrivileges(TokenHandle, FALSE, &TokenPrivileges, 0, NULL, 0)) {
-        CloseHandle(TokenHandle);
-        return FALSE;
-    }
-    CloseHandle(TokenHandle);
-
     return TRUE;
 }
 
@@ -953,19 +970,19 @@ CopyFreeCopyContext(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
+    BOOLEAN ArgumentUnderstood;
     DWORD FilesProcessed;
     DWORD FileCount;
-    DWORD LastFileArg = 0;
-    DWORD FirstFileArg = 0;
-    DWORD MatchFlags;
-    BOOL BasicEnumeration;
-    BOOL Recursive;
-    DWORD i;
+    YORI_ALLOC_SIZE_T LastFileArg = 0;
+    YORI_ALLOC_SIZE_T FirstFileArg = 0;
+    WORD MatchFlags;
+    BOOLEAN BasicEnumeration;
+    BOOLEAN Recursive;
+    YORI_ALLOC_SIZE_T i;
     DWORD Result;
     COPY_CONTEXT CopyContext;
     YORILIB_COMPRESS_ALGORITHM CompressionAlgorithm;
@@ -986,80 +1003,86 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 CopyHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
-                YoriLibDisplayMitLicense(_T("2017-2021"));
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
+                YoriLibDisplayMitLicense(_T("2017-2022"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("b")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("b")) == 0) {
                 BasicEnumeration = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("c")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("c")) == 0) {
                 CompressionAlgorithm.EntireAlgorithm = 0;
                 CompressionAlgorithm.WofAlgorithm = FILE_PROVIDER_COMPRESSION_XPRESS16K;
                 CopyContext.CompressDest = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("c:lzx")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("ds")) == 0) {
+                if (i + 1 < ArgC) {
+                    CopyContext.DeviceSize = YoriLibStringToFileSize(&ArgV[i + 1]);
+                    ArgumentUnderstood = TRUE;
+                    i++;
+                }
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("c:lzx")) == 0) {
 
                 CompressionAlgorithm.EntireAlgorithm = 0;
                 CompressionAlgorithm.WofAlgorithm = FILE_PROVIDER_COMPRESSION_LZX;
                 CopyContext.CompressDest = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("c:ntfs")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("c:ntfs")) == 0) {
                 CompressionAlgorithm.EntireAlgorithm = 0;
                 CompressionAlgorithm.NtfsAlgorithm = COMPRESSION_FORMAT_DEFAULT;
                 CopyContext.CompressDest = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("c:xpress")) == 0 ||
-                       YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("c:xp4k")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("c:xpress")) == 0 ||
+                       YoriLibCompareStringLitIns(&Arg, _T("c:xp4k")) == 0) {
                 CompressionAlgorithm.EntireAlgorithm = 0;
                 CompressionAlgorithm.WofAlgorithm = FILE_PROVIDER_COMPRESSION_XPRESS4K;
                 CopyContext.CompressDest = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("c:xp8k")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("c:xp8k")) == 0) {
                 CompressionAlgorithm.EntireAlgorithm = 0;
                 CompressionAlgorithm.WofAlgorithm = FILE_PROVIDER_COMPRESSION_XPRESS8K;
                 CopyContext.CompressDest = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("c:xp16k")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("c:xp16k")) == 0) {
                 CompressionAlgorithm.EntireAlgorithm = 0;
                 CompressionAlgorithm.WofAlgorithm = FILE_PROVIDER_COMPRESSION_XPRESS16K;
                 CopyContext.CompressDest = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("l")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("l")) == 0) {
                 CopyContext.CopyAsLinks = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("n")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("n")) == 0) {
                 CopyContext.PreserveExisting = FALSE;
                 CopyContext.SkipDataCopy = FALSE;
                 CopyContext.CopyNewOnly = TRUE;
                 CopyContext.CopyChangedTimestamps = FALSE;
                 CopyContext.CopyTimestamps = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("nt")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("nt")) == 0) {
                 CopyContext.PreserveExisting = FALSE;
                 CopyContext.SkipDataCopy = FALSE;
                 CopyContext.CopyNewOnly = TRUE;
                 CopyContext.CopyChangedTimestamps = TRUE;
                 CopyContext.CopyTimestamps = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("p")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("p")) == 0) {
                 CopyContext.CopyNewOnly = FALSE;
                 CopyContext.SkipDataCopy = FALSE;
                 CopyContext.PreserveExisting = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("s")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("s")) == 0) {
                 Recursive = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("t")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("t")) == 0) {
                 CopyContext.CopyTimestamps = TRUE;
                 CopyContext.SkipDataCopy = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("v")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("v")) == 0) {
                 CopyContext.Verbose = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("x")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("x")) == 0) {
                 if (i + 1 < ArgC) {
                     CopyAddExclude(&CopyContext, &ArgV[i + 1]);
                     ArgumentUnderstood = TRUE;
@@ -1085,7 +1108,13 @@ ENTRYPOINT(
         CopyFreeCopyContext(&CopyContext);
         return EXIT_FAILURE;
     } else if (FileCount == 1) {
-        YoriLibConstantString(&CopyContext.Dest, _T("."));
+        YORI_STRING RelativeCurrentDirectory;
+        YoriLibConstantString(&RelativeCurrentDirectory, _T("."));
+        if (!YoriLibUserStringToSingleFilePathOrDevice(&RelativeCurrentDirectory, TRUE, &CopyContext.Dest)) {
+            YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("copy: could not resolve %y\n"), &RelativeCurrentDirectory);
+            CopyFreeCopyContext(&CopyContext);
+            return EXIT_FAILURE;
+        }
     } else {
         if (!YoriLibUserStringToSingleFilePathOrDevice(&ArgV[LastFileArg], TRUE, &CopyContext.Dest)) {
             YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("copy: could not resolve %y\n"), &ArgV[LastFileArg]);
@@ -1101,7 +1130,7 @@ ENTRYPOINT(
     ASSERT(YoriLibIsStringNullTerminated(&CopyContext.Dest));
 
     if (CopyContext.CopyAsLinks) {
-        if (!CopyEnableSymlinkPrivilege()) {
+        if (!YoriLibEnableSymbolicLinkPrivilege()) {
             YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("copy: warning: could not enable symlink privilege\n"));
         }
     }
@@ -1136,7 +1165,7 @@ ENTRYPOINT(
     }
 
 #if YORI_BUILTIN
-    YoriLibCancelEnable();
+    YoriLibCancelEnable(FALSE);
 #endif
 
     CopyContext.FilesCopied = 0;

@@ -33,11 +33,6 @@
 #define MS_PRIMITIVE_PROVIDER L"Microsoft Primitive Provider"
 
 /**
- Specifies the NT success error code.
- */
-#define STATUS_SUCCESS (0)
-
-/**
  Help text to display to the user.
  */
 const
@@ -105,7 +100,7 @@ typedef struct _HASH_CONTEXT {
     /**
      Specifies the number of bytes in HashBuffer.
      */
-    DWORD HashLength;
+    YORI_ALLOC_SIZE_T HashLength;
 
     /**
      Pointer to a buffer to read data from the file into.
@@ -115,7 +110,7 @@ typedef struct _HASH_CONTEXT {
     /**
      Specifies the number of bytes in ReadBuffer.
      */
-    DWORD ReadBufferLength;
+    YORI_ALLOC_SIZE_T ReadBufferLength;
 
     /**
      A string which contains enough characters to contain the hex
@@ -229,8 +224,8 @@ HashFileFoundCallback(
     PHASH_CONTEXT HashContext = (PHASH_CONTEXT)Context;
     YORI_STRING RelativePathFrom;
     HANDLE FileHandle;
-    DWORD SlashesFound;
-    DWORD Index;
+    YORI_ALLOC_SIZE_T SlashesFound;
+    YORI_ALLOC_SIZE_T Index;
 
     UNREFERENCED_PARAMETER(FileInfo);
 
@@ -370,6 +365,7 @@ HashInitializeContext(
     DWORD LastError;
     LPTSTR ErrText;
     DWORD Index;
+    DWORD HashLength;
 
     LastError = ERROR_SUCCESS;
 
@@ -394,7 +390,7 @@ HashInitializeContext(
             //  although it's less clear on why.  In practice this appears
             //  necessary on NT 4 RTM (perhaps nothing else has used it first?)
             //
-            if (LastError != NTE_BAD_KEYSET) {
+            if (LastError != (DWORD)NTE_BAD_KEYSET) {
                 continue;
             }
 
@@ -423,7 +419,7 @@ HashInitializeContext(
         return FALSE;
     }
 
-    if (!DllAdvApi32.pCryptGetHashParam(hHash, HP_HASHVAL, NULL, &HashContext->HashLength, 0)) {
+    if (!DllAdvApi32.pCryptGetHashParam(hHash, HP_HASHVAL, NULL, &HashLength, 0)) {
         LastError = GetLastError();
         if (LastError != ERROR_MORE_DATA) {
             ErrText = YoriLibGetWinErrorText(LastError);
@@ -434,6 +430,14 @@ HashInitializeContext(
             return FALSE;
         }
     }
+
+    if (!YoriLibIsSizeAllocatable(HashLength)) {
+        YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("hash: hash length %i too large\n"), HashLength);
+        DllAdvApi32.pCryptDestroyHash(hHash);
+        HashCleanupContext(HashContext);
+        return FALSE;
+    }
+    HashContext->HashLength = (YORI_ALLOC_SIZE_T)HashLength;
 
     DllAdvApi32.pCryptDestroyHash(hHash);
 
@@ -450,7 +454,7 @@ HashInitializeContext(
         return FALSE;
     }
 
-    HashContext->ReadBufferLength = 1024 * 1024;
+    HashContext->ReadBufferLength = YoriLibMaximumAllocationInRange(60 * 1024, 1024 * 1024);
 
     HashContext->ReadBuffer = YoriLibMalloc(HashContext->ReadBufferLength);
     if (HashContext->ReadBuffer == NULL) {
@@ -510,7 +514,7 @@ HashFileEnumerateErrorCallback(
         DirName.StartOfString = UnescapedFilePath.StartOfString;
         FilePart = YoriLibFindRightMostCharacter(&UnescapedFilePath, '\\');
         if (FilePart != NULL) {
-            DirName.LengthInChars = (DWORD)(FilePart - DirName.StartOfString);
+            DirName.LengthInChars = (YORI_ALLOC_SIZE_T)(FilePart - DirName.StartOfString);
         } else {
             DirName.LengthInChars = UnescapedFilePath.LengthInChars;
         }
@@ -546,15 +550,15 @@ HashFileEnumerateErrorCallback(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
-    DWORD MatchFlags;
-    BOOL BasicEnumeration = FALSE;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
+    WORD MatchFlags;
+    BOOLEAN BasicEnumeration = FALSE;
     HASH_CONTEXT HashContext;
     YORI_STRING Arg;
     DWORD Algorithm = CALG_SHA1;
@@ -568,35 +572,35 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 HashHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2019-2021"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("a")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("a")) == 0) {
                 if (i + 1 < ArgC) {
-                    if (YoriLibCompareStringWithLiteralInsensitive(&ArgV[i + 1], _T("MD4")) == 0) {
+                    if (YoriLibCompareStringLitIns(&ArgV[i + 1], _T("MD4")) == 0) {
                         ArgumentUnderstood = TRUE;
                         i++;
                         Algorithm = CALG_MD4;
-                    } else if (YoriLibCompareStringWithLiteralInsensitive(&ArgV[i + 1], _T("MD5")) == 0) {
+                    } else if (YoriLibCompareStringLitIns(&ArgV[i + 1], _T("MD5")) == 0) {
                         ArgumentUnderstood = TRUE;
                         i++;
                         Algorithm = CALG_MD5;
-                    } else if (YoriLibCompareStringWithLiteralInsensitive(&ArgV[i + 1], _T("SHA1")) == 0) {
+                    } else if (YoriLibCompareStringLitIns(&ArgV[i + 1], _T("SHA1")) == 0) {
                         ArgumentUnderstood = TRUE;
                         i++;
                         Algorithm = CALG_SHA1;
-                    } else if (YoriLibCompareStringWithLiteralInsensitive(&ArgV[i + 1], _T("SHA256")) == 0) {
+                    } else if (YoriLibCompareStringLitIns(&ArgV[i + 1], _T("SHA256")) == 0) {
                         ArgumentUnderstood = TRUE;
                         i++;
                         Algorithm = CALG_SHA_256;
-                    } else if (YoriLibCompareStringWithLiteralInsensitive(&ArgV[i + 1], _T("SHA384")) == 0) {
+                    } else if (YoriLibCompareStringLitIns(&ArgV[i + 1], _T("SHA384")) == 0) {
                         ArgumentUnderstood = TRUE;
                         i++;
                         Algorithm = CALG_SHA_384;
-                    } else if (YoriLibCompareStringWithLiteralInsensitive(&ArgV[i + 1], _T("SHA512")) == 0) {
+                    } else if (YoriLibCompareStringLitIns(&ArgV[i + 1], _T("SHA512")) == 0) {
                         ArgumentUnderstood = TRUE;
                         i++;
                         Algorithm = CALG_SHA_512;
@@ -605,13 +609,13 @@ ENTRYPOINT(
                         return EXIT_FAILURE;
                     }
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("b")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("b")) == 0) {
                 BasicEnumeration = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("s")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("s")) == 0) {
                 HashContext.Recursive = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 StartArg = i + 1;
                 ArgumentUnderstood = TRUE;
                 break;
@@ -644,7 +648,7 @@ ENTRYPOINT(
     }
 
 #if YORI_BUILTIN
-    YoriLibCancelEnable();
+    YoriLibCancelEnable(FALSE);
 #endif
 
     //

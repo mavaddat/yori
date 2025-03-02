@@ -49,17 +49,17 @@ typedef struct _YORI_LIB_LINE_READ_CONTEXT {
      The number of characters in PreviousBuffer.  Note that PreviousBuffer
      is currently an 8 bit string.
      */
-    DWORD BytesInBuffer;
+    YORI_ALLOC_SIZE_T BytesInBuffer;
 
     /**
      The size of the PreviousBuffer allocation, in characters.
      */
-    DWORD LengthOfBuffer;
+    YORI_ALLOC_SIZE_T LengthOfBuffer;
 
     /**
      Offset within the buffer to the data that has not yet been returned.
      */
-    DWORD CurrentBufferOffset;
+    YORI_ALLOC_SIZE_T CurrentBufferOffset;
 
     /**
      The type of the handle (file, pipe, etc.)
@@ -104,20 +104,20 @@ BOOL
 YoriLibCopyLineToUserBufferW(
     __inout PYORI_STRING UserString,
     __in LPSTR SourceBuffer,
-    __in DWORD CharsToCopy
+    __in YORI_ALLOC_SIZE_T CharsToCopy
     )
 {
-    DWORD CharsNeeded;
+    YORI_ALLOC_SIZE_T CharsNeeded;
 
     if (CharsToCopy == 0) {
         CharsNeeded = 1;
     } else {
-        CharsNeeded = YoriLibGetMultibyteInputSizeNeeded(SourceBuffer, CharsToCopy) + 1;
+        CharsNeeded = (YORI_ALLOC_SIZE_T)YoriLibGetMultibyteInputSizeNeeded(SourceBuffer, CharsToCopy) + 1;
     }
 
     if (CharsNeeded > UserString->LengthAllocated) {
         UserString->LengthInChars = 0;
-        if (!YoriLibReallocateString(UserString, CharsNeeded + 64)) {
+        if (!YoriLibReallocString(UserString, CharsNeeded + 64)) {
             return FALSE;
         }
     }
@@ -147,7 +147,7 @@ YoriLibCopyLineToUserBufferW(
 
  @return The count of bytes in the BOM, which may be zero.
  */
-DWORD
+UCHAR
 YoriLibBytesInBom(
     __in PUCHAR StringToCheck,
     __in DWORD BytesInString
@@ -193,17 +193,26 @@ YoriLibBytesInBom(
  */
 PYORI_LIB_LINE_READ_CONTEXT YoriLibReadLineCachedContext[YORI_LIB_READ_LINE_CACHE_ENTRIES];
 
-#if defined(_MSC_VER) && defined(_M_IX86) && (_MSC_VER >= 1010) && (_M_IX86 >= 400)
-LONG _InterlockedCompareExchange(__inout _Interlocked_operand_ LONG volatile *, __in LONG, __in LONG);
-#pragma intrinsic(_InterlockedCompareExchange)
+#if defined(_M_IX86) && (_M_IX86 >= 400)
+/**
+ Newer compilers provide an intrinsic, but the situation is awful, so this
+ links to an assembly routine instead.
+
+ Visual C++ 2.0-4.0 do not support the intrinsic.
+ Visual C++ 4.1-4.2 generate a "lock mov" and a non-lock "cmpxchg", which
+     causes programs to hit an illegal instruction fault.
+ Visual C++ 5.0 appears to not emit the actual cmpxchg instruction.
+ Visual C++ 6.0 works.
+ */
+LONG lock_cmpxchg(__inout _Interlocked_operand_ LONG volatile *, __in LONG, __in LONG);
 #endif
 
 /**
  Return TRUE if InterlockedCompareExchangePointer is available.  This exists
- on all 64 bit systems, and on 32 bit x86 it requires a 486 or newer.  If
- targeting a 486 or above with Visual C++ 4.1 or newer, use the intrinsic;
- because this is an instruction it can run on older versions of NT.
- Otherwise, fallback to using the export, requiring NT 4 or above.
+ on all 64 bit systems, and on 32 bit x86 it requires a 486 or newer.  The
+ implementation is provided as assembly due to incomplete and buggy
+ implementations of a compiler intrinsic on older compilers.  If compiled
+ for 386 or RISC, fallback to using the export, requiring NT 4 or above.
 
  @return TRUE if the system supports an implementation of
          InterlockedCompareExchangePointer, or FALSE if it does not.
@@ -212,8 +221,12 @@ BOOLEAN
 YoriLibIsInterlockedCompareExchangePointerAvailable(VOID)
 {
 #if defined(_WIN64)
+#if defined(_M_ALPHA)
+    return FALSE;
+#else
     return TRUE;
-#elif defined(_MSC_VER) && defined(_M_IX86) && (_MSC_VER >= 1010) && (_M_IX86 >= 400)
+#endif
+#elif defined(_M_IX86) && (_M_IX86 >= 400)
     return TRUE;
 #else
     if (DllKernel32.pInterlockedCompareExchange) {
@@ -223,6 +236,7 @@ YoriLibIsInterlockedCompareExchangePointerAvailable(VOID)
 #endif
 }
 
+#if defined(_WIN64) || !defined(_M_IX86) || (_M_IX86 < 400)
 /**
  Perform an InterlockedCompareExchange of pointer size.  This function assumes
  the caller has firstly called
@@ -241,13 +255,28 @@ PVOID
 YoriLibInterlockedCompareExchangePointer(volatile PVOID * Dest, PVOID Exchange, PVOID Comperand)
 {
 #if defined(_WIN64)
+#if defined(_M_ALPHA)
+    UNREFERENCED_PARAMETER(Dest);
+    UNREFERENCED_PARAMETER(Exchange);
+    UNREFERENCED_PARAMETER(Comperand);
+    return NULL;
+#else
     return InterlockedCompareExchangePointer(Dest, Exchange, Comperand);
-#elif defined(_MSC_VER) && defined(_M_IX86) && (_MSC_VER >= 1010) && (_M_IX86 >= 400)
-    return (PVOID)(_InterlockedCompareExchange((volatile LONG *)Dest, (LONG)Exchange, (LONG)Comperand));
+#endif
 #else
     return (PVOID)(DllKernel32.pInterlockedCompareExchange((volatile LONG *)Dest, (LONG)Exchange, (LONG)Comperand));
 #endif
 }
+
+#else
+
+/**
+ Since this is a 32 bit system, the pointer function is the same as the 32 bit
+ integer function.  Cast the types in both directions to keep C happy.
+ */
+#define YoriLibInterlockedCompareExchangePointer(a, b, c) (PVOID)lock_cmpxchg((volatile LONG *)a, (LONG)b, (LONG)c)
+
+#endif
 
 /**
  Allocate a line read context, which may be from a previously saved cache
@@ -273,7 +302,7 @@ YoriLibReadLineAllocateContext(VOID)
         }
 
         if (ReadContext != NULL) {
-            if (YoriLibInterlockedCompareExchangePointer(&YoriLibReadLineCachedContext[ProbeIndex], NULL, ReadContext) == ReadContext) {
+            if (YoriLibInterlockedCompareExchangePointer((volatile PVOID *)&YoriLibReadLineCachedContext[ProbeIndex], NULL, ReadContext) == ReadContext) {
                 return ReadContext;
             }
         }
@@ -317,7 +346,7 @@ YoriLibLineReadCloseOrCache(
         }
 
         if (OldContext == NULL) {
-            if (YoriLibInterlockedCompareExchangePointer(&YoriLibReadLineCachedContext[ProbeIndex], ReadContext, NULL) == NULL) {
+            if (YoriLibInterlockedCompareExchangePointer((volatile PVOID *)&YoriLibReadLineCachedContext[ProbeIndex], ReadContext, NULL) == NULL) {
                 return;
             }
         }
@@ -342,7 +371,7 @@ YoriLibLineReadCleanupCache(VOID)
              ProbeIndex++) {
 
             OldContext = YoriLibReadLineCachedContext[ProbeIndex];
-            if (YoriLibInterlockedCompareExchangePointer(&YoriLibReadLineCachedContext[ProbeIndex], NULL, OldContext) == OldContext) {
+            if (YoriLibInterlockedCompareExchangePointer((volatile PVOID *)&YoriLibReadLineCachedContext[ProbeIndex], NULL, OldContext) == OldContext) {
                 YoriLibLineReadClose(OldContext);
             }
         }
@@ -398,19 +427,19 @@ YoriLibReadLineToStringEx(
     )
 {
     PYORI_LIB_LINE_READ_CONTEXT ReadContext;
-    DWORD Count = 0;
+    YORI_ALLOC_SIZE_T Count = 0;
     DWORD LastError;
-    DWORD BytesToRead;
+    YORI_ALLOC_SIZE_T BytesToRead;
     DWORD BytesRead;
-    DWORD CharsToCopy;
-    DWORD CharsToSkip;
+    YORI_ALLOC_SIZE_T CharsToCopy;
+    YORI_ALLOC_SIZE_T CharsToSkip;
     BOOL BomFound = FALSE;
     BOOL TerminateProcessing;
     HANDLE HandleArray[2];
     DWORD HandleCount;
     DWORD WaitResult;
     DWORD DelayTime;
-    DWORD CharsRemaining;
+    YORI_ALLOC_SIZE_T CharsRemaining;
     DWORD CumulativeDelay;
     YORI_LIB_LINE_ENDING LocalLineEnding;
 
@@ -450,13 +479,19 @@ YoriLibReadLineToStringEx(
     //
 
     if (ReadContext->PreviousBuffer == NULL || UserString->LengthAllocated > ReadContext->LengthOfBuffer) {
+        YORI_ALLOC_SIZE_T MinBufferSize;
         if (ReadContext->PreviousBuffer != NULL) {
             YoriLibFree(ReadContext->PreviousBuffer);
             ReadContext->PreviousBuffer = NULL;
         }
+
+        //
+        //  MSFIX: Need to adjust this for smaller alloc size limits
+        //
         ReadContext->LengthOfBuffer = UserString->LengthAllocated;
-        if (ReadContext->LengthOfBuffer < 256 * 1024) {
-            ReadContext->LengthOfBuffer = 256 * 1024;
+        MinBufferSize = YoriLibMaximumAllocationInRange(60 * 1024, 256 * 1024);
+        if (ReadContext->LengthOfBuffer < MinBufferSize) {
+            ReadContext->LengthOfBuffer = MinBufferSize;
         }
         ReadContext->PreviousBuffer = YoriLibMalloc(ReadContext->LengthOfBuffer);
         if (ReadContext->PreviousBuffer == NULL) {
@@ -509,15 +544,15 @@ YoriLibReadLineToStringEx(
 
                         CharsToSkip = 0;
                         if (!BomFound && ReadContext->LinesRead == 0) {
-                            CharsToSkip = YoriLibBytesInBom(ReadContext->PreviousBuffer, CharsToCopy * sizeof(WCHAR));
+                            CharsToSkip = YoriLibBytesInBom((PUCHAR)ReadContext->PreviousBuffer, CharsToCopy * sizeof(WCHAR));
                             if (CharsToSkip > 0) {
                                 BomFound = TRUE;
                                 CharsToSkip = CharsToSkip / sizeof(WCHAR);
-                                CharsToCopy -= CharsToSkip;
+                                CharsToCopy = CharsToCopy - CharsToSkip;
                             }
                         }
                         if (YoriLibCopyLineToUserBufferW(UserString, (LPSTR)&WideBuffer[CharsToSkip], CharsToCopy)) {
-                            ReadContext->CurrentBufferOffset += Count * sizeof(WCHAR);
+                            ReadContext->CurrentBufferOffset = ReadContext->CurrentBufferOffset + Count * sizeof(WCHAR);
                             ReadContext->LinesRead++;
                             *LineEnding = LocalLineEnding;
                             return UserString->StartOfString;
@@ -561,14 +596,14 @@ YoriLibReadLineToStringEx(
 
                         CharsToSkip = 0;
                         if (!BomFound && ReadContext->LinesRead == 0) {
-                            CharsToSkip = YoriLibBytesInBom(ReadContext->PreviousBuffer, CharsToCopy);
+                            CharsToSkip = YoriLibBytesInBom((PUCHAR)ReadContext->PreviousBuffer, CharsToCopy);
                             if (CharsToSkip > 0) {
                                 BomFound = TRUE;
-                                CharsToCopy -= CharsToSkip;
+                                CharsToCopy = CharsToCopy - CharsToSkip;
                             }
                         }
                         if (YoriLibCopyLineToUserBufferW(UserString, (LPSTR)&Buffer[CharsToSkip], CharsToCopy)) {
-                            ReadContext->CurrentBufferOffset += Count;
+                            ReadContext->CurrentBufferOffset = ReadContext->CurrentBufferOffset + Count;
                             ReadContext->LinesRead++;
                             *LineEnding = LocalLineEnding;
                             return UserString->StartOfString;
@@ -589,8 +624,10 @@ YoriLibReadLineToStringEx(
         //
 
         if (ReadContext->CurrentBufferOffset != 0) {
-            memmove(ReadContext->PreviousBuffer, YoriLibAddToPointer(ReadContext->PreviousBuffer, ReadContext->CurrentBufferOffset), ReadContext->BytesInBuffer - ReadContext->CurrentBufferOffset);
-            ReadContext->BytesInBuffer -= ReadContext->CurrentBufferOffset;
+            memmove(ReadContext->PreviousBuffer,
+                    YoriLibAddToPointer(ReadContext->PreviousBuffer, ReadContext->CurrentBufferOffset),
+                    ReadContext->BytesInBuffer - ReadContext->CurrentBufferOffset);
+            ReadContext->BytesInBuffer = ReadContext->BytesInBuffer - ReadContext->CurrentBufferOffset;
             ReadContext->CurrentBufferOffset = 0;
         }
 
@@ -646,7 +683,7 @@ YoriLibReadLineToStringEx(
                 HandleArray[0] = FileHandle;
             }
 
-            WaitResult = WaitForMultipleObjects(HandleCount, HandleArray, FALSE, INFINITE);
+            WaitResult = WaitForMultipleObjectsEx(HandleCount, HandleArray, FALSE, INFINITE, FALSE);
             if (WaitResult == WAIT_OBJECT_0 && HandleCount > 1) {
                 TerminateProcessing = TRUE;
                 break;
@@ -670,8 +707,6 @@ YoriLibReadLineToStringEx(
                 TerminateProcessing = TRUE;
                 break;
             }
-
-            ResetEvent(FileHandle);
 
             //
             //  Note that this delay is not exercised once the process
@@ -775,10 +810,10 @@ YoriLibReadLineToStringEx(
                     CharsToSkip = 0;
                     CharsToCopy = ReadContext->BytesInBuffer;
                     if (!BomFound && ReadContext->LinesRead == 0) {
-                        CharsToSkip = YoriLibBytesInBom(ReadContext->PreviousBuffer, CharsToCopy);
+                        CharsToSkip = YoriLibBytesInBom((PUCHAR)ReadContext->PreviousBuffer, CharsToCopy);
                         if (CharsToSkip > 0) {
                             BomFound = TRUE;
-                            CharsToCopy -= CharsToSkip;
+                            CharsToCopy = CharsToCopy - CharsToSkip;
                         }
                     }
                     if (ReadContext->ReadWChars) {
@@ -796,7 +831,7 @@ YoriLibReadLineToStringEx(
             return NULL;
         }
 
-        ReadContext->BytesInBuffer += BytesRead;
+        ReadContext->BytesInBuffer = ReadContext->BytesInBuffer + (YORI_ALLOC_SIZE_T)BytesRead;
 
     } while(TRUE);
 }

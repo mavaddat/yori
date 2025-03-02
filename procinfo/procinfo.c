@@ -90,21 +90,23 @@ ProcInfoHelp(VOID)
          of characters required to successfully populate the contents into
          the variable.
  */
-DWORD
+YORI_ALLOC_SIZE_T
 ProcInfoOutputLargeInteger(
     __in LARGE_INTEGER LargeInt,
-    __in DWORD NumberBase,
+    __in WORD NumberBase,
     __inout PYORI_STRING OutputString
     )
 {
     YORI_STRING String;
     TCHAR StringBuffer[32];
+    YORI_MAX_SIGNED_T Value;
 
     YoriLibInitEmptyString(&String);
     String.StartOfString = StringBuffer;
     String.LengthAllocated = sizeof(StringBuffer)/sizeof(StringBuffer[0]);
 
-    YoriLibNumberToString(&String, LargeInt.QuadPart, NumberBase, 0, ' ');
+    Value = (YORI_MAX_SIGNED_T)LargeInt.QuadPart;
+    YoriLibNumberToString(&String, Value, NumberBase, 0, ' ');
 
     if (OutputString->LengthAllocated >= String.LengthInChars) {
         memcpy(OutputString->StartOfString, String.StartOfString, String.LengthInChars * sizeof(TCHAR));
@@ -125,7 +127,7 @@ ProcInfoOutputLargeInteger(
          of characters required to successfully populate the contents into
          the variable.
  */
-DWORD
+YORI_ALLOC_SIZE_T
 ProcInfoOutputTimestamp(
     __in LARGE_INTEGER LargeInt,
     __inout PYORI_STRING OutputString
@@ -134,19 +136,19 @@ ProcInfoOutputTimestamp(
     YORI_STRING String;
     TCHAR StringBuffer[32];
     LARGE_INTEGER Remainder;
-    DWORD Milliseconds;
-    DWORD Seconds;
-    DWORD Minutes;
-    DWORD Hours;
+    WORD Milliseconds;
+    WORD Seconds;
+    WORD Minutes;
+    WORD Hours;
 
     Remainder.QuadPart = LargeInt.QuadPart;
-    Milliseconds = Remainder.LowPart % 1000;
+    Milliseconds = (WORD)(Remainder.LowPart % 1000);
     Remainder.QuadPart = Remainder.QuadPart / 1000;
-    Seconds = Remainder.LowPart % 60;
+    Seconds = (WORD)(Remainder.LowPart % 60);
     Remainder.QuadPart = Remainder.QuadPart / 60;
-    Minutes = Remainder.LowPart % 60;
+    Minutes = (WORD)(Remainder.LowPart % 60);
     Remainder.QuadPart = Remainder.QuadPart / 60;
-    Hours = Remainder.LowPart;
+    Hours = (WORD)Remainder.LowPart;
 
     YoriLibInitEmptyString(&String);
     String.StartOfString = StringBuffer;
@@ -212,7 +214,7 @@ typedef struct _PROCINFO_CONTEXT {
          characters required in order to successfully populate, or zero
          on error.
  */
-DWORD
+YORI_ALLOC_SIZE_T
 ProcInfoExpandVariables(
     __inout PYORI_STRING OutputBuffer,
     __in PYORI_STRING VariableName,
@@ -224,46 +226,46 @@ ProcInfoExpandVariables(
     LARGE_INTEGER IoCount;
     PPROCINFO_CONTEXT ProcInfoContext = (PPROCINFO_CONTEXT)Context;
 
-    if (YoriLibCompareStringWithLiteral(VariableName, _T("COMMIT")) == 0) {
+    if (YoriLibCompareStringLit(VariableName, _T("COMMIT")) == 0) {
         MemInKb.QuadPart = ProcInfoContext->VmInfo.CommitUsage / 1024;
         return ProcInfoOutputLargeInteger(MemInKb, 10, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("CPU")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("CPU")) == 0) {
         CpuTime.QuadPart = ProcInfoContext->KernelTimeInMs.QuadPart + ProcInfoContext->UserTimeInMs.QuadPart;
         return ProcInfoOutputTimestamp(CpuTime, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("CPUMS")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("CPUMS")) == 0) {
         CpuTime.QuadPart = ProcInfoContext->KernelTimeInMs.QuadPart + ProcInfoContext->UserTimeInMs.QuadPart;
         return ProcInfoOutputLargeInteger(CpuTime, 10, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("CPUKERNEL")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("CPUKERNEL")) == 0) {
         return ProcInfoOutputTimestamp(ProcInfoContext->KernelTimeInMs, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("CPUKERNELMS")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("CPUKERNELMS")) == 0) {
         return ProcInfoOutputLargeInteger(ProcInfoContext->KernelTimeInMs, 10, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("CPUUSER")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("CPUUSER")) == 0) {
         return ProcInfoOutputTimestamp(ProcInfoContext->UserTimeInMs, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("CPUUSERMS")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("CPUUSERMS")) == 0) {
         return ProcInfoOutputLargeInteger(ProcInfoContext->UserTimeInMs, 10, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("ELAPSED")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("ELAPSED")) == 0) {
         return ProcInfoOutputTimestamp(ProcInfoContext->ElapsedTimeInMs, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("ELAPSEDMS")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("ELAPSEDMS")) == 0) {
         return ProcInfoOutputLargeInteger(ProcInfoContext->ElapsedTimeInMs, 10, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("OTHERIOBYTES")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("OTHERIOBYTES")) == 0) {
         IoCount.QuadPart = ProcInfoContext->IoCounters.OtherBytes;
         return ProcInfoOutputLargeInteger(IoCount, 10, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("OTHERIOCOUNT")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("OTHERIOCOUNT")) == 0) {
         IoCount.QuadPart = ProcInfoContext->IoCounters.OtherOperations;
         return ProcInfoOutputLargeInteger(IoCount, 10, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("READBYTES")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("READBYTES")) == 0) {
         IoCount.QuadPart = ProcInfoContext->IoCounters.ReadBytes;
         return ProcInfoOutputLargeInteger(IoCount, 10, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("READCOUNT")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("READCOUNT")) == 0) {
         IoCount.QuadPart = ProcInfoContext->IoCounters.ReadOperations;
         return ProcInfoOutputLargeInteger(IoCount, 10, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("WORKINGSET")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("WORKINGSET")) == 0) {
         MemInKb.QuadPart = ProcInfoContext->VmInfo.WorkingSetSize / 1024;
         return ProcInfoOutputLargeInteger(MemInKb, 10, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("WRITEBYTES")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("WRITEBYTES")) == 0) {
         IoCount.QuadPart = ProcInfoContext->IoCounters.WriteBytes;
         return ProcInfoOutputLargeInteger(IoCount, 10, OutputBuffer);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("WRITECOUNT")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("WRITECOUNT")) == 0) {
         IoCount.QuadPart = ProcInfoContext->IoCounters.WriteOperations;
         return ProcInfoOutputLargeInteger(IoCount, 10, OutputBuffer);
     }
@@ -293,8 +295,8 @@ ProcInfoDumpHandles(
     PYORI_OBJECT_TYPE_INFORMATION ObjectType;
     YORI_STRING ObjectNameString;
     YORI_STRING ObjectTypeString;
-    DWORD ObjectNameLength;
-    DWORD ObjectTypeLength;
+    YORI_ALLOC_SIZE_T ObjectNameLength;
+    YORI_ALLOC_SIZE_T ObjectTypeLength;
     DWORD LengthReturned;
 
     if (!YoriLibGetSystemHandlesList(&Handles)) {
@@ -302,7 +304,7 @@ ProcInfoDumpHandles(
         return FALSE;
     }
 
-    ObjectNameLength = 0x10000;
+    ObjectNameLength = YoriLibMaximumAllocationInRange(0x8000, 0x10000);
     ObjectName = YoriLibMalloc(ObjectNameLength);
     if (ObjectName == NULL) {
         YoriLibFree(Handles);
@@ -349,7 +351,14 @@ ProcInfoDumpHandles(
                 ObjectTypeString.StartOfString = ObjectType->TypeName.Buffer;
             }
 
-            YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("Process %lli Handle %lli Object %p Type %y(%i) Name %y\n"), ThisHandle->ProcessId, ThisHandle->HandleValue, ThisHandle->Object, &ObjectTypeString, ThisHandle->ObjectType, &ObjectNameString);
+            YoriLibOutput(YORI_LIB_OUTPUT_STDOUT,
+                          _T("Process %lli Handle %lli Object %p Type %y(%i) Name %y\n"),
+                          ThisHandle->ProcessId,
+                          ThisHandle->HandleValue,
+                          ThisHandle->Object,
+                          &ObjectTypeString,
+                          ThisHandle->ObjectType,
+                          &ObjectNameString);
         }
     }
 
@@ -383,16 +392,16 @@ ProcInfoDumpHandles(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
     BOOL ArgumentUnderstood;
     DWORD StartArg = 1;
-    LONGLONG llTemp;
-    DWORD CharsConsumed;
+    YORI_MAX_SIGNED_T llTemp;
+    YORI_ALLOC_SIZE_T CharsConsumed;
     DWORD Pid;
-    DWORD i;
+    YORI_ALLOC_SIZE_T i;
     YORI_STRING Arg;
     YORI_STRING DisplayString;
     YORI_STRING AllocatedFormatString;
@@ -427,20 +436,20 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 ProcInfoHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2019-2021"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("f")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("f")) == 0) {
                 if (ArgC > i + 1) {
                     YoriLibFreeStringContents(&AllocatedFormatString);
                     YoriLibCloneString(&AllocatedFormatString, &ArgV[i + 1]);
                     ArgumentUnderstood = TRUE;
                     i++;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("h")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("h")) == 0) {
                 DumpHandles = TRUE;
                 ArgumentUnderstood = TRUE;
             }

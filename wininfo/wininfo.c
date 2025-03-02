@@ -90,23 +90,23 @@ typedef struct _WININFO_CONTEXT {
          characters required in order to successfully populate, or zero
          on error.
  */
-DWORD
+YORI_ALLOC_SIZE_T
 WinInfoExpandVariables(
     __inout PYORI_STRING OutputString,
     __in PYORI_STRING VariableName,
     __in PVOID Context
     )
 {
-    DWORD CharsNeeded;
+    YORI_ALLOC_SIZE_T CharsNeeded;
     PWININFO_CONTEXT WinInfoContext = (PWININFO_CONTEXT)Context;
 
-    if (YoriLibCompareStringWithLiteral(VariableName, _T("left")) == 0) {
+    if (YoriLibCompareStringLit(VariableName, _T("left")) == 0) {
         CharsNeeded = YoriLibSPrintfSize(_T("%i"), WinInfoContext->WindowRect.left);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("top")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("top")) == 0) {
         CharsNeeded = YoriLibSPrintfSize(_T("%i"), WinInfoContext->WindowRect.top);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("width")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("width")) == 0) {
         CharsNeeded = YoriLibSPrintfSize(_T("%i"), WinInfoContext->WindowRect.right - WinInfoContext->WindowRect.left);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("height")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("height")) == 0) {
         CharsNeeded = YoriLibSPrintfSize(_T("%i"), WinInfoContext->WindowRect.bottom - WinInfoContext->WindowRect.top);
     } else {
         return 0;
@@ -116,13 +116,13 @@ WinInfoExpandVariables(
         return CharsNeeded;
     }
 
-    if (YoriLibCompareStringWithLiteral(VariableName, _T("left")) == 0) {
+    if (YoriLibCompareStringLit(VariableName, _T("left")) == 0) {
         CharsNeeded = YoriLibSPrintf(OutputString->StartOfString, _T("%i"), WinInfoContext->WindowRect.left);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("top")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("top")) == 0) {
         CharsNeeded = YoriLibSPrintf(OutputString->StartOfString, _T("%i"), WinInfoContext->WindowRect.top);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("width")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("width")) == 0) {
         CharsNeeded = YoriLibSPrintf(OutputString->StartOfString, _T("%i"), WinInfoContext->WindowRect.right - WinInfoContext->WindowRect.left);
-    } else if (YoriLibCompareStringWithLiteral(VariableName, _T("height")) == 0) {
+    } else if (YoriLibCompareStringLit(VariableName, _T("height")) == 0) {
         CharsNeeded = YoriLibSPrintf(OutputString->StartOfString, _T("%i"), WinInfoContext->WindowRect.bottom - WinInfoContext->WindowRect.top);
     }
 
@@ -154,13 +154,13 @@ WinInfoExpandVariables(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD StartArg = 0;
-    DWORD i;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T StartArg = 0;
+    YORI_ALLOC_SIZE_T i;
     YORI_STRING Arg;
     PYORI_STRING WindowTitle = NULL;
     YORI_STRING DisplayString;
@@ -179,20 +179,20 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 WinInfoHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2018"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("f")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("f")) == 0) {
                 if (ArgC >= i + 1) {
                     YsFormatString.StartOfString = ArgV[i + 1].StartOfString;
                     YsFormatString.LengthInChars = ArgV[i + 1].LengthInChars;
                     ArgumentUnderstood = TRUE;
                     i++;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("t")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("t")) == 0) {
                 if (ArgC >= i + 1) {
                     WindowTitle = &ArgV[i + 1];
                     ArgumentUnderstood = TRUE;

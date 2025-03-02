@@ -188,16 +188,16 @@ FsCmpFileFoundCallback(
  */
 DWORD
 ENTRYPOINT(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
-    BOOL ArgumentUnderstood;
-    DWORD StartArg = 0;
-    DWORD i;
-    DWORD MatchFlags;
+    BOOLEAN ArgumentUnderstood;
+    YORI_ALLOC_SIZE_T StartArg = 0;
+    YORI_ALLOC_SIZE_T i;
+    WORD MatchFlags;
     FSCMP_CONTEXT FsCmpContext;
-    BOOL BasicExpansion;
+    BOOLEAN BasicExpansion;
     YORI_STRING Arg;
 
     ZeroMemory(&FsCmpContext, sizeof(FsCmpContext));
@@ -210,25 +210,25 @@ ENTRYPOINT(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 FsCmpHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2018"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("b")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("b")) == 0) {
                 BasicExpansion = TRUE;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("d")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("d")) == 0) {
                 FsCmpContext.TestType = FsCmpTestTypeDirectoryExists;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("e")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("e")) == 0) {
                 FsCmpContext.TestType = FsCmpTestTypeExists;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("f")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("f")) == 0) {
                 FsCmpContext.TestType = FsCmpTestTypeFileExists;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("i")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("i")) == 0) {
                 if (i + 1 < ArgC) {
                     YORI_STRING ErrorSubstring;
                     YORI_LIB_FILE_FILTER Filter;
@@ -248,10 +248,10 @@ ENTRYPOINT(
                     i++;
                     ArgumentUnderstood = TRUE;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("l")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("l")) == 0) {
                 FsCmpContext.TestType = FsCmpTestTypeLinkExists;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("-")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 ArgumentUnderstood = TRUE;
                 StartArg = i + 1;
                 break;

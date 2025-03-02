@@ -1,7 +1,7 @@
 /**
  * @file yui/resource.h
  *
- * Yori shell bootstrap installer resource definitions
+ * Yori shell user interface resource definitions
  *
  * Copyright (c) 2019 Malcolm J. Smith
  *
@@ -24,6 +24,80 @@
  * THE SOFTWARE.
  */
 
+/**
+ The identifier for the start button icon.
+ */
+#define STARTICON    2
+
+/**
+ The identifier for the programs menu icon.
+ */
+#define PROGRAMSICON 3
+
+/**
+ The identifier for the system menu icon.
+ */
+#define SYSTEMICON   4
+
+/**
+ The identifier for the debug menu icon.
+ */
+#define DEBUGICON    5
+
+/**
+ The identifier for the run menu icon.
+ */
+#define RUNICON      6
+
+/**
+ The identifier for the logoff menu icon.
+ */
+#define LOGOFFICON   7
+
+/**
+ The identifier for the exit menu icon.
+ */
+#define EXITICON     8
+
+/**
+ The identifier for the shut down menu icon.
+ */
+#define SHUTDOWNICON 9
+
+/**
+ The identifier for the checked icon.
+ */
+#define CHECKEDICON  10
+
+/**
+ The identifier for the wifi strength 1 icon.
+ */
+#define WIFI1ICON    11
+
+/**
+ The identifier for the wifi strength 2 icon.
+ */
+#define WIFI2ICON    12
+
+/**
+ The identifier for the wifi strength 3 icon.
+ */
+#define WIFI3ICON    13
+
+/**
+ The identifier for the wifi strength 4 icon.
+ */
+#define WIFI4ICON    14
+
+/**
+ The identifier for the wifi strength 5 icon.
+ */
+#define WIFI5ICON    15
+
+/**
+ The identifier for the wifi connected icon.
+ */
+#define WIFICONNICON 16
 
 /**
  The identifier for the dialog box.

@@ -3,7 +3,7 @@ ANALYZE=0
 ARCH=win32
 DEBUG=0
 FDI=0
-PDB=1
+KERNELBASE=0
 YORI_BUILD_ID=0
 
 !IF [$(CC) -? 2>&1 | findstr /C:"x64" >NUL 2>&1]==0
@@ -23,6 +23,14 @@ ARCH=ia64
 !ELSE
 !IF [$(CC) -? 2>&1 | findstr /C:"MIPS" >NUL 2>&1]==0
 ARCH=mips
+!ELSE
+!IF [$(CC) -? 2>&1 | findstr /C:"PowerPC" >NUL 2>&1]==0
+ARCH=ppc
+!ELSE
+!IF [$(CC) -? 2>&1 | findstr /C:"Alpha" >NUL 2>&1]==0
+ARCH=axp
+!ENDIF # AXP
+!ENDIF # PPC
 !ENDIF # MIPS
 !ENDIF # Itanium
 !ENDIF # ARM (32)
@@ -30,15 +38,18 @@ ARCH=mips
 !ENDIF # AMD64
 !ENDIF # x64
 
-BINDIR_ROOT=bin\$(ARCH)
-SYMDIR_ROOT=sym\$(ARCH)
-MODDIR_ROOT=bin\$(ARCH)\modules
+BINDIR_PARENT=bin
+SYMDIR_PARENT=sym
+
+BINDIR_ROOT=$(BINDIR_PARENT)\$(ARCH)
+SYMDIR_ROOT=$(SYMDIR_PARENT)\$(ARCH)
+MODDIR_ROOT=$(BINDIR_PARENT)\$(ARCH)\modules
 
 BINDIR=..\$(BINDIR_ROOT)
 SYMDIR=..\$(SYMDIR_ROOT)
 MODDIR=..\$(MODDIR_ROOT)
 
-BUILD=$(MAKE) -nologo ANALYZE=$(ANALYZE) DEBUG=$(DEBUG) FDI=$(FDI) PDB=$(PDB) YORI_BUILD_ID=$(YORI_BUILD_ID) BINDIR=$(BINDIR) SYMDIR=$(SYMDIR) MODDIR=$(MODDIR)
+BUILD=$(MAKE) ANALYZE=$(ANALYZE) DEBUG=$(DEBUG) FDI=$(FDI) KERNELBASE=$(KERNELBASE) YORI_BUILD_ID=$(YORI_BUILD_ID) BINDIR=$(BINDIR) SYMDIR=$(SYMDIR) MODDIR=$(MODDIR)
 
 CURRENTTIME=REM
 !IFNDEF _YMAKE_VER
@@ -59,102 +70,124 @@ STARTCMD="
 CURRENTTIME=echo. & echo For: $(FOR) & ydate $$HOUR$$:$$MIN$$:$$SEC$$ & echo.
 !ENDIF
 
-SHDIRS=sh      \
 
-DIRS=crt       \
-     lib       \
-     libwin    \
-     libdlg    \
-     libsh     \
-     builtins  \
-     assoc     \
-     attrib    \
-     cab       \
-     cal       \
-     charmap   \
-     clip      \
-     clmp      \
-     cls       \
-     co        \
-     compact   \
-     copy      \
-     cpuinfo   \
-     cshot     \
-     cut       \
-     cvtvt     \
-     date      \
-     df        \
-     dir       \
-     dircase   \
-     du        \
-     echo      \
-     edit      \
-     env       \
-     envdiff   \
-     erase     \
-     err       \
-     expr      \
-     finfo     \
-     for       \
-     fscmp     \
-     get       \
-     grpcmp    \
-     hash      \
-     help      \
-     hexdump   \
-     hilite    \
-     iconv     \
-     initool   \
-     intcmp    \
-     kill      \
-     lines     \
-     lsof      \
-     make      \
-     mem       \
-     mkdir     \
-     mklink    \
-     more      \
-     mount     \
-     move      \
-     nice      \
-     osver     \
-     path      \
-     pause     \
-     petool    \
-     pkg       \
-     pkglib    \
-     procinfo  \
-     ps        \
-     readline  \
-     repl      \
-     rmdir     \
-     scut      \
-     sdir      \
-     setver    \
-     shutdn    \
-     sleep     \
-     slmenu    \
-     split     \
-     sponge    \
-     start     \
-     strcmp    \
-     stride    \
-     sync      \
-     tail      \
-     tee       \
-     timethis  \
-     title     \
-     touch     \
-     type      \
-     vhdtool   \
-     vol       \
-     which     \
-     wininfo   \
-     winpos    \
-     ydbg      \
-     ypm       \
-     ysetup    \
-     yui       \
+# SHDIRS really needs everything else to be compiled first but takes the
+# longest to link.  It's split out to hint to YMAKE to start this first.
+SHDIRS=sh       \
+
+# Old versions of NMAKE have a limit on the line length they can process.  The
+# line is after substituting these variables to make a for loop.  Break the
+# directories in half so that NMAKE can have one half at a time.  YMAKE gets
+# both grouped together.
+
+DIRS1=crt        \
+      lib        \
+      libwin     \
+      libdlg     \
+      libsh      \
+      kernelbase \
+      builtins   \
+      airplan    \
+      assoc      \
+      attrib     \
+      base64     \
+      battery    \
+      cab        \
+      cal        \
+      charmap    \
+      clip       \
+      clmp       \
+      cls        \
+      co         \
+      compact    \
+      contool    \
+      copy       \
+      cpuinfo    \
+      cshot      \
+      cut        \
+      cvtvt      \
+      date       \
+      df         \
+      dir        \
+      dircase    \
+      du         \
+      echo       \
+      edit       \
+      env        \
+      envdiff    \
+      erase      \
+      err        \
+      expr       \
+      extents    \
+      finfo      \
+      for        \
+      fscmp      \
+      get        \
+      grpcmp     \
+      hash       \
+      help       \
+      hexdump    \
+      hexedit    \
+      hilite     \
+
+
+DIRS2=iconv      \
+      initool    \
+      intcmp     \
+      kill       \
+      lines      \
+      lsof       \
+      make       \
+      mem        \
+      mkdir      \
+      mklink     \
+      more       \
+      mount      \
+      move       \
+      nice       \
+      objdir     \
+      osver      \
+      path       \
+      pause      \
+      petool     \
+      pkg        \
+      pkglib     \
+      procinfo   \
+      ps         \
+      readline   \
+      regedit    \
+      repl       \
+      rmdir      \
+      scut       \
+      sdir       \
+      setver     \
+      shutdn     \
+      sleep      \
+      slmenu     \
+      speak      \
+      split      \
+      sponge     \
+      start      \
+      strcmp     \
+      stride     \
+      sync       \
+      tail       \
+      tee        \
+      test       \
+      timethis   \
+      title      \
+      touch      \
+      type       \
+      vhdtool    \
+      vol        \
+      which      \
+      wifi       \
+      wininfo    \
+      winpos     \
+      ydbg       \
+      ypm        \
+      ysetup     \
+      yui        \
 
 !IFDEF _YMAKE_VER
 $(BINDIR_ROOT):
@@ -169,43 +202,47 @@ $(SYMDIR_ROOT):
 $(MODDIR_ROOT):
 	@-$(MKDIR) $(MODDIR_ROOT) 
 
-all.real[dirs target=install]: $(DIRS) $(SHDIRS)
+all.real[dirs target=install]: $(SHDIRS) $(DIRS1) $(DIRS2)
 
 compile:
 
-link[dirs target=link]: $(DIRS) $(SHDIRS)
+link[dirs target=link]: $(SHDIRS) $(DIRS1) $(DIRS2)
 !ELSE
 all.real: writeconfigcache
 	@$(CURRENTTIME)
-	@$(FOR) %%i in ($(BINDIR_ROOT) $(SYMDIR_ROOT) $(MODDIR_ROOT) $(BINDIR_ROOT)\YoriInit.d) do $(STARTCMD)@if not exist %%i $(MKDIR) %%i$(STARTCMD)
-	@$(FOR) %%i in ($(SHDIRS) $(DIRS)) do $(STARTCMD)@if exist %%i echo *** Compiling %%i & cd %%i & $(BUILD) compile READCONFIGCACHEFILE=..\$(WRITECONFIGCACHEFILE) & cd ..$(STARTCMD)
-	@$(FOR) %%i in ($(DIRS)) do $(STARTCMD)@if exist %%i echo *** Linking %%i & cd %%i & $(BUILD) link READCONFIGCACHEFILE=..\$(WRITECONFIGCACHEFILE) & cd ..$(STARTCMD)
-	@$(FOR) %%i in ($(SHDIRS)) do $(STARTCMD)@if exist %%i echo *** Linking %%i & cd %%i & $(BUILD) link READCONFIGCACHEFILE=..\$(WRITECONFIGCACHEFILE) & cd ..$(STARTCMD)
-	@$(FOR) %%i in ($(SHDIRS) $(DIRS)) do $(STARTCMD)@if exist %%i echo *** Installing %%i & cd %%i & $(BUILD) install READCONFIGCACHEFILE=..\$(WRITECONFIGCACHEFILE) & cd ..$(STARTCMD)
+	@$(FOR) %%i in ($(BINDIR_PARENT) $(SYMDIR_PARENT) $(BINDIR_ROOT) $(SYMDIR_ROOT) $(MODDIR_ROOT) $(BINDIR_ROOT)\YoriInit.d) do $(STARTCMD)@if not exist %%i $(MKDIR) %%i$(STARTCMD)
+	@$(FOR) %%i in ($(SHDIRS) $(DIRS1)) do $(STARTCMD)@if exist %%i echo *** Compiling %%i & cd %%i & $(BUILD) READCONFIGCACHEFILE=..\$(WRITECONFIGCACHEFILE) compile & cd ..$(STARTCMD)
+	@$(FOR) %%i in ($(DIRS2)) do $(STARTCMD)@if exist %%i echo *** Compiling %%i & cd %%i & $(BUILD) READCONFIGCACHEFILE=..\$(WRITECONFIGCACHEFILE) compile & cd ..$(STARTCMD)
+	@$(FOR) %%i in ($(DIRS1)) do $(STARTCMD)@if exist %%i echo *** Linking %%i & cd %%i & $(BUILD) READCONFIGCACHEFILE=..\$(WRITECONFIGCACHEFILE) link & cd ..$(STARTCMD)
+	@$(FOR) %%i in ($(DIRS2)) do $(STARTCMD)@if exist %%i echo *** Linking %%i & cd %%i & $(BUILD) READCONFIGCACHEFILE=..\$(WRITECONFIGCACHEFILE) link & cd ..$(STARTCMD)
+	@$(FOR) %%i in ($(SHDIRS)) do $(STARTCMD)@if exist %%i echo *** Linking %%i & cd %%i & $(BUILD) READCONFIGCACHEFILE=..\$(WRITECONFIGCACHEFILE) link & cd ..$(STARTCMD)
+	@$(FOR) %%i in ($(SHDIRS) $(DIRS1)) do $(STARTCMD)@if exist %%i echo *** Installing %%i & cd %%i & $(BUILD) READCONFIGCACHEFILE=..\$(WRITECONFIGCACHEFILE) install & cd ..$(STARTCMD)
+	@$(FOR) %%i in ($(DIRS2)) do $(STARTCMD)@if exist %%i echo *** Installing %%i & cd %%i & $(BUILD) READCONFIGCACHEFILE=..\$(WRITECONFIGCACHEFILE) install & cd ..$(STARTCMD)
 	@$(CURRENTTIME)
 !ENDIF
 
-beta: all.real
-	@if not exist beta $(MKDIR) beta
-	@move $(BINDIR_ROOT) beta\$(ARCH)
-	@move $(SYMDIR_ROOT) beta\$(ARCH)\sym
-
 !IFDEF _YMAKE_VER
-clean[dirs target=clean]: $(DIRS) $(SHDIRS)
+clean[dirs target=clean]: $(SHDIRS) $(DIRS1) $(DIRS2)
 !ELSE
 clean: writeconfigcache
-	@$(FOR) %%i in ($(SHDIRS) $(DIRS)) do $(STARTCMD)@if exist %%i echo *** Cleaning %%i & cd %%i & $(BUILD) clean READCONFIGCACHEFILE=..\$(WRITECONFIGCACHEFILE) & cd ..$(STARTCMD)
+	@$(FOR) %%i in ($(SHDIRS) $(DIRS1)) do $(STARTCMD)@if exist %%i echo *** Cleaning %%i & cd %%i & $(BUILD) clean READCONFIGCACHEFILE=..\$(WRITECONFIGCACHEFILE) & cd ..$(STARTCMD)
+	@$(FOR) %%i in ($(DIRS2)) do $(STARTCMD)@if exist %%i echo *** Cleaning %%i & cd %%i & $(BUILD) clean READCONFIGCACHEFILE=..\$(WRITECONFIGCACHEFILE) & cd ..$(STARTCMD)
 	@if exist *~ erase *~
-	@$(FOR_ST) /D %%i in ($(MODDIR_ROOT) $(BINDIR_ROOT) $(SYMDIR_ROOT)) do @if exist %%i $(RMDIR) /s/q %%i
+	@$(FOR) %%i in ($(MODDIR_ROOT) $(BINDIR_ROOT) $(SYMDIR_ROOT)) do @if exist %%i $(RMDIR) /s/q %%i
 	@if exist $(WRITECONFIGCACHEFILE) erase $(WRITECONFIGCACHEFILE)
 !ENDIF
 
 distclean: clean
-	@$(FOR_ST) /D %%i in (pkg\*) do @if exist %%i $(RMDIR) /s/q %%i
-	@$(FOR_ST) %%i in (beta doc bin sym) do @if exist %%i $(RMDIR) /s/q %%i
+	@$(FOR) %%i in ($(BINDIR_PARENT) $(SYMDIR_PARENT) doc) do @if exist %%i $(RMDIR) /s/q %%i
+	@$(FOR) /D %%i in (pkg\*) do @if exist %%i $(RMDIR) /s/q %%i
 
-help:
-	@echo "ANALYZE=[0|1] - If set, will perform static analysis during compilation"
-	@echo "DEBUG=[0|1] - If set, will compile debug build without optimization and with instrumentation"
-	@echo "PDB=[0|1] - If set, will generate debug symbols"
-
+buildhelp:
+	@echo "ANALYZE=[0|1]    - If set, will perform static analysis during compilation"
+	@echo "DEBUG=[0|1]      - If set, will compile debug build without optimization"
+	@echo "                   and with instrumentation"
+	@echo "FDI=[0|1]        - If set, will link against the static fdi.lib so"
+	@echo "                   decompression is possible without cabinet.dll.  fdi.lib"
+	@echo "                   is not in every compiler or SDK."
+	@echo "KERNELBASE=[0|1] - If set, will link against kernelbase rather than"
+	@echo "                   kernel32 to run on very minimal Windows editions.  This"
+	@echo "                   requires a hand-built kernelbase.lib."

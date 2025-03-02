@@ -3,7 +3,7 @@
  *
  * Yori shell history output
  *
- * Copyright (c) 2018-2019 Malcolm J. Smith
+ * Copyright (c) 2018-2023 Malcolm J. Smith
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -43,6 +43,15 @@ CHAR strHistoryHelpText[] =
         "   -l             Load history from a file\n"
         "   -n             The number of lines of history to output\n"
         "   -u             Display a menu for the user to select a command\n";
+
+/**
+ The set of control identifiers allocated within this program.
+ */
+typedef enum _HISTORY_CONTROLS {
+    HistoryCtrlList = 1,
+    HistoryCtrlOk = 2,
+    HistoryCtrlCancel = 3,
+} HISTORY_CONTROLS;
 
 /**
  Display usage text to the user.
@@ -89,6 +98,156 @@ HistoryCancelButtonClicked(
 }
 
 /**
+ The minimum width in characters where history ui can hope to function.
+ */
+#define HISTORY_MINIMUM_WIDTH (40)
+
+/**
+ The minimum height in characters where history ui can hope to function.
+ */
+#define HISTORY_MINIMUM_HEIGHT (12)
+
+/**
+ Determine the size of the window and location of all controls for a specified
+ window manager size.  This allows the same layout logic to be used for
+ initial creation as well as window manager resize.
+
+ @param WindowMgrSize The dimensions of the window manager.
+
+ @param WindowSize On completion, updated to contain the size of the main
+        window.
+
+ @param ListRect On completion, updated to contain the rect describing the
+        main list in window client coordinates.
+
+ @param OkButtonRect On completion, updated to contain the rect describing
+        the ok button in window client coordinates.
+
+ @param CancelButtonRect On completion, updated to contain the rect describing
+        the cancel button in window client coordinates.
+ */
+VOID
+HistoryGetControlRectsFromWindowManagerSize(
+    __in COORD WindowMgrSize,
+    __out PCOORD WindowSize,
+    __out PSMALL_RECT ListRect,
+    __out PSMALL_RECT OkButtonRect,
+    __out PSMALL_RECT CancelButtonRect
+    )
+{
+    COORD ClientSize;
+    WORD ButtonWidth;
+
+    WindowSize->X = (SHORT)(WindowMgrSize.X * 4 / 5);
+    if (WindowSize->X < HISTORY_MINIMUM_WIDTH) {
+        WindowSize->X = HISTORY_MINIMUM_WIDTH;
+    }
+
+    WindowSize->Y = (SHORT)(WindowMgrSize.Y * 3 / 4);
+    if (WindowSize->Y < HISTORY_MINIMUM_HEIGHT) {
+        WindowSize->Y = HISTORY_MINIMUM_HEIGHT;
+    }
+
+    ClientSize.X = (WORD)(WindowSize->X - 2);
+    ClientSize.Y = (WORD)(WindowSize->Y - 2);
+
+    ListRect->Left = 1;
+    ListRect->Top = 1;
+    ListRect->Right = (SHORT)(ClientSize.X - 2);
+    ListRect->Bottom = (SHORT)(ClientSize.Y - 3 - 1);
+
+    ButtonWidth = (WORD)(sizeof("Cancel") - 1 + 2);
+
+    OkButtonRect->Top = (SHORT)(ClientSize.Y - 3);
+    OkButtonRect->Bottom = (SHORT)(OkButtonRect->Top + 2);
+
+    //
+    //  WindowSize corresponds to dimensions, so rightmost cell is one
+    //  less.  The button starts two buttons over, and each button
+    //  has its client plus border chars, and there's an extra char
+    //  between the buttons.
+    //
+
+    OkButtonRect->Left = (SHORT)(ClientSize.X - 1 - 2 * (ButtonWidth + 2) - 1);
+    OkButtonRect->Right = (WORD)(OkButtonRect->Left + ButtonWidth + 1);
+
+    CancelButtonRect->Left = (SHORT)(ClientSize.X - 1 - (ButtonWidth + 2));
+    CancelButtonRect->Right = (WORD)(CancelButtonRect->Left + ButtonWidth + 1);
+    CancelButtonRect->Top = OkButtonRect->Top;
+    CancelButtonRect->Bottom = OkButtonRect->Bottom;
+}
+
+/**
+ A callback that is invoked when the window manager is being resized.  This
+ typically means the user resized the window.
+
+ @param WindowHandle Handle to the main window.
+
+ @param OldPosition The old dimensions of the window manager.
+
+ @param NewPosition The new dimensions of the window manager.
+ */
+VOID
+HistoryResizeWindowManager(
+    __in PYORI_WIN_WINDOW_HANDLE WindowHandle,
+    __in PSMALL_RECT OldPosition,
+    __in PSMALL_RECT NewPosition
+    )
+{
+    PYORI_WIN_CTRL_HANDLE WindowCtrl;
+    SMALL_RECT Rect;
+    COORD NewSize;
+    COORD WindowSize;
+    SMALL_RECT ListRect;
+    SMALL_RECT OkButtonRect;
+    SMALL_RECT CancelButtonRect;
+    PYORI_WIN_CTRL_HANDLE Ctrl;
+
+    UNREFERENCED_PARAMETER(OldPosition);
+
+    WindowCtrl = YoriWinGetCtrlFromWindow(WindowHandle);
+
+    NewSize.X = (SHORT)(NewPosition->Right - NewPosition->Left + 1);
+    NewSize.Y = (SHORT)(NewPosition->Bottom - NewPosition->Top + 1);
+
+    if (NewSize.X < HISTORY_MINIMUM_WIDTH || NewSize.Y < HISTORY_MINIMUM_HEIGHT) {
+        return;
+    }
+
+    HistoryGetControlRectsFromWindowManagerSize(NewSize,
+                                                &WindowSize,
+                                                &ListRect,
+                                                &OkButtonRect,
+                                                &CancelButtonRect);
+
+    Rect.Left = (SHORT)((NewSize.X - WindowSize.X) / 2);
+    Rect.Top = (SHORT)((NewSize.Y - WindowSize.Y) / 2);
+    Rect.Right = (SHORT)(Rect.Left + WindowSize.X - 1);
+    Rect.Bottom = (SHORT)(Rect.Top + WindowSize.Y - 1);
+
+    //
+    //  Resize the main window, including capturing its new background
+    //
+
+    if (!YoriWinWindowReposition(WindowHandle, &Rect)) {
+        return;
+    }
+
+    Ctrl = YoriWinFindControlById(WindowHandle, HistoryCtrlList);
+    ASSERT(Ctrl != NULL);
+    YoriWinListReposition(Ctrl, &ListRect);
+
+    Ctrl = YoriWinFindControlById(WindowHandle, HistoryCtrlOk);
+    ASSERT(Ctrl != NULL);
+    YoriWinButtonReposition(Ctrl, &OkButtonRect);
+
+    Ctrl = YoriWinFindControlById(WindowHandle, HistoryCtrlCancel);
+    ASSERT(Ctrl != NULL);
+    YoriWinButtonReposition(Ctrl, &CancelButtonRect);
+}
+
+
+/**
  Display a popup window containing a list of items.
 
  @param MenuOptions Pointer to an array of list items.
@@ -103,22 +262,22 @@ HistoryCancelButtonClicked(
          operation.
  */
 __success(return)
-BOOL
+BOOLEAN
 HistoryCreateSynchronousMenu(
     __in PYORI_STRING MenuOptions,
-    __in DWORD NumberOptions,
-    __out PDWORD ActiveOption
+    __in YORI_ALLOC_SIZE_T NumberOptions,
+    __out PYORI_ALLOC_SIZE_T ActiveOption
     )
 {
     PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr;
     PYORI_WIN_CTRL_HANDLE List;
     PYORI_WIN_WINDOW_HANDLE Parent;
-    SMALL_RECT ListRect;
     COORD WindowSize;
     YORI_STRING Title;
-    SMALL_RECT ButtonArea;
+    SMALL_RECT ListRect;
+    SMALL_RECT OkButtonRect;
+    SMALL_RECT CancelButtonRect;
     YORI_STRING Caption;
-    WORD ButtonWidth;
     PYORI_WIN_CTRL_HANDLE Ctrl;
     DWORD_PTR Result;
 
@@ -126,24 +285,20 @@ HistoryCreateSynchronousMenu(
         return FALSE;
     }
 
-    if (!YoriWinOpenWindowManager(FALSE, &WinMgr)) {
+    if (!YoriWinOpenWindowManager(FALSE, YoriWinColorTableDefault, &WinMgr)) {
         return FALSE;
     }
 
     if (!YoriWinGetWinMgrDimensions(WinMgr, &WindowSize)) {
-        WindowSize.X = 40;
-        WindowSize.X = 15;
-    } else {
-        WindowSize.X = (SHORT)(WindowSize.X * 4 / 5);
-        if (WindowSize.X < 40) {
-            WindowSize.X = 40;
-        }
-
-        WindowSize.Y = (SHORT)(WindowSize.Y * 3 / 4);
-        if (WindowSize.Y < 12) {
-            WindowSize.Y = 12;
-        }
+        WindowSize.X = 80;
+        WindowSize.X = 24;
     }
+
+    HistoryGetControlRectsFromWindowManagerSize(WindowSize,
+                                                &WindowSize,
+                                                &ListRect,
+                                                &OkButtonRect,
+                                                &CancelButtonRect);
 
     YoriLibConstantString(&Title, _T("History"));
 
@@ -154,17 +309,13 @@ HistoryCreateSynchronousMenu(
 
     YoriWinGetClientSize(Parent, &WindowSize);
 
-    ListRect.Left = 1;
-    ListRect.Top = 1;
-    ListRect.Right = (SHORT)(WindowSize.X - 2);
-    ListRect.Bottom = (SHORT)(WindowSize.Y - 3 - 1);
-
-    List = YoriWinListCreate(Parent, &ListRect, YORI_WIN_LIST_STYLE_VSCROLLBAR);
+    List = YoriWinListCreate(Parent, &ListRect, YORI_WIN_LIST_STYLE_VSCROLLBAR | YORI_WIN_LIST_STYLE_AUTO_HSCROLLBAR);
     if (List == NULL) {
         YoriWinDestroyWindow(Parent);
         YoriWinCloseWindowManager(WinMgr);
         return FALSE;
     }
+    YoriWinSetControlId(List, HistoryCtrlList);
 
     if (!YoriWinListAddItems(List, MenuOptions, NumberOptions)) {
         YoriWinDestroyWindow(Parent);
@@ -174,41 +325,25 @@ HistoryCreateSynchronousMenu(
 
     YoriWinListSetActiveOption(List, NumberOptions - 1);
 
-    ButtonWidth = (WORD)(sizeof("Cancel") - 1 + 2);
-
-    ButtonArea.Top = (SHORT)(WindowSize.Y - 3);
-    ButtonArea.Bottom = (SHORT)(ButtonArea.Top + 2);
-
     YoriLibConstantString(&Caption, _T("&Ok"));
-
-    //
-    //  WindowSize corresponds to dimensions, so rightmost cell is one
-    //  less.  The button starts two buttons over, and each button
-    //  has its client plus border chars, and there's an extra char
-    //  between the buttons.
-    //
-
-    ButtonArea.Left = (SHORT)(WindowSize.X - 1 - 2 * (ButtonWidth + 2) - 1);
-    ButtonArea.Right = (WORD)(ButtonArea.Left + ButtonWidth + 1);
-
-    Ctrl = YoriWinButtonCreate(Parent, &ButtonArea, &Caption, YORI_WIN_BUTTON_STYLE_DEFAULT, HistoryOkButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &OkButtonRect, &Caption, YORI_WIN_BUTTON_STYLE_DEFAULT, HistoryOkButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         YoriWinCloseWindowManager(WinMgr);
         return FALSE;
     }
+    YoriWinSetControlId(Ctrl, HistoryCtrlOk);
 
     YoriLibConstantString(&Caption, _T("&Cancel"));
-
-    ButtonArea.Left = (SHORT)(WindowSize.X - 1 - (ButtonWidth + 2));
-    ButtonArea.Right = (WORD)(ButtonArea.Left + ButtonWidth + 1);
-
-    Ctrl = YoriWinButtonCreate(Parent, &ButtonArea, &Caption, YORI_WIN_BUTTON_STYLE_CANCEL, HistoryCancelButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &CancelButtonRect, &Caption, YORI_WIN_BUTTON_STYLE_CANCEL, HistoryCancelButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         YoriWinCloseWindowManager(WinMgr);
         return FALSE;
     }
+    YoriWinSetControlId(Ctrl, HistoryCtrlCancel);
+
+    YoriWinSetWindowManagerResizeNotifyCallback(Parent, HistoryResizeWindowManager);
 
     Result = FALSE;
     if (!YoriWinProcessInputForWindow(Parent, &Result)) {
@@ -222,7 +357,10 @@ HistoryCreateSynchronousMenu(
 
     YoriWinDestroyWindow(Parent);
     YoriWinCloseWindowManager(WinMgr);
-    return (BOOL)Result;
+    if (Result) {
+        return TRUE;
+    }
+    return FALSE;
 }
 
 
@@ -304,19 +442,19 @@ typedef enum _HISTORY_OP {
 DWORD
 YORI_BUILTIN_FN
 YoriCmd_HISTORY(
-    __in DWORD ArgC,
+    __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
 {
     BOOL ArgumentUnderstood;
-    DWORD i;
-    DWORD StartArg = 0;
-    DWORD LineCount = 0;
+    YORI_ALLOC_SIZE_T i;
+    YORI_ALLOC_SIZE_T StartArg = 0;
+    YORI_ALLOC_SIZE_T LineCount = 0;
     YORI_STRING Arg;
     YORI_STRING HistoryStrings;
     PYORI_STRING SourceFile = NULL;
     LPTSTR ThisVar;
-    DWORD VarLen;
+    YORI_ALLOC_SIZE_T VarLen;
     HISTORY_OP Op;
 
     Op = HistoryDisplayHistory;
@@ -330,35 +468,35 @@ YoriCmd_HISTORY(
 
         if (YoriLibIsCommandLineOption(&ArgV[i], &Arg)) {
 
-            if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("?")) == 0) {
+            if (YoriLibCompareStringLitIns(&Arg, _T("?")) == 0) {
                 HistoryHelp();
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("license")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("license")) == 0) {
                 YoriLibDisplayMitLicense(_T("2018"));
                 return EXIT_SUCCESS;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("c")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("c")) == 0) {
                 Op = HistoryClearHistory;
                 ArgumentUnderstood = TRUE;
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("l")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("l")) == 0) {
                 if (ArgC > i + 1) {
                     Op = HistoryLoadHistory;
                     SourceFile = &ArgV[i + 1];
                     ArgumentUnderstood = TRUE;
                     i++;
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("n")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("n")) == 0) {
                 if (ArgC > i + 1) {
-                    DWORD CharsConsumed;
-                    LONGLONG llTemp;
+                    YORI_ALLOC_SIZE_T CharsConsumed;
+                    YORI_MAX_SIGNED_T llTemp;
                     if (YoriLibStringToNumber(&ArgV[i + 1], TRUE, &llTemp, &CharsConsumed) &&
                         CharsConsumed > 0) {
 
-                        LineCount = (DWORD)llTemp;
+                        LineCount = (YORI_ALLOC_SIZE_T)llTemp;
                         ArgumentUnderstood = TRUE;
                         i++;
                     }
                 }
-            } else if (YoriLibCompareStringWithLiteralInsensitive(&Arg, _T("u")) == 0) {
+            } else if (YoriLibCompareStringLitIns(&Arg, _T("u")) == 0) {
 
                 Op = HistoryDisplayUi;
                 ArgumentUnderstood = TRUE;
@@ -400,7 +538,7 @@ YoriCmd_HISTORY(
         if (YoriCallGetHistoryStrings(LineCount, &HistoryStrings)) {
             ThisVar = HistoryStrings.StartOfString;
             while (*ThisVar != '\0') {
-                VarLen = _tcslen(ThisVar);
+                VarLen = (YORI_ALLOC_SIZE_T)_tcslen(ThisVar);
                 YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("%s\n"), ThisVar);
                 ThisVar += VarLen;
                 ThisVar++;
@@ -410,12 +548,12 @@ YoriCmd_HISTORY(
     } else if (Op == HistoryDisplayUi) {
         if (YoriCallGetHistoryStrings(LineCount, &HistoryStrings)) {
             PYORI_STRING StringArray;
-            DWORD StringCount;
-            DWORD Index;
+            YORI_ALLOC_SIZE_T StringCount;
+            YORI_ALLOC_SIZE_T Index;
             StringCount = 0;
             ThisVar = HistoryStrings.StartOfString;
             while (*ThisVar != '\0') {
-                VarLen = _tcslen(ThisVar);
+                VarLen = (YORI_ALLOC_SIZE_T)_tcslen(ThisVar);
                 StringCount++;
                 ThisVar += VarLen;
                 ThisVar++;
@@ -430,7 +568,7 @@ YoriCmd_HISTORY(
             Index = 0;
             ThisVar = HistoryStrings.StartOfString;
             while (*ThisVar != '\0') {
-                VarLen = _tcslen(ThisVar);
+                VarLen = (YORI_ALLOC_SIZE_T)_tcslen(ThisVar);
                 YoriLibInitEmptyString(&StringArray[Index]);
                 StringArray[Index].StartOfString = ThisVar;
                 StringArray[Index].LengthInChars = VarLen;

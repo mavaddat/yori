@@ -3,7 +3,7 @@
  *
  * Yori display a large hex buffer
  *
- * Copyright (c) 2018-2021 Malcolm J. Smith
+ * Copyright (c) 2018-2023 Malcolm J. Smith
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -28,6 +28,31 @@
 #include "yorilib.h"
 
 /**
+ A lookup table of hex digits to use when generating strings.
+ */
+static UCHAR HexDigits[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
+
+/**
+ Return the character representation of a single hex digit.
+ */
+#define HEX_DIGIT_FROM_VALUE(x) HexDigits[x & 0x0F];
+
+/**
+ Return the string representation for a hex digit (in the range 0-15.)
+
+ @param Value The numberic representation of the digit.
+
+ @return The character representation of the digit.
+ */
+TCHAR
+YoriLibHexDigitFromValue(
+    __in DWORD Value
+    )
+{
+    return HEX_DIGIT_FROM_VALUE(Value);
+}
+
+/**
  Generate a line of up to YORI_LIB_HEXDUMP_BYTES_PER_LINE in of bytes to
  include into a C file.
 
@@ -48,14 +73,14 @@ BOOL
 YoriLibHexByteCStyle(
     __inout PYORI_STRING Output,
     __in_ecount(BytesToDisplay) UCHAR CONST * Buffer,
-    __in DWORD BytesToDisplay,
+    __in YORI_ALLOC_SIZE_T BytesToDisplay,
     __in BOOLEAN MoreFollowing
     )
 {
     UCHAR WordToDisplay = 0;
     DWORD WordIndex;
     BOOL DisplayWord;
-    DWORD OutputIndex = 0;
+    YORI_ALLOC_SIZE_T OutputIndex = 0;
     YORI_STRING Subset;
 
     if (BytesToDisplay > YORI_LIB_HEXDUMP_BYTES_PER_LINE) {
@@ -67,7 +92,7 @@ YoriLibHexByteCStyle(
     Subset.LengthInChars = YoriLibSPrintfS(Subset.StartOfString,
                                            Subset.LengthAllocated,
                                            _T("        "));
-    OutputIndex += Subset.LengthInChars;
+    OutputIndex = OutputIndex + Subset.LengthInChars;
 
     for (WordIndex = 0; WordIndex < YORI_LIB_HEXDUMP_BYTES_PER_LINE / sizeof(WordToDisplay); WordIndex++) {
 
@@ -94,7 +119,7 @@ YoriLibHexByteCStyle(
                                                        _T("%02x, "),
                                                        WordToDisplay);
             }
-            OutputIndex += Subset.LengthInChars;
+            OutputIndex = OutputIndex + Subset.LengthInChars;
         }
     }
     Output->LengthInChars = OutputIndex;
@@ -126,7 +151,7 @@ BOOL
 YoriLibHexByteLine(
     __inout PYORI_STRING Output,
     __in_ecount(BytesToDisplay) UCHAR CONST * Buffer,
-    __in DWORD BytesToDisplay,
+    __in YORI_ALLOC_SIZE_T BytesToDisplay,
     __in DWORD HilightBits,
     __in BOOLEAN DisplaySeperator
     )
@@ -135,7 +160,7 @@ YoriLibHexByteLine(
     DWORD WordIndex;
     BOOL DisplayWord;
     DWORD ByteIndex;
-    DWORD OutputIndex = 0;
+    YORI_ALLOC_SIZE_T OutputIndex = 0;
     DWORD CurrentBit = (0x1 << (YORI_LIB_HEXDUMP_BYTES_PER_LINE - sizeof(WordToDisplay)));
 
     if (BytesToDisplay > YORI_LIB_HEXDUMP_BYTES_PER_LINE) {
@@ -162,24 +187,31 @@ YoriLibHexByteLine(
             }
         }
 
-        if (DisplayWord) {
+        if (DisplayWord && OutputIndex + sizeof(WordToDisplay) * 2 + 11 < Output->LengthAllocated) {
             YORI_STRING Subset;
             Subset.StartOfString = &Output->StartOfString[OutputIndex];
             Subset.LengthAllocated = Output->LengthAllocated - OutputIndex;
             Subset.LengthInChars = 0;
             if (HilightBits) {
-                Subset.LengthInChars = YoriLibSPrintfS(Subset.StartOfString,
-                                                       Subset.LengthAllocated,
-                                                       _T("\x1b[0%sm%02x\x1b[0m "),
-                                                       (HilightBits & CurrentBit)?_T(";1"):_T(""),
-                                                       WordToDisplay);
-            } else {
-                Subset.LengthInChars = YoriLibSPrintfS(Subset.StartOfString,
-                                                       Subset.LengthAllocated,
-                                                       _T("%02x "),
-                                                       WordToDisplay);
+                Subset.StartOfString[Subset.LengthInChars++] = 0x1b;
+                Subset.StartOfString[Subset.LengthInChars++] = '[';
+                Subset.StartOfString[Subset.LengthInChars++] = '0';
+                if (HilightBits & CurrentBit) {
+                    Subset.StartOfString[Subset.LengthInChars++] = ';';
+                    Subset.StartOfString[Subset.LengthInChars++] = '1';
+                }
+                Subset.StartOfString[Subset.LengthInChars++] = 'm';
             }
-            OutputIndex += Subset.LengthInChars;
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(WordToDisplay >> 4);
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(WordToDisplay & 0x0f);
+            if (HilightBits) {
+                Subset.StartOfString[Subset.LengthInChars++] = 0x1b;
+                Subset.StartOfString[Subset.LengthInChars++] = '[';
+                Subset.StartOfString[Subset.LengthInChars++] = '0';
+                Subset.StartOfString[Subset.LengthInChars++] = 'm';
+            }
+            Subset.StartOfString[Subset.LengthInChars++] = ' ';
+            OutputIndex = OutputIndex + Subset.LengthInChars;
         } else {
             for (ByteIndex = 0;
                  OutputIndex < Output->LengthAllocated && ByteIndex < (sizeof(WordToDisplay) * 2 + 1);
@@ -221,7 +253,7 @@ BOOL
 YoriLibHexWordLine(
     __inout PYORI_STRING Output,
     __in UCHAR CONST * Buffer,
-    __in DWORD BytesToDisplay,
+    __in YORI_ALLOC_SIZE_T BytesToDisplay,
     __in DWORD HilightBits,
     __in BOOLEAN DisplaySeperator
     )
@@ -230,7 +262,7 @@ YoriLibHexWordLine(
     DWORD WordIndex;
     BOOL DisplayWord;
     DWORD ByteIndex;
-    DWORD OutputIndex = 0;
+    YORI_ALLOC_SIZE_T OutputIndex = 0;
     DWORD CurrentBit = (0x3 << (YORI_LIB_HEXDUMP_BYTES_PER_LINE - sizeof(WordToDisplay)));
 
     if (BytesToDisplay > YORI_LIB_HEXDUMP_BYTES_PER_LINE) {
@@ -257,24 +289,33 @@ YoriLibHexWordLine(
             }
         }
 
-        if (DisplayWord) {
+        if (DisplayWord && OutputIndex + sizeof(WordToDisplay) * 2 + 11 < Output->LengthAllocated) {
             YORI_STRING Subset;
             Subset.StartOfString = &Output->StartOfString[OutputIndex];
             Subset.LengthAllocated = Output->LengthAllocated - OutputIndex;
             Subset.LengthInChars = 0;
             if (HilightBits) {
-                Subset.LengthInChars = YoriLibSPrintfS(Subset.StartOfString,
-                                                       Subset.LengthAllocated,
-                                                       _T("\x1b[0%sm%04x\x1b[0m "),
-                                                       (HilightBits & CurrentBit)?_T(";1"):_T(""),
-                                                       WordToDisplay);
-            } else {
-                Subset.LengthInChars = YoriLibSPrintfS(Subset.StartOfString,
-                                                       Subset.LengthAllocated,
-                                                       _T("%04x "),
-                                                       WordToDisplay);
+                Subset.StartOfString[Subset.LengthInChars++] = 0x1b;
+                Subset.StartOfString[Subset.LengthInChars++] = '[';
+                Subset.StartOfString[Subset.LengthInChars++] = '0';
+                if (HilightBits & CurrentBit) {
+                    Subset.StartOfString[Subset.LengthInChars++] = ';';
+                    Subset.StartOfString[Subset.LengthInChars++] = '1';
+                }
+                Subset.StartOfString[Subset.LengthInChars++] = 'm';
             }
-            OutputIndex += Subset.LengthInChars;
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(WordToDisplay >> 12);
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(WordToDisplay >> 8);
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(WordToDisplay >> 4);
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(WordToDisplay);
+            if (HilightBits) {
+                Subset.StartOfString[Subset.LengthInChars++] = 0x1b;
+                Subset.StartOfString[Subset.LengthInChars++] = '[';
+                Subset.StartOfString[Subset.LengthInChars++] = '0';
+                Subset.StartOfString[Subset.LengthInChars++] = 'm';
+            }
+            Subset.StartOfString[Subset.LengthInChars++] = ' ';
+            OutputIndex = OutputIndex + Subset.LengthInChars;
         } else {
             for (ByteIndex = 0;
                  OutputIndex < Output->LengthAllocated && ByteIndex < (sizeof(WordToDisplay) * 2 + 1);
@@ -317,7 +358,7 @@ BOOL
 YoriLibHexDwordLine(
     __inout PYORI_STRING Output,
     __in UCHAR CONST * Buffer,
-    __in DWORD BytesToDisplay,
+    __in YORI_ALLOC_SIZE_T BytesToDisplay,
     __in DWORD HilightBits,
     __in BOOLEAN DisplaySeperator
     )
@@ -326,7 +367,7 @@ YoriLibHexDwordLine(
     DWORD WordIndex;
     BOOL DisplayWord;
     DWORD ByteIndex;
-    DWORD OutputIndex = 0;
+    YORI_ALLOC_SIZE_T OutputIndex = 0;
     DWORD CurrentBit = (0xf << (YORI_LIB_HEXDUMP_BYTES_PER_LINE - sizeof(WordToDisplay)));
 
     if (BytesToDisplay > YORI_LIB_HEXDUMP_BYTES_PER_LINE) {
@@ -353,24 +394,37 @@ YoriLibHexDwordLine(
             }
         }
 
-        if (DisplayWord) {
+        if (DisplayWord && OutputIndex + sizeof(WordToDisplay) * 2 + 11 < Output->LengthAllocated) {
             YORI_STRING Subset;
             Subset.StartOfString = &Output->StartOfString[OutputIndex];
             Subset.LengthAllocated = Output->LengthAllocated - OutputIndex;
             Subset.LengthInChars = 0;
             if (HilightBits) {
-                Subset.LengthInChars = YoriLibSPrintfS(Subset.StartOfString,
-                                                       Subset.LengthAllocated,
-                                                       _T("\x1b[0%sm%08x\x1b[0m "),
-                                                       (HilightBits & CurrentBit)?_T(";1"):_T(""),
-                                                       WordToDisplay);
-            } else {
-                Subset.LengthInChars = YoriLibSPrintfS(Subset.StartOfString,
-                                                       Subset.LengthAllocated,
-                                                       _T("%08x "),
-                                                       WordToDisplay);
+                Subset.StartOfString[Subset.LengthInChars++] = 0x1b;
+                Subset.StartOfString[Subset.LengthInChars++] = '[';
+                Subset.StartOfString[Subset.LengthInChars++] = '0';
+                if (HilightBits & CurrentBit) {
+                    Subset.StartOfString[Subset.LengthInChars++] = ';';
+                    Subset.StartOfString[Subset.LengthInChars++] = '1';
+                }
+                Subset.StartOfString[Subset.LengthInChars++] = 'm';
             }
-            OutputIndex += Subset.LengthInChars;
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(WordToDisplay >> 28);
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(WordToDisplay >> 24);
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(WordToDisplay >> 20);
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(WordToDisplay >> 16);
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(WordToDisplay >> 12);
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(WordToDisplay >> 8);
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(WordToDisplay >> 4);
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(WordToDisplay);
+            if (HilightBits) {
+                Subset.StartOfString[Subset.LengthInChars++] = 0x1b;
+                Subset.StartOfString[Subset.LengthInChars++] = '[';
+                Subset.StartOfString[Subset.LengthInChars++] = '0';
+                Subset.StartOfString[Subset.LengthInChars++] = 'm';
+            }
+            Subset.StartOfString[Subset.LengthInChars++] = ' ';
+            OutputIndex = OutputIndex + Subset.LengthInChars;
         } else {
             for (ByteIndex = 0;
                  OutputIndex < Output->LengthAllocated && ByteIndex < (sizeof(WordToDisplay) * 2 + 1);
@@ -412,7 +466,7 @@ BOOL
 YoriLibHexDwordLongLine(
     __inout PYORI_STRING Output,
     __in UCHAR CONST * Buffer,
-    __in DWORD BytesToDisplay,
+    __in YORI_ALLOC_SIZE_T BytesToDisplay,
     __in DWORD HilightBits,
     __in BOOLEAN DisplaySeperator
     )
@@ -421,7 +475,7 @@ YoriLibHexDwordLongLine(
     DWORD WordIndex;
     BOOL DisplayWord;
     DWORD ByteIndex;
-    DWORD OutputIndex = 0;
+    YORI_ALLOC_SIZE_T OutputIndex = 0;
     DWORD CurrentBit = (0xff << (YORI_LIB_HEXDUMP_BYTES_PER_LINE - sizeof(WordToDisplay)));
 
     if (BytesToDisplay > YORI_LIB_HEXDUMP_BYTES_PER_LINE) {
@@ -448,7 +502,7 @@ YoriLibHexDwordLongLine(
             }
         }
 
-        if (DisplayWord) {
+        if (DisplayWord && OutputIndex + sizeof(WordToDisplay) * 2 + 12 < Output->LengthAllocated) {
             LARGE_INTEGER DisplayValue;
             YORI_STRING Subset;
             Subset.StartOfString = &Output->StartOfString[OutputIndex];
@@ -456,20 +510,40 @@ YoriLibHexDwordLongLine(
             Subset.LengthInChars = 0;
             DisplayValue.QuadPart = WordToDisplay;
             if (HilightBits) {
-                Subset.LengthInChars = YoriLibSPrintfS(Subset.StartOfString,
-                                                       Subset.LengthAllocated,
-                                                       _T("\x1b[0%sm%08x`%08x\x1b[0m "),
-                                                       (HilightBits & CurrentBit)?_T(";1"):_T(""),
-                                                       DisplayValue.HighPart,
-                                                       DisplayValue.LowPart);
-            } else {
-                Subset.LengthInChars = YoriLibSPrintfS(Subset.StartOfString,
-                                                       Subset.LengthAllocated,
-                                                       _T("%08x`%08x "),
-                                                       DisplayValue.HighPart,
-                                                       DisplayValue.LowPart);
+                Subset.StartOfString[Subset.LengthInChars++] = 0x1b;
+                Subset.StartOfString[Subset.LengthInChars++] = '[';
+                Subset.StartOfString[Subset.LengthInChars++] = '0';
+                if (HilightBits & CurrentBit) {
+                    Subset.StartOfString[Subset.LengthInChars++] = ';';
+                    Subset.StartOfString[Subset.LengthInChars++] = '1';
+                }
+                Subset.StartOfString[Subset.LengthInChars++] = 'm';
             }
-            OutputIndex += Subset.LengthInChars;
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(DisplayValue.HighPart >> 28);
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(DisplayValue.HighPart >> 24);
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(DisplayValue.HighPart >> 20);
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(DisplayValue.HighPart >> 16);
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(DisplayValue.HighPart >> 12);
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(DisplayValue.HighPart >> 8);
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(DisplayValue.HighPart >> 4);
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(DisplayValue.HighPart);
+            Subset.StartOfString[Subset.LengthInChars++] = '`';
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(DisplayValue.LowPart >> 28);
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(DisplayValue.LowPart >> 24);
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(DisplayValue.LowPart >> 20);
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(DisplayValue.LowPart >> 16);
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(DisplayValue.LowPart >> 12);
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(DisplayValue.LowPart >> 8);
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(DisplayValue.LowPart >> 4);
+            Subset.StartOfString[Subset.LengthInChars++] = HEX_DIGIT_FROM_VALUE(DisplayValue.LowPart);
+            if (HilightBits) {
+                Subset.StartOfString[Subset.LengthInChars++] = 0x1b;
+                Subset.StartOfString[Subset.LengthInChars++] = '[';
+                Subset.StartOfString[Subset.LengthInChars++] = '0';
+                Subset.StartOfString[Subset.LengthInChars++] = 'm';
+            }
+            Subset.StartOfString[Subset.LengthInChars++] = ' ';
+            OutputIndex = OutputIndex + Subset.LengthInChars;
         } else {
             for (ByteIndex = 0;
                  OutputIndex < Output->LengthAllocated && ByteIndex < (sizeof(WordToDisplay) * 2 + 1);
@@ -484,6 +558,220 @@ YoriLibHexDwordLongLine(
     Output->LengthInChars = OutputIndex;
 
     return TRUE;
+}
+
+/**
+ Convert the buffer offset to a string.  This is really the same hex
+ generation as elsewhere in the module.  It can be 64 or 32 bit, and is
+ followed with a colon and space.
+
+ @param String Pointer to a string to populate with the offset.  The length
+        of the string is updated within this routine.
+
+ @param StartOfBufferOffset The buffer offset to render.
+
+ @param DumpFlags The flags for the dump, indicating whether any offset should
+        be displayed, and whether that offset should be 32 or 64 bit.
+ */
+VOID
+YoriLibHexDumpWriteOffset(
+    __inout PYORI_STRING String,
+    __in LONGLONG StartOfBufferOffset,
+    __in DWORD DumpFlags
+    )
+{
+    LARGE_INTEGER Offset;
+
+    Offset.QuadPart = StartOfBufferOffset;
+
+    if (DumpFlags & YORI_LIB_HEX_FLAG_DISPLAY_LARGE_OFFSET) {
+        if (String->LengthAllocated >= sizeof(Offset) * 2 + 3) {
+            String->StartOfString[String->LengthInChars++] = HEX_DIGIT_FROM_VALUE(Offset.HighPart >> 28);
+            String->StartOfString[String->LengthInChars++] = HEX_DIGIT_FROM_VALUE(Offset.HighPart >> 24);
+            String->StartOfString[String->LengthInChars++] = HEX_DIGIT_FROM_VALUE(Offset.HighPart >> 20);
+            String->StartOfString[String->LengthInChars++] = HEX_DIGIT_FROM_VALUE(Offset.HighPart >> 16);
+            String->StartOfString[String->LengthInChars++] = HEX_DIGIT_FROM_VALUE(Offset.HighPart >> 12);
+            String->StartOfString[String->LengthInChars++] = HEX_DIGIT_FROM_VALUE(Offset.HighPart >> 8);
+            String->StartOfString[String->LengthInChars++] = HEX_DIGIT_FROM_VALUE(Offset.HighPart >> 4);
+            String->StartOfString[String->LengthInChars++] = HEX_DIGIT_FROM_VALUE(Offset.HighPart);
+            String->StartOfString[String->LengthInChars++] = '`';
+            String->StartOfString[String->LengthInChars++] = HEX_DIGIT_FROM_VALUE(Offset.LowPart >> 28);
+            String->StartOfString[String->LengthInChars++] = HEX_DIGIT_FROM_VALUE(Offset.LowPart >> 24);
+            String->StartOfString[String->LengthInChars++] = HEX_DIGIT_FROM_VALUE(Offset.LowPart >> 20);
+            String->StartOfString[String->LengthInChars++] = HEX_DIGIT_FROM_VALUE(Offset.LowPart >> 16);
+            String->StartOfString[String->LengthInChars++] = HEX_DIGIT_FROM_VALUE(Offset.LowPart >> 12);
+            String->StartOfString[String->LengthInChars++] = HEX_DIGIT_FROM_VALUE(Offset.LowPart >> 8);
+            String->StartOfString[String->LengthInChars++] = HEX_DIGIT_FROM_VALUE(Offset.LowPart >> 4);
+            String->StartOfString[String->LengthInChars++] = HEX_DIGIT_FROM_VALUE(Offset.LowPart);
+            String->StartOfString[String->LengthInChars++] = ':';
+            String->StartOfString[String->LengthInChars++] = ' ';
+        }
+    } else if (DumpFlags & YORI_LIB_HEX_FLAG_DISPLAY_OFFSET) {
+        if (String->LengthAllocated >= sizeof(Offset.LowPart) * 2 + 2) {
+            String->StartOfString[String->LengthInChars++] = HEX_DIGIT_FROM_VALUE(Offset.LowPart >> 28);
+            String->StartOfString[String->LengthInChars++] = HEX_DIGIT_FROM_VALUE(Offset.LowPart >> 24);
+            String->StartOfString[String->LengthInChars++] = HEX_DIGIT_FROM_VALUE(Offset.LowPart >> 20);
+            String->StartOfString[String->LengthInChars++] = HEX_DIGIT_FROM_VALUE(Offset.LowPart >> 16);
+            String->StartOfString[String->LengthInChars++] = HEX_DIGIT_FROM_VALUE(Offset.LowPart >> 12);
+            String->StartOfString[String->LengthInChars++] = HEX_DIGIT_FROM_VALUE(Offset.LowPart >> 8);
+            String->StartOfString[String->LengthInChars++] = HEX_DIGIT_FROM_VALUE(Offset.LowPart >> 4);
+            String->StartOfString[String->LengthInChars++] = HEX_DIGIT_FROM_VALUE(Offset.LowPart);
+            String->StartOfString[String->LengthInChars++] = ':';
+            String->StartOfString[String->LengthInChars++] = ' ';
+        }
+    }
+
+}
+
+/**
+ Generate a line of hex string into a caller supplied buffer.
+
+ @param Buffer Pointer to the buffer to generate.
+
+ @param StartOfBufferOffset If the buffer displayed to this call is part of
+        a larger logical stream of data, this value indicates the offset of
+        this buffer within the larger logical stream.  This is used for
+        display only.
+
+ @param BufferLength The length of the buffer, in bytes.
+
+ @param BytesPerWord The number of bytes to display at a time.
+
+ @param DumpFlags Flags for the operation.
+
+ @param MoreFollowing If TRUE, the line should be terminated with a comma
+        because more data remains.  If FALSE, this is the final line and
+        it should be terminated with a newline.
+
+ @param LineBuffer Pointer to a caller allocated line buffer.  This routine
+        attempts to be buffer safe, although for correct output the caller
+        is expected to supply a buffer large enough to contain the output
+        for an entire line given the flags specified.
+ */
+VOID
+YoriLibHexLineToString(
+    __in CONST UCHAR * Buffer,
+    __in LONGLONG StartOfBufferOffset,
+    __in YORI_ALLOC_SIZE_T BufferLength,
+    __in DWORD BytesPerWord,
+    __in DWORD DumpFlags,
+    __in BOOLEAN MoreFollowing,
+    __inout PYORI_STRING LineBuffer
+    )
+{
+    YORI_STRING Subset;
+    DWORD WordIndex;
+    YORI_ALLOC_SIZE_T BytesToDisplay;
+    UCHAR CharToDisplay;
+    TCHAR TCharToDisplay;
+
+    YoriLibInitEmptyString(&Subset);
+
+    Subset.StartOfString = LineBuffer->StartOfString;
+    Subset.LengthInChars = 0;
+    Subset.LengthAllocated = LineBuffer->LengthAllocated;
+
+    //
+    //  If the caller requested to display the buffer offset for each
+    //  line, display it
+    //
+
+    YoriLibHexDumpWriteOffset(&Subset, StartOfBufferOffset, DumpFlags);
+
+    //
+    //  Advance the buffer
+    //
+
+    LineBuffer->LengthInChars = LineBuffer->LengthInChars + Subset.LengthInChars;
+    Subset.StartOfString += Subset.LengthInChars;
+    Subset.LengthAllocated = Subset.LengthAllocated - Subset.LengthInChars;
+    Subset.LengthInChars = 0;
+
+    //
+    //  Figure out how many hex bytes can be displayed on this line
+    //
+
+    BytesToDisplay = BufferLength;
+    if (BytesToDisplay > YORI_LIB_HEXDUMP_BYTES_PER_LINE) {
+        BytesToDisplay = YORI_LIB_HEXDUMP_BYTES_PER_LINE;
+    }
+
+    //
+    //  Depending on the requested display format, generate the data.
+    //
+
+    if (DumpFlags & YORI_LIB_HEX_FLAG_C_STYLE) {
+        YoriLibHexByteCStyle(&Subset, Buffer, BytesToDisplay, MoreFollowing);
+    } else if (BytesPerWord == 1) {
+        YoriLibHexByteLine(&Subset, Buffer, BytesToDisplay, 0, FALSE);
+    } else if (BytesPerWord == 2) {
+        YoriLibHexWordLine(&Subset, Buffer, BytesToDisplay, 0, FALSE);
+    } else if (BytesPerWord == 4) {
+        YoriLibHexDwordLine(&Subset, Buffer, BytesToDisplay, 0, FALSE);
+    } else if (BytesPerWord == 8) {
+        YoriLibHexDwordLongLine(&Subset, Buffer, BytesToDisplay, 0, FALSE);
+    }
+
+    //
+    //  Advance the buffer
+    //
+
+    LineBuffer->LengthInChars = LineBuffer->LengthInChars + Subset.LengthInChars;
+    Subset.StartOfString += Subset.LengthInChars;
+    Subset.LengthAllocated = Subset.LengthAllocated - Subset.LengthInChars;
+    Subset.LengthInChars = 0;
+
+    //
+    //  If the caller requested characters after the hex output, generate
+    //  those.
+    //
+
+    if (DumpFlags & (YORI_LIB_HEX_FLAG_DISPLAY_CHARS | YORI_LIB_HEX_FLAG_DISPLAY_WCHARS)) {
+        if (LineBuffer->LengthInChars < LineBuffer->LengthAllocated) {
+            Subset.StartOfString[0] = ' ';
+            Subset.StartOfString++;
+            LineBuffer->LengthInChars++;
+        }
+        if (DumpFlags & YORI_LIB_HEX_FLAG_DISPLAY_CHARS) {
+            for (WordIndex = 0; WordIndex < YORI_LIB_HEXDUMP_BYTES_PER_LINE; WordIndex++) {
+                if (WordIndex < BytesToDisplay) {
+                    CharToDisplay = Buffer[WordIndex];
+                    if (!YoriLibIsCharPrintable(CharToDisplay)) {
+                        CharToDisplay = '.';
+                    }
+                } else {
+                    CharToDisplay = ' ';
+                }
+                Subset.StartOfString[0] = CharToDisplay;
+                Subset.StartOfString++;
+                LineBuffer->LengthInChars++;
+                if (LineBuffer->LengthInChars == LineBuffer->LengthAllocated) {
+                    break;
+                }
+            }
+        } else {
+            UCHAR Low;
+            UCHAR High;
+            for (WordIndex = 0; WordIndex < YORI_LIB_HEXDUMP_BYTES_PER_LINE / sizeof(TCHAR); WordIndex++) {
+                if (WordIndex * sizeof(TCHAR) < BytesToDisplay) {
+                    Low = Buffer[WordIndex * sizeof(TCHAR)];
+                    High = Buffer[WordIndex * sizeof(TCHAR) + 1];
+                    TCharToDisplay = (TCHAR)((High << 8) + Low);
+                    if (!YoriLibIsCharPrintable(TCharToDisplay)) {
+                        TCharToDisplay = '.';
+                    }
+                } else {
+                    TCharToDisplay = ' ';
+                }
+                Subset.StartOfString[0] = TCharToDisplay;
+                Subset.StartOfString++;
+                LineBuffer->LengthInChars++;
+                if (LineBuffer->LengthInChars == LineBuffer->LengthAllocated) {
+                    break;
+                }
+            }
+        }
+    }
 }
 
 /**
@@ -508,20 +796,22 @@ BOOL
 YoriLibHexDump(
     __in LPCSTR Buffer,
     __in LONGLONG StartOfBufferOffset,
-    __in DWORD BufferLength,
+    __in YORI_ALLOC_SIZE_T BufferLength,
     __in DWORD BytesPerWord,
     __in DWORD DumpFlags
     )
 {
     DWORD LineCount = (BufferLength + YORI_LIB_HEXDUMP_BYTES_PER_LINE - 1) / YORI_LIB_HEXDUMP_BYTES_PER_LINE;
     DWORD LineIndex;
-    DWORD WordIndex;
-    DWORD BytesToDisplay;
-    UCHAR CharToDisplay;
-    TCHAR TCharToDisplay;
-    LARGE_INTEGER DisplayBufferOffset;
+    LONGLONG DisplayBufferOffset;
+    YORI_STRING OutputBuffer;
     YORI_STRING LineBuffer;
-    YORI_STRING Subset;
+    PUCHAR CurrentBuffer;
+    YORI_ALLOC_SIZE_T BufferRemaining;
+    BOOLEAN MoreFollowing;
+    YORI_ALLOC_SIZE_T CharsPerLine;
+    HANDLE hOut;
+    YORI_ALLOC_SIZE_T AllocSize;
 
     if (BytesPerWord != 1 && BytesPerWord != 2 && BytesPerWord != 4 && BytesPerWord != 8) {
         return FALSE;
@@ -533,143 +823,69 @@ YoriLibHexDump(
     //  and a character.
     //
 
-    if (!YoriLibAllocateString(&LineBuffer, 16 * YORI_LIB_HEXDUMP_BYTES_PER_LINE + 32)) {
+    CharsPerLine = 16 * YORI_LIB_HEXDUMP_BYTES_PER_LINE + 32;
+
+    //
+    //  Allocate a chunk of memory to generate lines into.  The value below is
+    //  big enough to batch writes but isn't specifically meaningful.
+    //
+
+    AllocSize = YoriLibMaximumAllocationInRange(60 * 1024, 4 * 1024 * 1024);
+    if (!YoriLibAllocateString(&OutputBuffer, AllocSize)) {
         return FALSE;
     }
+    YoriLibInitEmptyString(&LineBuffer);
 
-    Subset.StartOfString = LineBuffer.StartOfString;
-    Subset.LengthInChars = LineBuffer.LengthInChars;
-    Subset.LengthAllocated = LineBuffer.LengthAllocated;
-
-    DisplayBufferOffset.QuadPart = StartOfBufferOffset;
+    DisplayBufferOffset = StartOfBufferOffset;
+    CurrentBuffer = (PUCHAR)Buffer;
+    BufferRemaining = BufferLength;
+    MoreFollowing = TRUE;
+    hOut = GetStdHandle(STD_OUTPUT_HANDLE);
 
     for (LineIndex = 0; LineIndex < LineCount; LineIndex++) {
 
-        //
-        //  If the caller requested to display the buffer offset for each
-        //  line, display it
-        //
-
-        if (DumpFlags & YORI_LIB_HEX_FLAG_DISPLAY_LARGE_OFFSET) {
-            Subset.LengthInChars = YoriLibSPrintfS(Subset.StartOfString, Subset.LengthAllocated, _T("%08x`%08x: "), DisplayBufferOffset.HighPart, DisplayBufferOffset.LowPart);
-            DisplayBufferOffset.QuadPart += YORI_LIB_HEXDUMP_BYTES_PER_LINE;
-        } else if (DumpFlags & YORI_LIB_HEX_FLAG_DISPLAY_OFFSET) {
-            Subset.LengthInChars = YoriLibSPrintfS(Subset.StartOfString, Subset.LengthAllocated, _T("%08x: "), DisplayBufferOffset.LowPart);
-            DisplayBufferOffset.QuadPart += YORI_LIB_HEXDUMP_BYTES_PER_LINE;
+        if (LineIndex + 1 == LineCount) {
+            MoreFollowing = FALSE;
         }
 
         //
-        //  Advance the buffer
+        //  Write a new line to the end of the buffer and add a newline.
         //
 
-        LineBuffer.LengthInChars += Subset.LengthInChars;
-        Subset.StartOfString += Subset.LengthInChars;
-        Subset.LengthAllocated -= Subset.LengthInChars;
-        Subset.LengthInChars = 0;
+        LineBuffer.StartOfString = &OutputBuffer.StartOfString[OutputBuffer.LengthInChars];
+        LineBuffer.LengthInChars = 0;
+        LineBuffer.LengthAllocated = CharsPerLine;
 
-        //
-        //  Figure out how many hex bytes can be displayed on this line
-        //
-
-        BytesToDisplay = BufferLength - LineIndex * YORI_LIB_HEXDUMP_BYTES_PER_LINE;
-        if (BytesToDisplay > YORI_LIB_HEXDUMP_BYTES_PER_LINE) {
-            BytesToDisplay = YORI_LIB_HEXDUMP_BYTES_PER_LINE;
-        }
-
-        //
-        //  Depending on the requested display format, generate the data.
-        //
-
-        if (DumpFlags & YORI_LIB_HEX_FLAG_C_STYLE) {
-            if (LineIndex + 1 == LineCount) {
-                YoriLibHexByteCStyle(&Subset, (CONST UCHAR *)&Buffer[LineIndex * YORI_LIB_HEXDUMP_BYTES_PER_LINE], BytesToDisplay, FALSE);
-            } else {
-                YoriLibHexByteCStyle(&Subset, (CONST UCHAR *)&Buffer[LineIndex * YORI_LIB_HEXDUMP_BYTES_PER_LINE], BytesToDisplay, TRUE);
-            }
-        } else if (BytesPerWord == 1) {
-            YoriLibHexByteLine(&Subset, (CONST UCHAR *)&Buffer[LineIndex * YORI_LIB_HEXDUMP_BYTES_PER_LINE], BytesToDisplay, 0, FALSE);
-        } else if (BytesPerWord == 2) {
-            YoriLibHexWordLine(&Subset, (CONST UCHAR *)&Buffer[LineIndex * YORI_LIB_HEXDUMP_BYTES_PER_LINE], BytesToDisplay, 0, FALSE);
-        } else if (BytesPerWord == 4) {
-            YoriLibHexDwordLine(&Subset, (CONST UCHAR *)&Buffer[LineIndex * YORI_LIB_HEXDUMP_BYTES_PER_LINE], BytesToDisplay, 0, FALSE);
-        } else if (BytesPerWord == 8) {
-            YoriLibHexDwordLongLine(&Subset, (CONST UCHAR *)&Buffer[LineIndex * YORI_LIB_HEXDUMP_BYTES_PER_LINE], BytesToDisplay, 0, FALSE);
-        }
-
-        //
-        //  Advance the buffer
-        //
-
-        LineBuffer.LengthInChars += Subset.LengthInChars;
-        Subset.StartOfString += Subset.LengthInChars;
-        Subset.LengthAllocated -= Subset.LengthInChars;
-        Subset.LengthInChars = 0;
-
-        //
-        //  If the caller requested characters after the hex output, generate
-        //  those.
-        //
-
-        if (DumpFlags & (YORI_LIB_HEX_FLAG_DISPLAY_CHARS | YORI_LIB_HEX_FLAG_DISPLAY_WCHARS)) {
-            if (LineBuffer.LengthInChars < LineBuffer.LengthAllocated) {
-                Subset.StartOfString[0] = ' ';
-                Subset.StartOfString++;
-                LineBuffer.LengthInChars++;
-            }
-            if (DumpFlags & YORI_LIB_HEX_FLAG_DISPLAY_CHARS) {
-                for (WordIndex = 0; WordIndex < YORI_LIB_HEXDUMP_BYTES_PER_LINE; WordIndex++) {
-                    if (WordIndex < BytesToDisplay) {
-                        CharToDisplay = Buffer[LineIndex * YORI_LIB_HEXDUMP_BYTES_PER_LINE + WordIndex];
-                        if (CharToDisplay < 32) {
-                            CharToDisplay = '.';
-                        }
-                    } else {
-                        CharToDisplay = ' ';
-                    }
-                    Subset.StartOfString[0] = CharToDisplay;
-                    Subset.StartOfString++;
-                    LineBuffer.LengthInChars++;
-                    if (LineBuffer.LengthInChars == LineBuffer.LengthAllocated) {
-                        break;
-                    }
-                }
-            } else {
-                UCHAR Low;
-                UCHAR High;
-                for (WordIndex = 0; WordIndex < YORI_LIB_HEXDUMP_BYTES_PER_LINE / sizeof(TCHAR); WordIndex++) {
-                    if (WordIndex * sizeof(TCHAR) < BytesToDisplay) {
-                        Low = Buffer[LineIndex * YORI_LIB_HEXDUMP_BYTES_PER_LINE + WordIndex * sizeof(TCHAR)];
-                        High = Buffer[LineIndex * YORI_LIB_HEXDUMP_BYTES_PER_LINE + WordIndex * sizeof(TCHAR) + 1];
-                        TCharToDisplay = (TCHAR)((High << 8) + Low);
-                        if (TCharToDisplay < 32) {
-                            TCharToDisplay = '.';
-                        }
-                    } else {
-                        TCharToDisplay = ' ';
-                    }
-                    Subset.StartOfString[0] = TCharToDisplay;
-                    Subset.StartOfString++;
-                    LineBuffer.LengthInChars++;
-                    if (LineBuffer.LengthInChars == LineBuffer.LengthAllocated) {
-                        break;
-                    }
-                }
-            }
-        }
+        YoriLibHexLineToString(CurrentBuffer, DisplayBufferOffset, BufferRemaining, BytesPerWord, DumpFlags, MoreFollowing, &LineBuffer);
 
         if (LineBuffer.LengthInChars < LineBuffer.LengthAllocated) {
-            Subset.StartOfString[0] = '\n';
-            Subset.StartOfString++;
+            LineBuffer.StartOfString[LineBuffer.LengthInChars] = '\n';
             LineBuffer.LengthInChars++;
         }
-        YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("%y"), &LineBuffer);
-        LineBuffer.LengthInChars = 0;
-        Subset.StartOfString = LineBuffer.StartOfString;
-        Subset.LengthInChars = LineBuffer.LengthInChars;
-        Subset.LengthAllocated = LineBuffer.LengthAllocated;
+
+        OutputBuffer.LengthInChars = OutputBuffer.LengthInChars + LineBuffer.LengthInChars;
+
+        //
+        //  If the buffer is full write it out.
+        //
+
+        if (OutputBuffer.LengthAllocated - OutputBuffer.LengthInChars <= CharsPerLine) {
+            YoriLibOutputString(hOut, 0, &OutputBuffer);
+            OutputBuffer.LengthInChars = 0;
+        }
+
+
+        CurrentBuffer = YoriLibAddToPointer(CurrentBuffer, YORI_LIB_HEXDUMP_BYTES_PER_LINE);
+        BufferRemaining = BufferRemaining - YORI_LIB_HEXDUMP_BYTES_PER_LINE;
+        DisplayBufferOffset = DisplayBufferOffset + YORI_LIB_HEXDUMP_BYTES_PER_LINE;
     }
 
-    YoriLibFreeStringContents(&LineBuffer);
+    if (OutputBuffer.LengthInChars > 0) {
+        YoriLibOutputString(hOut, 0, &OutputBuffer);
+        OutputBuffer.LengthInChars = 0;
+    }
+
+    YoriLibFreeStringContents(&OutputBuffer);
     return TRUE;
 }
 
@@ -699,18 +915,18 @@ BOOL
 YoriLibHexDiff(
     __in LONGLONG StartOfBufferOffset,
     __in LPCSTR Buffer1,
-    __in DWORD Buffer1Length,
+    __in YORI_ALLOC_SIZE_T Buffer1Length,
     __in LPCSTR Buffer2,
-    __in DWORD Buffer2Length,
+    __in YORI_ALLOC_SIZE_T Buffer2Length,
     __in DWORD BytesPerWord,
     __in DWORD DumpFlags
     )
 {
-    DWORD LineCount;
-    DWORD LineIndex;
-    DWORD WordIndex;
+    YORI_ALLOC_SIZE_T LineCount;
+    YORI_ALLOC_SIZE_T LineIndex;
+    YORI_ALLOC_SIZE_T WordIndex;
     DWORD BufferIndex;
-    DWORD BytesToDisplay;
+    YORI_ALLOC_SIZE_T BytesToDisplay;
     DWORD HilightBits;
     DWORD CurrentBit;
     UCHAR CharToDisplay;
@@ -718,7 +934,7 @@ YoriLibHexDiff(
     LARGE_INTEGER DisplayBufferOffset;
     LPCSTR BufferToDisplay;
     LPCSTR Buffers[2];
-    DWORD BufferLengths[2];
+    YORI_ALLOC_SIZE_T BufferLengths[2];
     YORI_STRING LineBuffer;
     YORI_STRING Subset;
 
@@ -731,7 +947,7 @@ YoriLibHexDiff(
     }
 
     Subset.StartOfString = LineBuffer.StartOfString;
-    Subset.LengthInChars = LineBuffer.LengthInChars;
+    Subset.LengthInChars = 0;
     Subset.LengthAllocated = LineBuffer.LengthAllocated;
 
     DisplayBufferOffset.QuadPart = StartOfBufferOffset;
@@ -754,21 +970,16 @@ YoriLibHexDiff(
         //  line, display it
         //
 
-        if (DumpFlags & YORI_LIB_HEX_FLAG_DISPLAY_LARGE_OFFSET) {
-            Subset.LengthInChars = YoriLibSPrintfS(Subset.StartOfString, Subset.LengthAllocated, _T("%08x`%08x: "), DisplayBufferOffset.HighPart, DisplayBufferOffset.LowPart);
-            DisplayBufferOffset.QuadPart += YORI_LIB_HEXDUMP_BYTES_PER_LINE;
-        } else if (DumpFlags & YORI_LIB_HEX_FLAG_DISPLAY_OFFSET) {
-            Subset.LengthInChars = YoriLibSPrintfS(Subset.StartOfString, Subset.LengthAllocated, _T("%08x: "), DisplayBufferOffset.LowPart);
-            DisplayBufferOffset.QuadPart += YORI_LIB_HEXDUMP_BYTES_PER_LINE;
-        }
+        YoriLibHexDumpWriteOffset(&Subset, DisplayBufferOffset.QuadPart, DumpFlags);
+        DisplayBufferOffset.QuadPart += YORI_LIB_HEXDUMP_BYTES_PER_LINE;
 
         //
         //  Advance the buffer
         //
 
-        LineBuffer.LengthInChars += Subset.LengthInChars;
+        LineBuffer.LengthInChars = LineBuffer.LengthInChars + Subset.LengthInChars;
         Subset.StartOfString += Subset.LengthInChars;
-        Subset.LengthAllocated -= Subset.LengthInChars;
+        Subset.LengthAllocated = Subset.LengthAllocated - Subset.LengthInChars;
         Subset.LengthInChars = 0;
 
         //
@@ -825,9 +1036,9 @@ YoriLibHexDiff(
             //  Advance the buffer
             //
 
-            LineBuffer.LengthInChars += Subset.LengthInChars;
+            LineBuffer.LengthInChars = LineBuffer.LengthInChars + Subset.LengthInChars;
             Subset.StartOfString += Subset.LengthInChars;
-            Subset.LengthAllocated -= Subset.LengthInChars;
+            Subset.LengthAllocated = Subset.LengthAllocated - Subset.LengthInChars;
             Subset.LengthInChars = 0;
 
             //
@@ -835,7 +1046,9 @@ YoriLibHexDiff(
             //  generate them.
             //
 
-            if (DumpFlags & (YORI_LIB_HEX_FLAG_DISPLAY_CHARS | YORI_LIB_HEX_FLAG_DISPLAY_WCHARS)) {
+            if ((DumpFlags & (YORI_LIB_HEX_FLAG_DISPLAY_CHARS | YORI_LIB_HEX_FLAG_DISPLAY_WCHARS)) &&
+                Subset.LengthAllocated >= (7 * YORI_LIB_HEXDUMP_BYTES_PER_LINE)) {
+
                 if (LineBuffer.LengthInChars < LineBuffer.LengthAllocated) {
                     Subset.StartOfString[0] = ' ';
                     Subset.StartOfString++;
@@ -853,15 +1066,19 @@ YoriLibHexDiff(
                             CharToDisplay = ' ';
                         }
 
-                        Subset.LengthInChars = YoriLibSPrintfS(Subset.StartOfString,
-                                                               Subset.LengthAllocated,
-                                                               _T("\x1b[0%sm%c"),
-                                                               (HilightBits & CurrentBit)?_T(";1"):_T(""),
-                                                               CharToDisplay);
+                        Subset.StartOfString[Subset.LengthInChars++] = 0x1b;
+                        Subset.StartOfString[Subset.LengthInChars++] = '[';
+                        Subset.StartOfString[Subset.LengthInChars++] = '0';
+                        if (HilightBits & CurrentBit) {
+                            Subset.StartOfString[Subset.LengthInChars++] = ';';
+                            Subset.StartOfString[Subset.LengthInChars++] = '1';
+                        }
+                        Subset.StartOfString[Subset.LengthInChars++] = 'm';
+                        Subset.StartOfString[Subset.LengthInChars++] = CharToDisplay;
 
-                        LineBuffer.LengthInChars += Subset.LengthInChars;
+                        LineBuffer.LengthInChars = LineBuffer.LengthInChars + Subset.LengthInChars;
                         Subset.StartOfString += Subset.LengthInChars;
-                        Subset.LengthAllocated -= Subset.LengthInChars;
+                        Subset.LengthAllocated = Subset.LengthAllocated - Subset.LengthInChars;
                         Subset.LengthInChars = 0;
 
                         CurrentBit = CurrentBit >> sizeof(CharToDisplay);
@@ -882,15 +1099,19 @@ YoriLibHexDiff(
                             TCharToDisplay = ' ';
                         }
 
-                        Subset.LengthInChars = YoriLibSPrintfS(Subset.StartOfString,
-                                                               Subset.LengthAllocated,
-                                                               _T("\x1b[0%sm%c"),
-                                                               (HilightBits & CurrentBit)?_T(";1"):_T(""),
-                                                               TCharToDisplay);
+                        Subset.StartOfString[Subset.LengthInChars++] = 0x1b;
+                        Subset.StartOfString[Subset.LengthInChars++] = '[';
+                        Subset.StartOfString[Subset.LengthInChars++] = '0';
+                        if (HilightBits & CurrentBit) {
+                            Subset.StartOfString[Subset.LengthInChars++] = ';';
+                            Subset.StartOfString[Subset.LengthInChars++] = '1';
+                        }
+                        Subset.StartOfString[Subset.LengthInChars++] = 'm';
+                        Subset.StartOfString[Subset.LengthInChars++] = TCharToDisplay;
 
-                        LineBuffer.LengthInChars += Subset.LengthInChars;
+                        LineBuffer.LengthInChars = LineBuffer.LengthInChars + Subset.LengthInChars;
                         Subset.StartOfString += Subset.LengthInChars;
-                        Subset.LengthAllocated -= Subset.LengthInChars;
+                        Subset.LengthAllocated = Subset.LengthAllocated - Subset.LengthInChars;
                         Subset.LengthInChars = 0;
 
                         CurrentBit = CurrentBit >> sizeof(TCharToDisplay);
@@ -898,13 +1119,13 @@ YoriLibHexDiff(
                 }
             }
 
-            if (BufferIndex == 0) {
-                Subset.LengthInChars = YoriLibSPrintfS(Subset.StartOfString,
-                                                       Subset.LengthAllocated,
-                                                       _T(" | "));
-                LineBuffer.LengthInChars += Subset.LengthInChars;
+            if (BufferIndex == 0 && Subset.LengthAllocated >= sizeof(" | ") - 1) {
+                Subset.StartOfString[Subset.LengthInChars++] = ' ';
+                Subset.StartOfString[Subset.LengthInChars++] = '|';
+                Subset.StartOfString[Subset.LengthInChars++] = ' ';
+                LineBuffer.LengthInChars = LineBuffer.LengthInChars + Subset.LengthInChars;
                 Subset.StartOfString += Subset.LengthInChars;
-                Subset.LengthAllocated -= Subset.LengthInChars;
+                Subset.LengthAllocated = Subset.LengthAllocated - Subset.LengthInChars;
                 Subset.LengthInChars = 0;
             }
         }
