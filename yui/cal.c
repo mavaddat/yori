@@ -404,7 +404,7 @@ YuiCalendarWindowProc(
         case WM_PAINT:
             {
                 SYSTEMTIME Now;
-                GetSystemTime(&Now);
+                GetLocalTime(&Now);
                 YuiCalendarOutputMonth(hwnd,
                                        Now.wYear,
                                        (WORD)(Now.wMonth - 1),
