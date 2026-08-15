@@ -349,7 +349,7 @@ SdirMultiplyViaShift(
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 BOOL
-SdirPopulateSummaryWithGetDiskFreeSpace(
+SdirPopulateSummaryFreeSpace(
     __in LPTSTR Path,
     __inout PSDIR_SUMMARY LocalSummary
     )

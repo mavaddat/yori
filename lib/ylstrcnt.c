@@ -96,7 +96,7 @@ YoriLibCntStringMatchCharsIns(
 
  @return The number of characters in String that occur in chars.
  */
-YORI_ALLOC_SIZE_T
+YORI_ALLOC_SIZE_T FAR
 YoriLibCntStringWithChars(
     __in PCYORI_STRING String,
     __in LPCTSTR chars
@@ -129,7 +129,7 @@ YoriLibCntStringWithChars(
 
  @return The number of characters in String that do not occur in match.
  */
-YORI_ALLOC_SIZE_T
+YORI_ALLOC_SIZE_T FAR
 YoriLibCntStringNotWithChars(
     __in PCYORI_STRING String,
     __in LPCTSTR match

@@ -41,13 +41,24 @@ CHAR strDuHelpText[] =
         "   -a             Enable all features for maximum accuracy\n"
         "   -b             Use basic search criteria for files only\n"
         "   -c             Display compressed file size\n"
-        "   -color         Use file color highlighting\n"
+        "   -color         Use file color highlighting\n";
+
+/**
+ Help text to display to the user.
+ */
+const
+CHAR strDuHelpText2[] =
+#if _WIN32
         "   -d             Include space used by alternate data streams\n"
+#endif
         "   -h             Average space used across multiple hard links\n"
         "   -r <num>       The maximum recursion depth to display\n"
         "   -s <size>      Only display directories containing at least size bytes\n"
         "   -u             Round space up to file allocation unit or cluster size\n"
-        "   -w             Count files backed by a WIM archive as zero size\n";
+#if _WIN32
+        "   -w             Count files backed by a WIM archive as zero size\n"
+#endif
+        ;
 
 /**
  Display usage text to the user.
@@ -59,10 +70,11 @@ DuHelp(VOID)
 #if YORI_BUILD_ID
     YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("  Build %i\n"), YORI_BUILD_ID);
 #endif
-    YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("%hs"), strDuHelpText);
+    YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("%hs%hs"), strDuHelpText, strDuHelpText2);
     return TRUE;
 }
 
+#if _WIN32
 /**
  The maximum size of the stream name in WIN32_FIND_STREAM_DATA.
  */
@@ -85,6 +97,8 @@ typedef struct _DU_WIN32_FIND_STREAM_DATA {
     WCHAR cStreamName[DU_MAX_STREAM_NAME];
 } DU_WIN32_FIND_STREAM_DATA, *PDU_WIN32_FIND_STREAM_DATA;
 
+#endif
+
 /**
  A structure describing a particular directory.  When traversing through
  files to calculate space, there will be one of these structures for each
@@ -100,26 +114,26 @@ typedef struct _DU_DIRECTORY_STACK {
     /**
      The number of files or directories encountered within this directory.
      */
-    LONGLONG ObjectsFoundThisDirectory;
+    YORI_MAX_UNSIGNED_T ObjectsFoundThisDirectory;
 
     /**
      The amount of bytes consumed by files within this directory.
      */
-    LONGLONG SpaceConsumedThisDirectory;
+    YORI_MAX_UNSIGNED_T SpaceConsumedThisDirectory;
 
     /**
      The amount of bytes consumed by subdirectories within this directory.
      Note this is populated only when the subdirectories have completed
      their enumerations.
      */
-    LONGLONG SpaceConsumedInChildren;
+    YORI_MAX_UNSIGNED_T SpaceConsumedInChildren;
 
     /**
      The number of bytes in each file system allocation unit for this
      directory.  This is only meaningful if AllocationSize reporting is
      enabled.
      */
-    LONGLONG AllocationSize;
+    YORI_MAX_UNSIGNED_T AllocationSize;
 } DU_DIRECTORY_STACK, *PDU_DIRECTORY_STACK;
 
 /**
@@ -204,7 +218,7 @@ typedef struct _DU_CONTEXT {
     /**
      Color information to display against matching files.
      */
-    YORI_LIB_FILE_FILTER ColorRules;
+    YORILIB_FILE_FILTER ColorRules;
 
 } DU_CONTEXT, *PDU_CONTEXT;
 
@@ -232,7 +246,7 @@ DuCleanupContext(
 
     DuContext->StackAllocated = 0;
     DuContext->StackIndex = 0;
-    YoriLibFileFiltFreeFilter(&DuContext->ColorRules);
+    YoriLibFilFltFreeFilter(&DuContext->ColorRules);
 }
 
 /**
@@ -270,7 +284,7 @@ DuCloseStack(
 BOOL
 DuReportAndCloseStack(
     __in PDU_CONTEXT DuContext,
-    __in DWORD Depth
+    __in YORI_ALLOC_SIZE_T Depth
     )
 {
     YORI_STRING UnescapedPath;
@@ -278,6 +292,7 @@ DuReportAndCloseStack(
     YORI_STRING FileSizeString;
     TCHAR FileSizeStringBuffer[8];
     LARGE_INTEGER SizeToDisplay;
+    YORI_MAX_UNSIGNED_T MinSizeToDisplay;
     YORI_STRING VtAttribute;
     TCHAR VtAttributeBuffer[YORI_MAX_VT_ESCAPE_CHARS];
     YORILIB_COLOR_ATTRIBUTES Attribute;
@@ -289,10 +304,11 @@ DuReportAndCloseStack(
     if (DuContext->MaximumDepthToDisplay == 0 ||
         Depth <= DuContext->MaximumDepthToDisplay) {
 
-        SizeToDisplay.QuadPart = DirStack->SpaceConsumedInChildren + DirStack->SpaceConsumedThisDirectory;
+        YoriLibLiAssignUnsigned(&SizeToDisplay, DirStack->SpaceConsumedInChildren + DirStack->SpaceConsumedThisDirectory);
 
-        if (DuContext->MinimumDirectorySizeToDisplay.QuadPart == 0 ||
-            SizeToDisplay.QuadPart >= DuContext->MinimumDirectorySizeToDisplay.QuadPart) {
+        MinSizeToDisplay = YoriLibLiGetUnsigned(&DuContext->MinimumDirectorySizeToDisplay);
+        if (MinSizeToDisplay == 0 ||
+            YoriLibLiGetUnsigned(&SizeToDisplay) >= MinSizeToDisplay) {
 
             //
             //  Convert the escaped path into a path for humans.
@@ -326,8 +342,8 @@ DuReportAndCloseStack(
                 VtAttribute.StartOfString = VtAttributeBuffer;
                 VtAttribute.LengthAllocated = sizeof(VtAttributeBuffer)/sizeof(VtAttributeBuffer[0]);
 
-                if (!YoriLibUpdateFindDataFromFileInformation(&FileInfo, DirStack->DirectoryName.StartOfString, TRUE) || 
-                    !YoriLibFileFiltCheckColorMatch(&DuContext->ColorRules, &DirStack->DirectoryName, &FileInfo, &Attribute)) {
+                if (!YoriLibUpdateFindDataFromFile(&FileInfo, DirStack->DirectoryName.StartOfString, TRUE) || 
+                    !YoriLibFilFltCheckColorMatch(&DuContext->ColorRules, &DirStack->DirectoryName, &FileInfo, &Attribute)) {
                     Attribute.Ctrl = YORILIB_ATTRCTRL_WINDOW_BG | YORILIB_ATTRCTRL_WINDOW_FG;
                     Attribute.Win32Attr = (UCHAR)YoriLibVtGetDefaultColor();
                 }
@@ -372,7 +388,7 @@ DuReportAndCloseStack(
 BOOL
 DuReportAndCloseAllActiveStacks(
     __in PDU_CONTEXT DuContext,
-    __in DWORD MinDepthToDisplay
+    __in YORI_ALLOC_SIZE_T MinDepthToDisplay
     )
 {
     YORI_ALLOC_SIZE_T Index;
@@ -486,7 +502,7 @@ DuInitializeDirectoryStack(
 
  @return The number of bytes attributable to the file.
  */
-LARGE_INTEGER
+YORI_MAX_UNSIGNED_T
 DuCalculateSpaceUsedByFile(
     __in PDU_CONTEXT DuContext,
     __in PDU_DIRECTORY_STACK DirStack,
@@ -494,12 +510,12 @@ DuCalculateSpaceUsedByFile(
     __in PWIN32_FIND_DATA FileInfo
     )
 {
-    LARGE_INTEGER FileSize;
+    YORI_MAX_UNSIGNED_T uFileSize;
     HANDLE FileHandle = INVALID_HANDLE_VALUE;
     BOOL ForceSizeZero = FALSE;
     BOOL ReportedOpenError = FALSE;
 
-    FileSize.QuadPart = 0;
+    uFileSize = 0L;
 
     if (DuContext->AverageHardLinkSize || DuContext->WimBackedFilesAsZero) {
 
@@ -519,6 +535,8 @@ DuCalculateSpaceUsedByFile(
         }
     }
 
+#ifdef _WIN32
+
     //
     //  If the file is WIM backed and the user requested it, count the default
     //  stream size as zero.
@@ -536,7 +554,7 @@ DuCalculateSpaceUsedByFile(
 
         if (DeviceIoControl(FileHandle, FSCTL_GET_EXTERNAL_BACKING, NULL, 0, &WofInfo, sizeof(WofInfo), &BytesReturned, NULL)) {
             if (WofInfo.WofHeader.Provider == WOF_PROVIDER_WIM) {
-                FileSize.QuadPart = 0;
+                uFileSize = 0L;
                 ForceSizeZero = TRUE;
             }
         }
@@ -548,28 +566,42 @@ DuCalculateSpaceUsedByFile(
     //
 
     if (!ForceSizeZero) {
+        LARGE_INTEGER liFileSize;
         if (DuContext->CompressedFileSize &&
             DllKernel32.pGetCompressedFileSizeW) {
 
-            FileSize.LowPart = DllKernel32.pGetCompressedFileSizeW(FilePath->StartOfString, (PDWORD)&FileSize.HighPart);
+            liFileSize.LowPart = DllKernel32.pGetCompressedFileSizeW(FilePath->StartOfString, (PDWORD)&liFileSize.HighPart);
 
-            if (FileSize.LowPart == INVALID_FILE_SIZE && GetLastError() != NO_ERROR) {
-                FileSize.LowPart = FileInfo->nFileSizeLow;
-                FileSize.HighPart = FileInfo->nFileSizeHigh;
+            if (liFileSize.LowPart == INVALID_FILE_SIZE && GetLastError() != NO_ERROR) {
+                liFileSize.LowPart = FileInfo->nFileSizeLow;
+                liFileSize.HighPart = FileInfo->nFileSizeHigh;
             }
         } else {
-            FileSize.LowPart = FileInfo->nFileSizeLow;
-            FileSize.HighPart = FileInfo->nFileSizeHigh;
+            liFileSize.LowPart = FileInfo->nFileSizeLow;
+            liFileSize.HighPart = FileInfo->nFileSizeHigh;
         }
+
+        uFileSize = YoriLibLiGetUnsigned(&liFileSize);
     }
+#else
+    {
+        LARGE_INTEGER liFileSize;
+        liFileSize.LowPart = FileInfo->nFileSizeLow;
+        liFileSize.HighPart = FileInfo->nFileSizeHigh;
+
+        uFileSize = YoriLibLiGetUnsigned(&liFileSize);
+    }
+#endif
 
     //
     //  Round up to allocation size if requested.
     //
 
     if (DuContext->AllocationSize) {
-        FileSize.QuadPart = (FileSize.QuadPart + DirStack->AllocationSize - 1) & (~(DirStack->AllocationSize - 1));
+        uFileSize = (uFileSize + DirStack->AllocationSize - 1) & (~(DirStack->AllocationSize - 1));
     }
+
+#if _WIN32
 
     //
     //  Add in any space used by alternate streams.  Note in particular that
@@ -595,27 +627,28 @@ DuCalculateSpaceUsedByFile(
         } else {
             do {
                 if (_tcscmp(FindStreamData.cStreamName, L"::$DATA") != 0) {
-                    FileSize.QuadPart += FindStreamData.StreamSize.QuadPart;
+                    uFileSize += YoriLibLiGetUnsigned(&FindStreamData.StreamSize);
                     if (DuContext->AllocationSize) {
-                        FileSize.QuadPart = (FileSize.QuadPart + DirStack->AllocationSize - 1) & (~(DirStack->AllocationSize - 1));
+                        uFileSize = (uFileSize + DirStack->AllocationSize - 1) & (~(DirStack->AllocationSize - 1));
                     }
                 }
             } while (DllKernel32.pFindNextStreamW(hFind, &FindStreamData));
             FindClose(hFind);
         }
     }
+#endif
 
     //
     //  If the file has a size and hardlink averaging is reuqested, divide the
     //  size found by the number of hard links.
     //
 
-    if (DuContext->AverageHardLinkSize && FileHandle != INVALID_HANDLE_VALUE && FileSize.QuadPart != 0) {
+    if (DuContext->AverageHardLinkSize && FileHandle != INVALID_HANDLE_VALUE && uFileSize != 0) {
         BY_HANDLE_FILE_INFORMATION HandleFileInfo;
 
         if (GetFileInformationByHandle(FileHandle, &HandleFileInfo)) {
             if (HandleFileInfo.nNumberOfLinks > 1) {
-                FileSize.QuadPart = FileSize.QuadPart / HandleFileInfo.nNumberOfLinks;
+                uFileSize = uFileSize / HandleFileInfo.nNumberOfLinks;
             }
         }
     }
@@ -624,10 +657,8 @@ DuCalculateSpaceUsedByFile(
         CloseHandle(FileHandle);
     }
 
-
-    return FileSize;
+    return uFileSize;
 }
-
 
 
 /**
@@ -775,9 +806,9 @@ DuFileFoundCallback(
     DuContext->DirStack[Depth].ObjectsFoundThisDirectory++;
 
     if ((FileInfo->dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0) {
-        LARGE_INTEGER FileSize;
+        YORI_MAX_UNSIGNED_T FileSize;
         FileSize = DuCalculateSpaceUsedByFile(DuContext, &DuContext->DirStack[Depth], FilePath, FileInfo);
-        DuContext->DirStack[Depth].SpaceConsumedThisDirectory += FileSize.QuadPart;
+        DuContext->DirStack[Depth].SpaceConsumedThisDirectory += FileSize;
     }
 
     return TRUE;
@@ -878,9 +909,11 @@ ENTRYPOINT(
             } else if (YoriLibCompareStringLitIns(&Arg, _T("c")) == 0) {
                 DuContext.CompressedFileSize = TRUE;
                 ArgumentUnderstood = TRUE;
+#if _WIN32                
             } else if (YoriLibCompareStringLitIns(&Arg, _T("d")) == 0) {
                 DuContext.IncludeNamedStreams = TRUE;
                 ArgumentUnderstood = TRUE;
+#endif                
             } else if (YoriLibCompareStringLitIns(&Arg, _T("h")) == 0) {
                 DuContext.AverageHardLinkSize = TRUE;
                 ArgumentUnderstood = TRUE;
@@ -904,9 +937,11 @@ ENTRYPOINT(
             } else if (YoriLibCompareStringLitIns(&Arg, _T("u")) == 0) {
                 DuContext.AllocationSize = TRUE;
                 ArgumentUnderstood = TRUE;
+#if _WIN32                
             } else if (YoriLibCompareStringLitIns(&Arg, _T("w")) == 0) {
                 DuContext.WimBackedFilesAsZero = TRUE;
                 ArgumentUnderstood = TRUE;
+#endif                
             } else if (YoriLibCompareStringLitIns(&Arg, _T("-")) == 0) {
                 ArgumentUnderstood = TRUE;
                 StartArg = i + 1;
@@ -923,9 +958,9 @@ ENTRYPOINT(
         }
     }
 
-    if (YoriLibLoadCombinedFileColorString(NULL, &Combined)) {
+    if (YoriLibLoadCombinedFileColorStr(NULL, &Combined)) {
         YORI_STRING ErrorSubstring;
-        if (!YoriLibFileFiltParseColorString(&DuContext.ColorRules, &Combined, &ErrorSubstring)) {
+        if (!YoriLibFilFltParseColorStr(&DuContext.ColorRules, &Combined, &ErrorSubstring)) {
             YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("du: parse error at %y\n"), &ErrorSubstring);
         }
         YoriLibFreeStringContents(&Combined);
@@ -964,7 +999,7 @@ ENTRYPOINT(
         YORI_STRING FilesInDirectorySpec;
         YoriLibConstantString(&FilesInDirectorySpec, _T("."));
         YoriLibForEachFile(&FilesInDirectorySpec, MatchFlags, 0, DuFileFoundCallback, NULL, &DuContext);
-        DuReportAndCloseAllActiveStacks(&DuContext, 1);
+        DuReportAndCloseAllActiveStacks(&DuContext, 0);
     } else {
         for (i = StartArg; i < ArgC; i++) {
             YoriLibForEachFile(&ArgV[i], MatchFlags, 0, DuFileFoundCallback, DuFileEnumerateErrorCallback, &DuContext);

@@ -1,5 +1,5 @@
 /**
- * @file lib/clip.c
+ * @file lib/ylclip.c
  *
  * Convert a Yori string containing HTML into a Utf-8 formatted text stream for
  * use in the clipboard.
@@ -28,6 +28,7 @@
 #include <yoripch.h>
 #include <yorilib.h>
 
+#if _WIN32
 /**
  Dummy header.  0.9 is part of the protocol.  The rest contain strings
  that are 8 characters long that can be overwritten with real zero padded
@@ -541,6 +542,8 @@ YoriLibCopyTextRtfAndHtml(
     return TRUE;
 }
 
+#endif
+
 /**
  Copy binary data into the clipboard.
 
@@ -558,6 +561,7 @@ YoriLibCopyBinaryData(
     __in YORI_ALLOC_SIZE_T BufferLength
     )
 {
+#if _WIN32
     HANDLE hMem;
     HANDLE hClip;
     PUCHAR pMem;
@@ -629,6 +633,11 @@ YoriLibCopyBinaryData(
     DllUser32.pCloseClipboard();
     GlobalFree(hMem);
     return TRUE;
+#else
+    UNREFERENCED_PARAMETER(Buffer);
+    UNREFERENCED_PARAMETER(BufferLength);
+    return FALSE;
+#endif
 }
 
 
@@ -644,6 +653,7 @@ YoriLibPasteBinaryData(
     __out PYORI_ALLOC_SIZE_T BufferLength
     )
 {
+#if _WIN32
     HANDLE hMem;
     PUCHAR pMem;
     SIZE_T ClipboardBufferLength;
@@ -727,6 +737,11 @@ YoriLibPasteBinaryData(
     *BufferLength = LocalBufferLength;
 
     return TRUE;
+#else
+    UNREFERENCED_PARAMETER(Buffer);
+    UNREFERENCED_PARAMETER(BufferLength);
+    return FALSE;
+#endif
 }
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1500) && (_MSC_VER <= 1600)
@@ -740,8 +755,9 @@ YoriLibPasteBinaryData(
  @return TRUE if the system clipboard is available, FALSE if it is not.
  */
 BOOLEAN
-YoriLibIsSystemClipboardAvailable(VOID)
+YoriLibIsSystemClipboardAvail(VOID)
 {
+#if _WIN32
     YoriLibLoadUser32Functions();
 
     if (DllUser32.pOpenClipboard == NULL ||
@@ -754,6 +770,9 @@ YoriLibIsSystemClipboardAvailable(VOID)
     }
 
     return TRUE;
+#else
+    return FALSE;
+#endif
 }
 
 /**
@@ -785,13 +804,15 @@ YoriLibEmptyProcessClipboard(VOID)
  */
 __success(return)
 BOOL
-YoriLibCopyTextWithProcessFallback(
+YoriLibCopyTextProcFallback(
     __in PYORI_STRING Buffer
     )
 {
-    if (YoriLibIsSystemClipboardAvailable()) {
+#if _WIN32
+    if (YoriLibIsSystemClipboardAvail()) {
         return YoriLibCopyText(Buffer);
     }
+#endif
 
     if (Buffer->LengthInChars > YoriLibProcessClipboard.LengthAllocated) {
         if (!YoriLibReallocStringNoContents(&YoriLibProcessClipboard, Buffer->LengthInChars)) {
@@ -817,13 +838,15 @@ YoriLibCopyTextWithProcessFallback(
  */
 __success(return)
 BOOL
-YoriLibPasteTextWithProcessFallback(
+YoriLibPasteTextProcFallback(
     __inout PYORI_STRING Buffer
     )
 {
-    if (YoriLibIsSystemClipboardAvailable()) {
+#if _WIN32
+    if (YoriLibIsSystemClipboardAvail()) {
         return YoriLibPasteText(Buffer);
     }
+#endif
 
     if (YoriLibProcessClipboard.LengthInChars + 1 > Buffer->LengthAllocated) {
         if (!YoriLibReallocStringNoContents(Buffer, (YORI_ALLOC_SIZE_T)(YoriLibProcessClipboard.LengthInChars + 1))) {

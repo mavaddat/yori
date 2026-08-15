@@ -156,7 +156,7 @@ YoriLibStreamEnumFileFoundCallback(
             //  Update stream information
             //
 
-            YoriLibUpdateFindDataFromFileInformation(&BogusFileInfo, StreamContext->FullPathWithStream.StartOfString, FALSE);
+            YoriLibUpdateFindDataFromFile(&BogusFileInfo, StreamContext->FullPathWithStream.StartOfString, FALSE);
 
 
             Result = StreamContext->UserCallback(&StreamContext->FullPathWithStream,
@@ -250,7 +250,7 @@ YoriLibStreamEnumFileFoundCallback(
                         //  Update stream information
                         //
 
-                        YoriLibUpdateFindDataFromFileInformation(&BogusFileInfo, StreamContext->FullPathWithStream.StartOfString, FALSE);
+                        YoriLibUpdateFindDataFromFile(&BogusFileInfo, StreamContext->FullPathWithStream.StartOfString, FALSE);
 
                         Result = StreamContext->UserCallback(&StreamContext->FullPathWithStream,
                                                              &BogusFileInfo,

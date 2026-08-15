@@ -70,9 +70,11 @@ SdirCollectSummary(
 
     Summary->TotalSize += SdirFileSizeFromLargeInt(&Entry->FileSize);
 
+#if _WIN32
     if (Opts->FtCompressedFileSize.Flags & SDIR_FEATURE_COLLECT) {
         Summary->CompressedSize += SdirFileSizeFromLargeInt(&Entry->CompressedFileSize);
     }
+#endif
 
     return TRUE;
 }
@@ -134,6 +136,7 @@ SdirDisplayFileAccessTime (
     return SdirDisplayFileTime(Buffer, Attributes, &Entry->AccessTime);
 }
 
+#if _WIN32
 /**
  Take the data inside a directory entry, convert it to a formatted string, and
  output the result to a buffer for a file's allocated range count.
@@ -176,6 +179,7 @@ SdirDisplayAllocatedRangeCount (
     }
     return 6;
 }
+#endif
 
 /**
  Take the data inside a directory entry, convert it to a formatted string, and
@@ -203,6 +207,7 @@ SdirDisplayAllocationSize (
     return SdirDisplayGenericSize(Buffer, Attributes, &Entry->AllocationSize);
 }
 
+#if _WIN32
 /**
  Take the data inside a directory entry, convert it to a formatted string, and
  output the result to a buffer for an executable's CPU architecture.
@@ -490,6 +495,7 @@ SdirDisplayEffectivePermissions (
     }
     return PairCount + 1;
 }
+#endif
 
 /**
  Take the data inside a directory entry, convert it to a formatted string, and
@@ -641,6 +647,7 @@ SdirDisplayFileSize (
 {
     if (Buffer) {
         if (Entry->FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) {
+#if _WIN32
             if (Entry->ReparseTag == IO_REPARSE_TAG_SYMLINK) {
                 SdirPasteStr(Buffer, _T(" <LNK>"), Entry->RenderAttributes, 6);
             } else if (Entry->ReparseTag == IO_REPARSE_TAG_MOUNT_POINT) {
@@ -648,8 +655,11 @@ SdirDisplayFileSize (
             } else if (Entry->ReparseTag == IO_REPARSE_TAG_APPEXECLINK) {
                 SdirPasteStr(Buffer, _T(" <APP>"), Entry->RenderAttributes, 6);
             } else {
+#endif
                 return SdirDisplayGenericSize(Buffer, Attributes, &Entry->FileSize);
+#if _WIN32
             }
+#endif
             return 6;
         } else if (Entry->FileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
             SdirPasteStr(Buffer, _T(" <DIR>"), Entry->RenderAttributes, 6);
@@ -661,6 +671,7 @@ SdirDisplayFileSize (
     return 6;
 }
 
+#if _WIN32
 /**
  Take the data inside a directory entry, convert it to a formatted string, and
  output the result to a buffer for a file's version string.
@@ -744,6 +755,7 @@ SdirDisplayFragmentCount (
     }
     return 6;
 }
+#endif
 
 /**
  Take the data inside a directory entry, convert it to a formatted string, and
@@ -781,6 +793,7 @@ SdirDisplayLinkCount (
     return 4;
 }
 
+#if _WIN32
 /**
  Take the data inside a directory entry, convert it to a formatted string, and
  output the result to a buffer for a file's object ID.
@@ -921,6 +934,7 @@ SdirDisplayReparseTag (
     }
     return SdirDisplayHex32(Buffer, Attributes, Tag);
 }
+#endif
 
 /**
  Take the data inside a directory entry, convert it to a formatted string, and
@@ -969,6 +983,7 @@ SdirDisplayShortName (
     return CurrentChar;
 }
 
+#if _WIN32
 /**
  Take the data inside a directory entry, convert it to a formatted string, and
  output the result to a buffer for an executable's subsystem.
@@ -1154,6 +1169,7 @@ SdirDisplayVersion(
     }
     return 23;
 }
+#endif
 
 /**
  Display the summary text to the output device.
@@ -1196,6 +1212,7 @@ SdirDisplaySummary(
     SdirPasteStr(&Buffer[CurrentChar], _T(" used,"), DefaultAttributes, 6);
     CurrentChar = CurrentChar + 6;
 
+#if _WIN32
     if (Opts->FtCompressedFileSize.Flags & SDIR_FEATURE_DISPLAY) {
         Size.HighPart = 0;
         SdirFileSizeFromLargeInt(&Size) = Summary->CompressedSize;
@@ -1204,6 +1221,7 @@ SdirDisplaySummary(
         SdirPasteStr(&Buffer[CurrentChar], _T(" compressed,"), DefaultAttributes, 12);
         CurrentChar = CurrentChar + 12;
     }
+#endif
 
     CurrentChar = CurrentChar + SdirDisplayGenericSize(&Buffer[CurrentChar], Opts->FtFileSize.HighlightColor, &Summary->VolumeSize);
     SdirPasteStr(&Buffer[CurrentChar], _T(" vol size,"), DefaultAttributes, 10);
@@ -1290,14 +1308,16 @@ SdirDisplayFileWriteTime (
  executable file.  Each entry refers to the offset within the options
  structure which is where any dynamic configuration is recorded.
 */
-const SDIR_OPT
+CONST SDIR_OPT
 SdirOptions[] = {
 
+#if _WIN32
     {OPT_OS(FtAllocatedRangeCount),          _T("ac"),
         {SDIR_FEATURE_ALLOW_DISPLAY|SDIR_FEATURE_ALLOW_SORT, {YORILIB_ATTRCTRL_WINDOW_BG, FOREGROUND_RED|FOREGROUND_GREEN}},
         SdirDisplayAllocatedRangeCount,      YoriLibCollectAllocatedRangeCount,
         YoriLibCompareAllocatedRangeCount,   NULL,
         YoriLibGenerateAllocatedRangeCount,  "allocated range count"},
+#endif
 
     {OPT_OS(FtAccessDate),                   _T("ad"),
         {SDIR_FEATURE_ALLOW_DISPLAY|SDIR_FEATURE_ALLOW_SORT, {YORILIB_ATTRCTRL_WINDOW_BG, FOREGROUND_GREEN|FOREGROUND_BLUE}},
@@ -1305,11 +1325,13 @@ SdirOptions[] = {
         YoriLibCompareAccessDate,            NULL,
         YoriLibGenerateAccessDate,           "access date"},
 
+#if _WIN32
     {OPT_OS(FtArch),                         _T("ar"),
         {SDIR_FEATURE_ALLOW_DISPLAY|SDIR_FEATURE_ALLOW_SORT, {YORILIB_ATTRCTRL_WINDOW_BG, FOREGROUND_RED|FOREGROUND_GREEN|FOREGROUND_INTENSITY}},
         SdirDisplayArch,                     YoriLibCollectArch,
         YoriLibCompareArch,                  NULL,
         YoriLibGenerateArch,                 "CPU architecture"},
+#endif
 
     {OPT_OS(FtAllocationSize),               _T("as"),
         {SDIR_FEATURE_ALLOW_DISPLAY|SDIR_FEATURE_ALLOW_SORT, {YORILIB_ATTRCTRL_WINDOW_BG, FOREGROUND_RED|FOREGROUND_GREEN|FOREGROUND_INTENSITY}},
@@ -1323,11 +1345,13 @@ SdirOptions[] = {
         YoriLibCompareAccessTime,            NULL,
         YoriLibGenerateAccessTime,           "access time"},
 
+#if _WIN32
     {OPT_OS(FtCompressionAlgorithm),         _T("ca"),
         {SDIR_FEATURE_ALLOW_DISPLAY|SDIR_FEATURE_ALLOW_SORT, {YORILIB_ATTRCTRL_WINDOW_BG, FOREGROUND_RED|FOREGROUND_GREEN}},
         SdirDisplayCompressionAlgorithm,     YoriLibCollectCompressionAlgorithm,
         YoriLibCompareCompressionAlgorithm,  NULL,
         YoriLibGenerateCompressionAlgorithm, "compression algorithm"},
+#endif
 
     {OPT_OS(FtCreateDate),                   _T("cd"),
         {SDIR_FEATURE_ALLOW_DISPLAY|SDIR_FEATURE_ALLOW_SORT, {YORILIB_ATTRCTRL_WINDOW_BG, FOREGROUND_RED|FOREGROUND_GREEN}},
@@ -1335,6 +1359,7 @@ SdirOptions[] = {
         YoriLibCompareCreateDate,            NULL,
         YoriLibGenerateCreateDate,           "create date"},
 
+#if _WIN32
     {OPT_OS(FtCaseSensitivity),              _T("ci"),
         {SDIR_FEATURE_ALLOW_DISPLAY|SDIR_FEATURE_ALLOW_SORT, {YORILIB_ATTRCTRL_WINDOW_BG, FOREGROUND_RED|FOREGROUND_GREEN}},
         SdirDisplayCaseSensitivity,          YoriLibCollectCaseSensitivity,
@@ -1346,6 +1371,7 @@ SdirOptions[] = {
         SdirDisplayCompressedFileSize,       YoriLibCollectCompressedFileSize,
         YoriLibCompareCompressedFileSize,    NULL,
         YoriLibGenerateCompressedFileSize,   "compressed size"},
+#endif
 
     {OPT_OS(FtCreateTime),                   _T("ct"),
         {SDIR_FEATURE_ALLOW_DISPLAY|SDIR_FEATURE_ALLOW_SORT, {YORILIB_ATTRCTRL_WINDOW_BG, FOREGROUND_RED|FOREGROUND_GREEN}},
@@ -1353,11 +1379,13 @@ SdirOptions[] = {
         YoriLibCompareCreateTime,            NULL,
         YoriLibGenerateCreateTime,           "create time"},
 
+#if _WIN32
     {OPT_OS(FtDescription),                  _T("de"),
         {SDIR_FEATURE_ALLOW_DISPLAY|SDIR_FEATURE_ALLOW_SORT, {YORILIB_ATTRCTRL_WINDOW_BG, FOREGROUND_RED|FOREGROUND_GREEN}},
         SdirDisplayDescription,              YoriLibCollectDescription,
         YoriLibCompareDescription,           NULL,
         YoriLibGenerateDescription,          "description"},
+#endif
 
     {OPT_OS(FtDirectory),                    _T("dr"),
         {SDIR_FEATURE_ALLOW_SORT, {YORILIB_ATTRCTRL_FILE, 0}},
@@ -1365,11 +1393,13 @@ SdirOptions[] = {
         YoriLibCompareDirectory,             NULL,
         YoriLibGenerateDirectory,            "directory"},
 
+#if _WIN32
     {OPT_OS(FtEffectivePermissions),         _T("ep"),
         {SDIR_FEATURE_ALLOW_DISPLAY|SDIR_FEATURE_ALLOW_SORT, {YORILIB_ATTRCTRL_WINDOW_BG, FOREGROUND_RED|FOREGROUND_GREEN}},
         SdirDisplayEffectivePermissions,     YoriLibCollectEffectivePermissions,
         YoriLibCompareEffectivePermissions,  YoriLibBitwiseEffectivePermissions,
         YoriLibGenerateEffectivePermissions, "effective permissions"},
+#endif
 
     {OPT_OS(FtError),                        _T("er"),
         {0, {YORILIB_ATTRCTRL_WINDOW_BG, FOREGROUND_RED|FOREGROUND_INTENSITY}},
@@ -1383,11 +1413,13 @@ SdirOptions[] = {
         YoriLibCompareFileAttributes,        YoriLibBitwiseFileAttributes,
         YoriLibGenerateFileAttributes,       "file attributes"},
 
+#if _WIN32
     {OPT_OS(FtFragmentCount),                _T("fc"),
         {SDIR_FEATURE_ALLOW_DISPLAY|SDIR_FEATURE_ALLOW_SORT, {YORILIB_ATTRCTRL_WINDOW_BG, FOREGROUND_RED|FOREGROUND_GREEN}},
         SdirDisplayFragmentCount,            YoriLibCollectFragmentCount,
         YoriLibCompareFragmentCount,         NULL,
         YoriLibGenerateFragmentCount,        "fragment count"},
+#endif
 
     {OPT_OS(FtFileExtension),                _T("fe"),
         {SDIR_FEATURE_DISPLAY|SDIR_FEATURE_COLLECT|SDIR_FEATURE_ALLOW_SORT|SDIR_FEATURE_FIXED_COLOR, {0, 0}},
@@ -1413,11 +1445,13 @@ SdirOptions[] = {
         YoriLibCompareFileSize,              NULL,
         YoriLibGenerateFileSize,             "file size"},
 
+#if _WIN32
     {OPT_OS(FtFileVersionString),            _T("fv"),
         {SDIR_FEATURE_ALLOW_DISPLAY|SDIR_FEATURE_ALLOW_SORT, {YORILIB_ATTRCTRL_WINDOW_BG, FOREGROUND_RED|FOREGROUND_GREEN}},
         SdirDisplayFileVersionString,        YoriLibCollectFileVersionString,
         YoriLibCompareFileVersionString,     NULL,
         YoriLibGenerateFileVersionString,    "file version string"},
+#endif
 
     {OPT_OS(FtGrid),                         _T("gr"),
         {0, {YORILIB_ATTRCTRL_WINDOW_BG, FOREGROUND_GREEN}},
@@ -1437,6 +1471,7 @@ SdirOptions[] = {
         NULL,                                NULL,
         NULL,                                "number files"},
 
+#if _WIN32
 #ifdef UNICODE
     {OPT_OS(FtNamedStreams),                 _T("ns"),
         {SDIR_FEATURE_ALLOW_DISPLAY|SDIR_FEATURE_FIXED_COLOR, {0, 0}},
@@ -1476,6 +1511,7 @@ SdirOptions[] = {
         YoriLibCompareStreamCount,           NULL,
         YoriLibGenerateStreamCount,          "stream count"},
 #endif
+#endif
 
     {OPT_OS(FtSummary),                      _T("sm"),
         {SDIR_FEATURE_DISPLAY|SDIR_FEATURE_COLLECT|SDIR_FEATURE_ALLOW_DISPLAY, {YORILIB_ATTRCTRL_WINDOW_BG, FOREGROUND_RED|FOREGROUND_GREEN|FOREGROUND_BLUE}},
@@ -1489,6 +1525,7 @@ SdirOptions[] = {
         YoriLibCompareShortName,             NULL,
         YoriLibGenerateShortName,            "short name"},
 
+#if _WIN32
     {OPT_OS(FtSubsystem),                    _T("ss"),
         {SDIR_FEATURE_ALLOW_DISPLAY|SDIR_FEATURE_ALLOW_SORT, {YORILIB_ATTRCTRL_WINDOW_BG, FOREGROUND_RED|FOREGROUND_GREEN}},
         SdirDisplaySubsystem,                YoriLibCollectSubsystem,
@@ -1506,6 +1543,7 @@ SdirOptions[] = {
         SdirDisplayVersion,                  YoriLibCollectVersion,
         YoriLibCompareVersion,               NULL,
         YoriLibGenerateVersion,              "version"},
+#endif
 
     {OPT_OS(FtWriteDate),                    _T("wd"),
         {SDIR_FEATURE_ALLOW_DISPLAY|SDIR_FEATURE_ALLOW_SORT, {YORILIB_ATTRCTRL_WINDOW_BG, FOREGROUND_GREEN}},
@@ -1536,26 +1574,35 @@ SdirGetNumSdirOptions(VOID)
  in which we will render each piece of metadata.  The table above is
  the order we display help.
  */
-const SDIR_EXEC
+CONST SDIR_EXEC
 SdirExec[] = {
     {OPT_OS(FtFileId),               SdirDisplayFileId},
+#if _WIN32
     {OPT_OS(FtUsn),                  SdirDisplayUsn},
+#endif
     {OPT_OS(FtFileSize),             SdirDisplayFileSize},
+#if _WIN32
     {OPT_OS(FtCompressedFileSize),   SdirDisplayCompressedFileSize},
+#endif
     {OPT_OS(FtAllocationSize),       SdirDisplayAllocationSize},
     {OPT_OS(FtFileAttributes),       SdirDisplayFileAttributes},
+#if _WIN32
     {OPT_OS(FtObjectId),             SdirDisplayObjectId},
     {OPT_OS(FtReparseTag),           SdirDisplayReparseTag},
+#endif
     {OPT_OS(FtLinkCount),            SdirDisplayLinkCount},
+#if _WIN32
     {OPT_OS(FtStreamCount),          SdirDisplayStreamCount},
     {OPT_OS(FtOwner),                SdirDisplayOwner},
     {OPT_OS(FtEffectivePermissions), SdirDisplayEffectivePermissions},
+#endif
     {OPT_OS(FtCreateDate),           SdirDisplayFileCreateDate},
     {OPT_OS(FtCreateTime),           SdirDisplayFileCreateTime},
     {OPT_OS(FtWriteDate),            SdirDisplayFileWriteDate},
     {OPT_OS(FtWriteTime),            SdirDisplayFileWriteTime},
     {OPT_OS(FtAccessDate),           SdirDisplayFileAccessDate},
     {OPT_OS(FtAccessTime),           SdirDisplayFileAccessTime},
+#if _WIN32
     {OPT_OS(FtVersion),              SdirDisplayVersion},
     {OPT_OS(FtOsVersion),            SdirDisplayOsVersion},
     {OPT_OS(FtArch),                 SdirDisplayArch},
@@ -1566,6 +1613,7 @@ SdirExec[] = {
     {OPT_OS(FtFragmentCount),        SdirDisplayFragmentCount},
     {OPT_OS(FtAllocatedRangeCount),  SdirDisplayAllocatedRangeCount},
     {OPT_OS(FtCaseSensitivity),      SdirDisplayCaseSensitivity},
+#endif
 };
 
 /**

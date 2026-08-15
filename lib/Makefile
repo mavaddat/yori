@@ -11,9 +11,7 @@ OBJS=\
 	 cabinet.obj  \
 	 call.obj     \
 	 cancel.obj   \
-	 clip.obj     \
 	 cmdline.obj  \
-	 color.obj    \
 	 condrv.obj   \
 	 cpuinfo.obj  \
 	 cshot.obj    \
@@ -32,8 +30,6 @@ OBJS=\
 	 ep_yori.obj  \
 	 filecomp.obj \
 	 fileenum.obj \
-	 filefilt.obj \
-	 fileinfo.obj \
 	 fullpath.obj \
 	 group.obj    \
 	 hash.obj     \
@@ -66,6 +62,11 @@ OBJS=\
 	 update.obj   \
 	 util.obj     \
 	 vt.obj       \
+	 ylclip.obj   \
+	 ylcolor.obj  \
+	 ylfilcol.obj \
+	 ylfilflt.obj \
+	 ylfilinf.obj \
 	 ylhomedr.obj \
 	 ylstralc.obj \
 	 ylstrcat.obj \
@@ -77,6 +78,7 @@ OBJS=\
 	 ylstrnum.obj \
 	 ylstrsrt.obj \
 	 ylstrtrm.obj \
+	 ylticktm.obj \
 	 ylvolpth.obj \
 	 ylvtdbg.obj  \
 

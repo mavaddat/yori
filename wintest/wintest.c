@@ -41,22 +41,22 @@
  */
 VOID
 WinTestExitButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, TRUE);
 }
 
-PYORI_WIN_WINDOW_HANDLE
+PYORIWIN_WINDOW_HANDLE
 WinTestCreateWindow(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr,
+    __in PYORIWIN_WINMGR_HANDLE WinMgr,
     __in PCYORI_STRING Title,
     __in COORD Offset
     )
 {
-    PYORI_WIN_WINDOW_HANDLE Window;
+    PYORIWIN_WINDOW_HANDLE Window;
     COORD WindowSize;
     SMALL_RECT ButtonArea;
     SMALL_RECT LabelArea;
@@ -66,7 +66,7 @@ WinTestCreateWindow(
     YORI_ALLOC_SIZE_T StringOffset;
     YORI_ALLOC_SIZE_T WordLength;
     YORI_ALLOC_SIZE_T WordOffset;
-    PYORI_WIN_CTRL_HANDLE Ctrl;
+    PYORIWIN_CTRL_HANDLE Ctrl;
 
     if (!YoriWinGetWinMgrDimensions(WinMgr, &WindowSize)) {
         return NULL;
@@ -77,7 +77,7 @@ WinTestCreateWindow(
     ButtonArea.Top = Offset.Y;
     ButtonArea.Bottom = ButtonArea.Top + WindowSize.Y / 8 * 5;
 
-    if (!YoriWinCreateWindowEx(WinMgr, &ButtonArea, YORI_WIN_WINDOW_STYLE_BORDER_SINGLE | YORI_WIN_WINDOW_STYLE_SHADOW_SOLID, Title, &Window)) {
+    if (!YoriWinCreateWindowEx(WinMgr, &ButtonArea, YORIWIN_WIN_STY_BORDER_SINGLE | YORIWIN_WIN_STY_SHADOW_SOLID, Title, &Window)) {
         return NULL;
     }
 
@@ -93,7 +93,7 @@ WinTestCreateWindow(
     ButtonArea.Left = (SHORT)(WindowSize.X - 2 - WINTEST_BUTTON_WIDTH - 1);
     ButtonArea.Right = (WORD)(ButtonArea.Left + 1 + WINTEST_BUTTON_WIDTH);
 
-    Ctrl = YoriWinButtonCreate(Window, &ButtonArea, &Caption, YORI_WIN_BUTTON_STYLE_CANCEL, WinTestExitButtonClicked);
+    Ctrl = YoriWinButtonCreate(Window, &ButtonArea, &Caption, YORIWIN_BUTTON_STY_CANCEL, WinTestExitButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Window);
         return NULL;
@@ -160,14 +160,14 @@ __success(return)
 BOOL
 WinTest(VOID)
 {
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr;
-    PYORI_WIN_WINDOW_HANDLE Window1;
-    PYORI_WIN_WINDOW_HANDLE Window2;
+    PYORIWIN_WINMGR_HANDLE WinMgr;
+    PYORIWIN_WINDOW_HANDLE Window1;
+    PYORIWIN_WINDOW_HANDLE Window2;
     COORD Offset;
     DWORD_PTR Result;
     YORI_STRING Title;
 
-    if (!YoriWinOpenWindowManager(FALSE, YoriWinColorTableDefault, &WinMgr)) {
+    if (!YoriWinOpenWinMgr(FALSE, YoriWinColorTableDefault, &WinMgr)) {
         return FALSE;
     }
 
@@ -178,7 +178,7 @@ WinTest(VOID)
 
     Window1 = WinTestCreateWindow(WinMgr, &Title, Offset);
     if (Window1 == NULL) {
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
@@ -190,7 +190,7 @@ WinTest(VOID)
     Window2 = WinTestCreateWindow(WinMgr, &Title, Offset);
     if (Window2 == NULL) {
         YoriWinDestroyWindow(Window1);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
@@ -201,7 +201,7 @@ WinTest(VOID)
 
     YoriWinDestroyWindow(Window2);
     YoriWinDestroyWindow(Window1);
-    YoriWinCloseWindowManager(WinMgr);
+    YoriWinCloseWinMgr(WinMgr);
     return (BOOL)Result;
 }
 

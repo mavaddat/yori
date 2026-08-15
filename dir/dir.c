@@ -191,7 +191,7 @@ typedef struct _DIR_CONTEXT {
     /**
      Color information to display against matching files.
      */
-    YORI_LIB_FILE_FILTER ColorRules;
+    YORILIB_FILE_FILTER ColorRules;
 
     /**
      A buffer allocated to fetch reparse data.  This is here because we
@@ -293,8 +293,8 @@ DirOutputBeginningOfDirectorySummary(
         VtAttribute.StartOfString = VtAttributeBuffer;
         VtAttribute.LengthAllocated = sizeof(VtAttributeBuffer)/sizeof(VtAttributeBuffer[0]);
 
-        if (!YoriLibUpdateFindDataFromFileInformation(&FileInfo, DirContext->CurrentDirectoryName.StartOfString, TRUE) ||
-            !YoriLibFileFiltCheckColorMatch(&DirContext->ColorRules, &DirContext->CurrentDirectoryName, &FileInfo, &Attribute)) {
+        if (!YoriLibUpdateFindDataFromFile(&FileInfo, DirContext->CurrentDirectoryName.StartOfString, TRUE) ||
+            !YoriLibFilFltCheckColorMatch(&DirContext->ColorRules, &DirContext->CurrentDirectoryName, &FileInfo, &Attribute)) {
 
             Attribute.Ctrl = YORILIB_ATTRCTRL_WINDOW_BG | YORILIB_ATTRCTRL_WINDOW_FG;
             Attribute.Win32Attr = (UCHAR)YoriLibVtGetDefaultColor();
@@ -513,7 +513,7 @@ DirInitializeVtAttributeForFile(
     YORILIB_COLOR_ATTRIBUTES Attribute;
 
     if (DirContext->ColorRules.NumberCriteria) {
-        if (!YoriLibFileFiltCheckColorMatch(&DirContext->ColorRules, FilePath, FileInfo, &Attribute)) {
+        if (!YoriLibFilFltCheckColorMatch(&DirContext->ColorRules, FilePath, FileInfo, &Attribute)) {
             Attribute.Ctrl = YORILIB_ATTRCTRL_WINDOW_BG | YORILIB_ATTRCTRL_WINDOW_FG;
             Attribute.Win32Attr = (UCHAR)YoriLibVtGetDefaultColor();
         }
@@ -933,7 +933,7 @@ DirFileFoundCallback(
                             //  Update stream information
                             //
 
-                            if (YoriLibUpdateFindDataFromFileInformation(&BogusFileInfo, StreamFullPath.StartOfString, FALSE)) {
+                            if (YoriLibUpdateFindDataFromFile(&BogusFileInfo, StreamFullPath.StartOfString, FALSE)) {
                                 DirInitializeVtAttributeForFile(DirContext, &StreamFullPath, &BogusFileInfo, &VtAttribute, &VtReset);
                             }
                         }
@@ -1192,8 +1192,8 @@ ENTRYPOINT(
     if (DisplayColor) {
         YORI_STRING ErrorSubstring;
         YORI_STRING Combined;
-        if (YoriLibLoadCombinedFileColorString(NULL, &Combined)) {
-            if (!YoriLibFileFiltParseColorString(&DirContext.ColorRules, &Combined, &ErrorSubstring)) {
+        if (YoriLibLoadCombinedFileColorStr(NULL, &Combined)) {
+            if (!YoriLibFilFltParseColorStr(&DirContext.ColorRules, &Combined, &ErrorSubstring)) {
                 YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("dir: parse error at %y\n"), &ErrorSubstring);
             }
             YoriLibFreeStringContents(&Combined);
@@ -1258,7 +1258,7 @@ ENTRYPOINT(
     }
 
     YoriLibFreeStringContents(&DirContext.CurrentDirectoryName);
-    YoriLibFileFiltFreeFilter(&DirContext.ColorRules);
+    YoriLibFilFltFreeFilter(&DirContext.ColorRules);
     if (DirContext.ReparseDataBuffer != NULL) {
         YoriLibFree(DirContext.ReparseDataBuffer);
     }

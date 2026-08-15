@@ -97,7 +97,7 @@ CONST REGEDIT_KEY_NAME_PAIR RegeditRootKeys[] = {
  */
 VOID
 RegeditDisplayWin32Error(
-    __in PYORI_WIN_CTRL_HANDLE Parent,
+    __in PYORIWIN_CTRL_HANDLE Parent,
     __in DWORD Error
     )
 {
@@ -112,7 +112,7 @@ RegeditDisplayWin32Error(
     ErrText = YoriLibGetWinErrorText(Error);
     YoriLibConstantString(&Text, ErrText);
 
-    YoriDlgMessageBox(YoriWinGetWindowManagerHandle(YoriWinGetWindowFromWindowCtrl(Parent)),
+    YoriDlgMessageBox(YoriWinGetWinMgrHandle(YoriWinGetWindowFromWindowCtrl(Parent)),
                       &Title,
                       &Text,
                       1,
@@ -130,14 +130,14 @@ RegeditDisplayWin32Error(
  */
 VOID
 RegeditKeyListSelectionChanged(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PREGEDIT_CONTEXT RegeditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    RegeditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    RegeditContext = YoriWinGetCtrlContext(Parent);
 
     RegeditContext->MostRecentListSelectedControl = RegeditControlKeyList;
 }
@@ -149,14 +149,14 @@ RegeditKeyListSelectionChanged(
  */
 VOID
 RegeditValueListSelectionChanged(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PREGEDIT_CONTEXT RegeditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    RegeditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    RegeditContext = YoriWinGetCtrlContext(Parent);
 
     RegeditContext->MostRecentListSelectedControl = RegeditControlValueList;
 }
@@ -188,14 +188,14 @@ RegeditValueListSelectionChanged(
 VOID
 RegeditPopulateKeyValueList(
     __in PREGEDIT_CONTEXT RegeditContext,
-    __in PYORI_WIN_CTRL_HANDLE KeyListCtrl,
-    __in PYORI_WIN_CTRL_HANDLE ValueListCtrl,
+    __in PYORIWIN_CTRL_HANDLE KeyListCtrl,
+    __in PYORIWIN_CTRL_HANDLE ValueListCtrl,
     __in_opt PYORI_STRING SelectKey,
     __in_opt PYORI_STRING SelectValue
     )
 {
     YORI_ALLOC_SIZE_T Index;
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     YORI_ALLOC_SIZE_T ArrayCount;
     DWORD BytesRequired;
     YORI_ALLOC_SIZE_T ArrayElementSize;
@@ -205,7 +205,7 @@ RegeditPopulateKeyValueList(
     DWORD MaxSubKeyLength;
     PYORI_STRING StringArray;
 
-    Parent = YoriWinGetControlParent(KeyListCtrl);
+    Parent = YoriWinGetCtrlParent(KeyListCtrl);
     YoriWinListClearAllItems(KeyListCtrl);
     YoriWinListClearAllItems(ValueListCtrl);
 
@@ -467,11 +467,11 @@ RegeditPopulateKeyValueList(
 VOID
 RegeditRefreshView(
     __in PREGEDIT_CONTEXT RegeditContext,
-    __in PYORI_WIN_CTRL_HANDLE Parent
+    __in PYORIWIN_CTRL_HANDLE Parent
     )
 {
-    PYORI_WIN_CTRL_HANDLE KeyList;
-    PYORI_WIN_CTRL_HANDLE ValueList;
+    PYORIWIN_CTRL_HANDLE KeyList;
+    PYORIWIN_CTRL_HANDLE ValueList;
     YORI_STRING PreviouslySelectedKey;
     YORI_STRING PreviouslySelectedValue;
     PYORI_STRING SelectKey;
@@ -541,9 +541,9 @@ RegeditRefreshView(
 VOID
 RegeditDeleteSelectedKey(
     __in PREGEDIT_CONTEXT RegeditContext,
-    __in PYORI_WIN_CTRL_HANDLE Parent,
-    __in PYORI_WIN_CTRL_HANDLE KeyList,
-    __in PYORI_WIN_CTRL_HANDLE ValueList,
+    __in PYORIWIN_CTRL_HANDLE Parent,
+    __in PYORIWIN_CTRL_HANDLE KeyList,
+    __in PYORIWIN_CTRL_HANDLE ValueList,
     __in YORI_ALLOC_SIZE_T SelectedKeyIndex
     )
 {
@@ -598,9 +598,9 @@ RegeditDeleteSelectedKey(
 VOID
 RegeditDeleteSelectedValue(
     __in PREGEDIT_CONTEXT RegeditContext,
-    __in PYORI_WIN_CTRL_HANDLE Parent,
-    __in PYORI_WIN_CTRL_HANDLE KeyList,
-    __in PYORI_WIN_CTRL_HANDLE ValueList,
+    __in PYORIWIN_CTRL_HANDLE Parent,
+    __in PYORIWIN_CTRL_HANDLE KeyList,
+    __in PYORIWIN_CTRL_HANDLE ValueList,
     __in YORI_ALLOC_SIZE_T SelectedValueIndex
     )
 {
@@ -651,9 +651,9 @@ RegeditDeleteSelectedValue(
 VOID
 RegeditEditSelectedValue(
     __in PREGEDIT_CONTEXT RegeditContext,
-    __in PYORI_WIN_CTRL_HANDLE Parent,
-    __in PYORI_WIN_CTRL_HANDLE KeyList,
-    __in PYORI_WIN_CTRL_HANDLE ValueList,
+    __in PYORIWIN_CTRL_HANDLE Parent,
+    __in PYORIWIN_CTRL_HANDLE KeyList,
+    __in PYORIWIN_CTRL_HANDLE ValueList,
     __in YORI_ALLOC_SIZE_T SelectedValueIndex
     )
 {
@@ -748,7 +748,7 @@ RegeditEditSelectedValue(
                     break;
             }
 
-            YoriDlgMessageBox(YoriWinGetWindowManagerHandle(YoriWinGetWindowFromWindowCtrl(Parent)),
+            YoriDlgMessageBox(YoriWinGetWinMgrHandle(YoriWinGetWindowFromWindowCtrl(Parent)),
                               &Title,
                               &Title,
                               1,
@@ -773,7 +773,7 @@ RegeditEditSelectedValue(
                 YoriLibCloneString(&NewValueName, &OriginalValueName);
 
                 if (RegeditEditStringValue(RegeditContext,
-                                           YoriWinGetWindowManagerHandle(YoriWinGetWindowFromWindowCtrl(Parent)),
+                                           YoriWinGetWinMgrHandle(YoriWinGetWindowFromWindowCtrl(Parent)),
                                            &NewValueName,
                                            FALSE,
                                            &Value,
@@ -801,7 +801,7 @@ RegeditEditSelectedValue(
                 YoriLibCloneString(&NewValueName, &OriginalValueName);
 
                 if (RegeditEditNumericValue(RegeditContext,
-                                            YoriWinGetWindowManagerHandle(YoriWinGetWindowFromWindowCtrl(Parent)),
+                                            YoriWinGetWinMgrHandle(YoriWinGetWindowFromWindowCtrl(Parent)),
                                             &NewValueName,
                                             FALSE,
                                             &LongData,
@@ -823,7 +823,7 @@ RegeditEditSelectedValue(
                 YoriLibCloneString(&NewValueName, &OriginalValueName);
 
                 if (RegeditEditNumericValue(RegeditContext,
-                                            YoriWinGetWindowManagerHandle(YoriWinGetWindowFromWindowCtrl(Parent)),
+                                            YoriWinGetWinMgrHandle(YoriWinGetWindowFromWindowCtrl(Parent)),
                                             &NewValueName,
                                             FALSE,
                                             &Data,
@@ -840,7 +840,7 @@ RegeditEditSelectedValue(
                 NativeDataSize = (YORI_ALLOC_SIZE_T)DataSize;
                 YoriLibCloneString(&NewValueName, &OriginalValueName);
                 if (RegeditEditBinaryValue(RegeditContext,
-                                           YoriWinGetWindowManagerHandle(YoriWinGetWindowFromWindowCtrl(Parent)),
+                                           YoriWinGetWinMgrHandle(YoriWinGetWindowFromWindowCtrl(Parent)),
                                            &NewValueName,
                                            FALSE,
                                            &Data,
@@ -931,13 +931,13 @@ RegeditEditSelectedValue(
 VOID
 RegeditNavigateToSelectedKey(
     __in PREGEDIT_CONTEXT RegeditContext,
-    __in PYORI_WIN_CTRL_HANDLE Parent,
-    __in PYORI_WIN_CTRL_HANDLE KeyList,
-    __in PYORI_WIN_CTRL_HANDLE ValueList,
+    __in PYORIWIN_CTRL_HANDLE Parent,
+    __in PYORIWIN_CTRL_HANDLE KeyList,
+    __in PYORIWIN_CTRL_HANDLE ValueList,
     __in YORI_ALLOC_SIZE_T SelectedKeyIndex
     )
 {
-    PYORI_WIN_CTRL_HANDLE KeyCaption;
+    PYORIWIN_CTRL_HANDLE KeyCaption;
     YORI_STRING String;
     YORI_STRING NewCaption;
 
@@ -1023,11 +1023,11 @@ RegeditNavigateToSelectedKey(
  */
 VOID
 RegeditCloseButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, TRUE);
 }
 
@@ -1039,11 +1039,11 @@ RegeditCloseButtonClicked(
  */
 VOID
 RegeditExitButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, TRUE);
 }
 
@@ -1054,18 +1054,18 @@ RegeditExitButtonClicked(
  */
 VOID
 RegeditEditButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE EditMenu;
-    PYORI_WIN_CTRL_HANDLE NewMenu;
-    PYORI_WIN_CTRL_HANDLE DeleteItem;
+    PYORIWIN_CTRL_HANDLE EditMenu;
+    PYORIWIN_CTRL_HANDLE NewMenu;
+    PYORIWIN_CTRL_HANDLE DeleteItem;
 
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PREGEDIT_CONTEXT RegeditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    RegeditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    RegeditContext = YoriWinGetCtrlContext(Parent);
 
     EditMenu = YoriWinMenuBarGetSubmenuHandle(Ctrl, NULL, RegeditContext->EditMenuIndex);
     NewMenu = YoriWinMenuBarGetSubmenuHandle(Ctrl, EditMenu, RegeditContext->NewMenuIndex);
@@ -1088,10 +1088,10 @@ RegeditEditButtonClicked(
  */
 VOID
 RegeditNewKeyButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PREGEDIT_CONTEXT RegeditContext;
     YORI_STRING Title;
     YORI_STRING Value;
@@ -1100,9 +1100,9 @@ RegeditNewKeyButtonClicked(
     HKEY NewKey;
     DWORD Disposition;
 
-    Parent = YoriWinGetControlParent(Ctrl);
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriLibInitEmptyString(&Value);
-    RegeditContext = YoriWinGetControlContext(Parent);
+    RegeditContext = YoriWinGetCtrlContext(Parent);
 
     //
     //  Can't create a key without a hive
@@ -1120,7 +1120,7 @@ RegeditNewKeyButtonClicked(
 
     YoriLibConstantString(&Title, _T("Create new key"));
 
-    if (YoriDlgInput(YoriWinGetWindowManagerHandle(YoriWinGetWindowFromWindowCtrl(Parent)),
+    if (YoriDlgInput(YoriWinGetWinMgrHandle(YoriWinGetWindowFromWindowCtrl(Parent)),
                      &Title,
                      FALSE,
                      &Value)) {
@@ -1143,7 +1143,7 @@ RegeditNewKeyButtonClicked(
             YoriLibConstantString(&Title, _T("Key already exists"));
             YoriLibConstantString(&ButtonText[0], _T("&Ok"));
 
-            YoriDlgMessageBox(YoriWinGetWindowManagerHandle(YoriWinGetWindowFromWindowCtrl(Parent)),
+            YoriDlgMessageBox(YoriWinGetWinMgrHandle(YoriWinGetWindowFromWindowCtrl(Parent)),
                               &Title,
                               &Title,
                               1,
@@ -1168,21 +1168,21 @@ RegeditNewKeyButtonClicked(
  */
 VOID
 RegeditNewStringWithType(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl,
+    __in PYORIWIN_CTRL_HANDLE Ctrl,
     __in DWORD DataType
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PREGEDIT_CONTEXT RegeditContext;
     YORI_STRING ValueName;
     YORI_STRING Value;
     DWORD Err;
     HKEY Key;
 
-    Parent = YoriWinGetControlParent(Ctrl);
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriLibInitEmptyString(&ValueName);
     YoriLibInitEmptyString(&Value);
-    RegeditContext = YoriWinGetControlContext(Parent);
+    RegeditContext = YoriWinGetCtrlContext(Parent);
 
     //
     //  Can't create a value without a hive
@@ -1200,7 +1200,7 @@ RegeditNewStringWithType(
 
 
     if (RegeditEditStringValue(RegeditContext,
-                               YoriWinGetWindowManagerHandle(YoriWinGetWindowFromWindowCtrl(Parent)),
+                               YoriWinGetWinMgrHandle(YoriWinGetWindowFromWindowCtrl(Parent)),
                                &ValueName,
                                FALSE,
                                &Value,
@@ -1230,7 +1230,7 @@ RegeditNewStringWithType(
  */
 VOID
 RegeditNewStringButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
     RegeditNewStringWithType(Ctrl, REG_SZ);
@@ -1243,7 +1243,7 @@ RegeditNewStringButtonClicked(
  */
 VOID
 RegeditNewExpandableStringButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
     RegeditNewStringWithType(Ctrl, REG_EXPAND_SZ);
@@ -1256,10 +1256,10 @@ RegeditNewExpandableStringButtonClicked(
  */
 VOID
 RegeditNewDWORDButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PREGEDIT_CONTEXT RegeditContext;
     YORI_STRING ValueName;
     DWORD Value;
@@ -1267,9 +1267,9 @@ RegeditNewDWORDButtonClicked(
     DWORD Err;
     HKEY Key;
 
-    Parent = YoriWinGetControlParent(Ctrl);
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriLibInitEmptyString(&ValueName);
-    RegeditContext = YoriWinGetControlContext(Parent);
+    RegeditContext = YoriWinGetCtrlContext(Parent);
 
     //
     //  Can't create a value without a hive
@@ -1288,7 +1288,7 @@ RegeditNewDWORDButtonClicked(
     LongValue = 0;
 
     if (RegeditEditNumericValue(RegeditContext,
-                                YoriWinGetWindowManagerHandle(YoriWinGetWindowFromWindowCtrl(Parent)),
+                                YoriWinGetWinMgrHandle(YoriWinGetWindowFromWindowCtrl(Parent)),
                                 &ValueName,
                                 FALSE,
                                 &LongValue,
@@ -1316,19 +1316,19 @@ RegeditNewDWORDButtonClicked(
  */
 VOID
 RegeditNewQWORDButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PREGEDIT_CONTEXT RegeditContext;
     YORI_STRING ValueName;
     YORI_MAX_UNSIGNED_T Value;
     DWORD Err;
     HKEY Key;
 
-    Parent = YoriWinGetControlParent(Ctrl);
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriLibInitEmptyString(&ValueName);
-    RegeditContext = YoriWinGetControlContext(Parent);
+    RegeditContext = YoriWinGetCtrlContext(Parent);
 
     //
     //  Can't create a value without a hive
@@ -1347,7 +1347,7 @@ RegeditNewQWORDButtonClicked(
     Value = 0;
 
     if (RegeditEditNumericValue(RegeditContext,
-                                YoriWinGetWindowManagerHandle(YoriWinGetWindowFromWindowCtrl(Parent)),
+                                YoriWinGetWinMgrHandle(YoriWinGetWindowFromWindowCtrl(Parent)),
                                 &ValueName,
                                 FALSE,
                                 &Value,
@@ -1373,10 +1373,10 @@ RegeditNewQWORDButtonClicked(
  */
 VOID
 RegeditNewBinaryButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PREGEDIT_CONTEXT RegeditContext;
     YORI_STRING ValueName;
     PUCHAR Value;
@@ -1385,9 +1385,9 @@ RegeditNewBinaryButtonClicked(
     DWORD Err;
     HKEY Key;
 
-    Parent = YoriWinGetControlParent(Ctrl);
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriLibInitEmptyString(&ValueName);
-    RegeditContext = YoriWinGetControlContext(Parent);
+    RegeditContext = YoriWinGetCtrlContext(Parent);
 
     //
     //  Can't create a value without a hive
@@ -1407,7 +1407,7 @@ RegeditNewBinaryButtonClicked(
     NativeValueLength = 0;
 
     if (RegeditEditBinaryValue(RegeditContext,
-                               YoriWinGetWindowManagerHandle(YoriWinGetWindowFromWindowCtrl(Parent)),
+                               YoriWinGetWinMgrHandle(YoriWinGetWindowFromWindowCtrl(Parent)),
                                &ValueName,
                                FALSE,
                                &Value,
@@ -1439,17 +1439,17 @@ RegeditNewBinaryButtonClicked(
  */
 VOID
 RegeditDeleteButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
     YORI_ALLOC_SIZE_T ActiveOption;
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PREGEDIT_CONTEXT RegeditContext;
-    PYORI_WIN_CTRL_HANDLE KeyList;
-    PYORI_WIN_CTRL_HANDLE ValueList;
+    PYORIWIN_CTRL_HANDLE KeyList;
+    PYORIWIN_CTRL_HANDLE ValueList;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    RegeditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    RegeditContext = YoriWinGetCtrlContext(Parent);
 
     //
     //  Can't delete a value without a hive
@@ -1488,17 +1488,17 @@ RegeditDeleteButtonClicked(
  */
 VOID
 RegeditCopyKeyButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PREGEDIT_CONTEXT RegeditContext;
     PCYORI_STRING RootString;
     YORI_STRING String;
     DWORD Index;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    RegeditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    RegeditContext = YoriWinGetCtrlContext(Parent);
 
     if (RegeditContext->TreeDepth > 0) {
 
@@ -1518,7 +1518,7 @@ RegeditCopyKeyButtonClicked(
                 YoriLibYPrintf(&String, _T("%y\\%y"), RootString, &RegeditContext->Subkey);
             }
 
-            YoriLibCopyTextWithProcessFallback(&String);
+            YoriLibCopyTextProcFallback(&String);
             YoriLibFreeStringContents(&String);
         }
     }
@@ -1532,14 +1532,14 @@ RegeditCopyKeyButtonClicked(
  */
 VOID
 RegeditRefreshButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PREGEDIT_CONTEXT RegeditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    RegeditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    RegeditContext = YoriWinGetCtrlContext(Parent);
 
     RegeditRefreshView(RegeditContext, Parent);
 }
@@ -1552,7 +1552,7 @@ RegeditRefreshButtonClicked(
  */
 VOID
 RegeditAboutButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
     YORI_STRING Title;
@@ -1560,11 +1560,11 @@ RegeditAboutButtonClicked(
     YORI_STRING LeftText;
     YORI_STRING CenteredText;
     YORI_STRING ButtonTexts[2];
-    PYORI_WIN_WINDOW_HANDLE Parent;
+    PYORIWIN_WINDOW_HANDLE Parent;
     YORI_ALLOC_SIZE_T Index;
     DWORD ButtonClicked;
 
-    Parent = YoriWinGetControlParent(Ctrl);
+    Parent = YoriWinGetCtrlParent(Ctrl);
 
     YoriLibConstantString(&Title, _T("About"));
     YoriLibInitEmptyString(&Text);
@@ -1618,7 +1618,7 @@ RegeditAboutButtonClicked(
     YoriLibConstantString(&ButtonTexts[0], _T("&Ok"));
     YoriLibConstantString(&ButtonTexts[1], _T("&View License..."));
 
-    ButtonClicked = YoriDlgAbout(YoriWinGetWindowManagerHandle(Parent),
+    ButtonClicked = YoriDlgAbout(YoriWinGetWinMgrHandle(Parent),
                                  &Title,
                                  &CenteredText,
                                  &LeftText,
@@ -1650,7 +1650,7 @@ RegeditAboutButtonClicked(
                 }
             }
 
-            YoriDlgAbout(YoriWinGetWindowManagerHandle(Parent),
+            YoriDlgAbout(YoriWinGetWinMgrHandle(Parent),
                          &Title,
                          &CenteredText,
                          &Text,
@@ -1671,17 +1671,17 @@ RegeditAboutButtonClicked(
  */
 VOID
 RegeditGoButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
     YORI_ALLOC_SIZE_T ActiveOption;
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PREGEDIT_CONTEXT RegeditContext;
-    PYORI_WIN_CTRL_HANDLE KeyList;
-    PYORI_WIN_CTRL_HANDLE ValueList;
+    PYORIWIN_CTRL_HANDLE KeyList;
+    PYORIWIN_CTRL_HANDLE ValueList;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    RegeditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    RegeditContext = YoriWinGetCtrlContext(Parent);
 
     KeyList = YoriWinFindControlById(Parent, RegeditControlKeyList);
     ASSERT(KeyList != NULL);
@@ -1714,49 +1714,49 @@ RegeditGoButtonClicked(
  @return Pointer to the menu bar control if it was successfully created
          and populated, or NULL on failure.
  */
-PYORI_WIN_CTRL_HANDLE
+PYORIWIN_CTRL_HANDLE
 RegeditPopulateMenuBar(
     __in PREGEDIT_CONTEXT RegeditContext,
-    __in PYORI_WIN_WINDOW_HANDLE Parent
+    __in PYORIWIN_WINDOW_HANDLE Parent
     )
 {
-    YORI_WIN_MENU_ENTRY FileMenuEntries[1];
-    YORI_WIN_MENU_ENTRY EditMenuEntries[5];
-    YORI_WIN_MENU_ENTRY ViewMenuEntries[1];
-    YORI_WIN_MENU_ENTRY NewMenuEntries[7];
-    YORI_WIN_MENU_ENTRY HelpMenuEntries[1];
-    YORI_WIN_MENU_ENTRY MenuEntries[4];
-    YORI_WIN_MENU MenuBarItems;
-    PYORI_WIN_CTRL_HANDLE Ctrl;
+    YORIWIN_MENU_ENTRY FileMenuEntries[1];
+    YORIWIN_MENU_ENTRY EditMenuEntries[5];
+    YORIWIN_MENU_ENTRY ViewMenuEntries[1];
+    YORIWIN_MENU_ENTRY NewMenuEntries[7];
+    YORIWIN_MENU_ENTRY HelpMenuEntries[1];
+    YORIWIN_MENU_ENTRY MenuEntries[4];
+    YORIWIN_MENU MenuBarItems;
+    PYORIWIN_CTRL_HANDLE Ctrl;
     YORI_ALLOC_SIZE_T MenuIndex;
 
     ZeroMemory(&NewMenuEntries, sizeof(NewMenuEntries));
     MenuIndex = 0;
     YoriLibConstantString(&NewMenuEntries[MenuIndex].Caption, _T("&Key"));
-    NewMenuEntries[MenuIndex].NotifyCallback = RegeditNewKeyButtonClicked;
+    NewMenuEntries[MenuIndex].NotifyCbk = RegeditNewKeyButtonClicked;
     MenuIndex++;
-    NewMenuEntries[MenuIndex].Flags = YORI_WIN_MENU_ENTRY_SEPERATOR;
+    NewMenuEntries[MenuIndex].Flags = YORIWIN_MENU_ENTRY_SEPERATOR;
     MenuIndex++;
     YoriLibConstantString(&NewMenuEntries[MenuIndex].Caption, _T("&String Value"));
-    NewMenuEntries[MenuIndex].NotifyCallback = RegeditNewStringButtonClicked;
+    NewMenuEntries[MenuIndex].NotifyCbk = RegeditNewStringButtonClicked;
     MenuIndex++;
     YoriLibConstantString(&NewMenuEntries[MenuIndex].Caption, _T("&DWORD Value"));
-    NewMenuEntries[MenuIndex].NotifyCallback = RegeditNewDWORDButtonClicked;
+    NewMenuEntries[MenuIndex].NotifyCbk = RegeditNewDWORDButtonClicked;
     MenuIndex++;
     YoriLibConstantString(&NewMenuEntries[MenuIndex].Caption, _T("&QWORD Value"));
-    NewMenuEntries[MenuIndex].NotifyCallback = RegeditNewQWORDButtonClicked;
+    NewMenuEntries[MenuIndex].NotifyCbk = RegeditNewQWORDButtonClicked;
     MenuIndex++;
     YoriLibConstantString(&NewMenuEntries[MenuIndex].Caption, _T("Expandable string Value"));
-    NewMenuEntries[MenuIndex].NotifyCallback = RegeditNewExpandableStringButtonClicked;
+    NewMenuEntries[MenuIndex].NotifyCbk = RegeditNewExpandableStringButtonClicked;
     MenuIndex++;
     YoriLibConstantString(&NewMenuEntries[MenuIndex].Caption, _T("&Binary Value"));
-    NewMenuEntries[MenuIndex].NotifyCallback = RegeditNewBinaryButtonClicked;
+    NewMenuEntries[MenuIndex].NotifyCbk = RegeditNewBinaryButtonClicked;
     // MSFIX multi string
 
     ZeroMemory(&FileMenuEntries, sizeof(FileMenuEntries));
     MenuIndex = 0;
     YoriLibConstantString(&FileMenuEntries[MenuIndex].Caption, _T("E&xit"));
-    FileMenuEntries[MenuIndex].NotifyCallback = RegeditExitButtonClicked;
+    FileMenuEntries[MenuIndex].NotifyCbk = RegeditExitButtonClicked;
 
     ZeroMemory(&EditMenuEntries, sizeof(EditMenuEntries));
     MenuIndex = 0;
@@ -1766,18 +1766,18 @@ RegeditPopulateMenuBar(
     RegeditContext->NewMenuIndex = MenuIndex;
 
     MenuIndex++;
-    EditMenuEntries[MenuIndex].Flags = YORI_WIN_MENU_ENTRY_SEPERATOR;
+    EditMenuEntries[MenuIndex].Flags = YORIWIN_MENU_ENTRY_SEPERATOR;
     MenuIndex++;
     YoriLibConstantString(&EditMenuEntries[MenuIndex].Caption, _T("&Delete"));
-    EditMenuEntries[MenuIndex].NotifyCallback = RegeditDeleteButtonClicked;
+    EditMenuEntries[MenuIndex].NotifyCbk = RegeditDeleteButtonClicked;
     YoriLibConstantString(&EditMenuEntries[MenuIndex].Hotkey, _T("Del"));
     RegeditContext->DeleteMenuIndex = MenuIndex;
 
     MenuIndex++;
-    EditMenuEntries[MenuIndex].Flags = YORI_WIN_MENU_ENTRY_SEPERATOR;
+    EditMenuEntries[MenuIndex].Flags = YORIWIN_MENU_ENTRY_SEPERATOR;
     MenuIndex++;
     YoriLibConstantString(&EditMenuEntries[MenuIndex].Caption, _T("&Copy Key Name"));
-    EditMenuEntries[MenuIndex].NotifyCallback = RegeditCopyKeyButtonClicked;
+    EditMenuEntries[MenuIndex].NotifyCbk = RegeditCopyKeyButtonClicked;
     YoriLibConstantString(&EditMenuEntries[MenuIndex].Hotkey, _T("Ctrl+C"));
     RegeditContext->CopyKeyMenuIndex = MenuIndex;
 
@@ -1785,14 +1785,14 @@ RegeditPopulateMenuBar(
     MenuIndex = 0;
     YoriLibConstantString(&ViewMenuEntries[MenuIndex].Caption, _T("&Refresh"));
     YoriLibConstantString(&ViewMenuEntries[MenuIndex].Hotkey, _T("F5"));
-    ViewMenuEntries[MenuIndex].NotifyCallback = RegeditRefreshButtonClicked;
+    ViewMenuEntries[MenuIndex].NotifyCbk = RegeditRefreshButtonClicked;
 
     // MSFIX Copy current key
 
     ZeroMemory(&HelpMenuEntries, sizeof(HelpMenuEntries));
     MenuIndex = 0;
     YoriLibConstantString(&HelpMenuEntries[MenuIndex].Caption, _T("&About..."));
-    HelpMenuEntries[MenuIndex].NotifyCallback = RegeditAboutButtonClicked;
+    HelpMenuEntries[MenuIndex].NotifyCbk = RegeditAboutButtonClicked;
 
     MenuBarItems.Items = MenuEntries;
 
@@ -1804,7 +1804,7 @@ RegeditPopulateMenuBar(
 
     MenuIndex++;
     YoriLibConstantString(&MenuEntries[MenuIndex].Caption, _T("&Edit"));
-    MenuEntries[MenuIndex].NotifyCallback = RegeditEditButtonClicked;
+    MenuEntries[MenuIndex].NotifyCbk = RegeditEditButtonClicked;
     MenuEntries[MenuIndex].ChildMenu.ItemCount = sizeof(EditMenuEntries)/sizeof(EditMenuEntries[0]);
     MenuEntries[MenuIndex].ChildMenu.Items = EditMenuEntries;
     RegeditContext->EditMenuIndex = MenuIndex;
@@ -1858,21 +1858,21 @@ RegeditPopulateMenuBar(
  */
 VOID
 RegeditResizeWindowManager(
-    __in PYORI_WIN_WINDOW_HANDLE WindowHandle,
+    __in PYORIWIN_WINDOW_HANDLE WindowHandle,
     __in PSMALL_RECT OldPosition,
     __in PSMALL_RECT NewPosition
     )
 {
     PREGEDIT_CONTEXT RegeditContext;
-    PYORI_WIN_CTRL_HANDLE WindowCtrl;
-    PYORI_WIN_CTRL_HANDLE Ctrl;
+    PYORIWIN_CTRL_HANDLE WindowCtrl;
+    PYORIWIN_CTRL_HANDLE Ctrl;
     SMALL_RECT Area;
     COORD NewSize;
 
     UNREFERENCED_PARAMETER(OldPosition);
 
     WindowCtrl = YoriWinGetCtrlFromWindow(WindowHandle);
-    RegeditContext = YoriWinGetControlContext(WindowCtrl);
+    RegeditContext = YoriWinGetCtrlContext(WindowCtrl);
 
     NewSize.X = (SHORT)(NewPosition->Right - NewPosition->Left + 1);
     NewSize.Y = (SHORT)(NewPosition->Bottom - NewPosition->Top + 1);
@@ -1998,18 +1998,18 @@ RegeditCreateMainWindow(
     __in PREGEDIT_CONTEXT RegeditContext
     )
 {
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr;
-    PYORI_WIN_WINDOW_HANDLE Parent;
+    PYORIWIN_WINMGR_HANDLE WinMgr;
+    PYORIWIN_WINDOW_HANDLE Parent;
     COORD WindowSize;
     SMALL_RECT Area;
     YORI_STRING Caption;
-    PYORI_WIN_CTRL_HANDLE KeyList;
-    PYORI_WIN_CTRL_HANDLE ValueList;
-    PYORI_WIN_CTRL_HANDLE Ctrl;
+    PYORIWIN_CTRL_HANDLE KeyList;
+    PYORIWIN_CTRL_HANDLE ValueList;
+    PYORIWIN_CTRL_HANDLE Ctrl;
     DWORD_PTR Result;
     COORD WinMgrSize;
 
-    if (!YoriWinOpenWindowManager(TRUE, YoriWinColorTableDefault, &WinMgr)) {
+    if (!YoriWinOpenWinMgr(TRUE, YoriWinColorTableDefault, &WinMgr)) {
         return FALSE;
     }
 
@@ -2018,25 +2018,25 @@ RegeditCreateMainWindow(
     }
 
     if (!YoriWinGetWinMgrDimensions(WinMgr, &WinMgrSize)) {
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
     if (WinMgrSize.X < 60 || WinMgrSize.Y < 20) {
         YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("regedit: window size too small\n"));
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
     if (!YoriWinCreateWindow(WinMgr, WinMgrSize.X, WinMgrSize.Y, WinMgrSize.X, WinMgrSize.Y, 0, NULL, &Parent)) {
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
-    YoriWinSetControlContext(Parent, RegeditContext);
+    YoriWinSetCtrlContext(Parent, RegeditContext);
 
     Ctrl = RegeditPopulateMenuBar(RegeditContext, Parent);
-    YoriWinSetControlId(Ctrl, RegeditControlMenuBar);
+    YoriWinSetCtrlId(Ctrl, RegeditControlMenuBar);
 
     YoriWinGetClientSize(Parent, &WindowSize);
 
@@ -2047,14 +2047,14 @@ RegeditCreateMainWindow(
 
     YoriLibConstantString(&Caption, _T(""));
 
-    Ctrl = YoriWinLabelCreate(Parent, &Area, &Caption, YORI_WIN_LABEL_NO_ACCELERATOR);
+    Ctrl = YoriWinLabelCreate(Parent, &Area, &Caption, YORIWIN_LABEL_NO_ACCELERATOR);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
-    YoriWinSetControlId(Ctrl, RegeditControlKeyName);
+    YoriWinSetCtrlId(Ctrl, RegeditControlKeyName);
 
     YoriLibConstantString(&Caption, _T("&Keys:"));
 
@@ -2066,26 +2066,26 @@ RegeditCreateMainWindow(
     Ctrl = YoriWinLabelCreate(Parent, &Area, &Caption, 0);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
-    YoriWinSetControlId(Ctrl, RegeditControlKeyCaption);
+    YoriWinSetCtrlId(Ctrl, RegeditControlKeyCaption);
 
     Area.Top = 3;
     Area.Left = 1;
     Area.Bottom = (WORD)(WindowSize.Y - 4);
     Area.Right = (WORD)(WindowSize.X / 2 - 1);
 
-    KeyList = YoriWinListCreate(Parent, &Area, YORI_WIN_LIST_STYLE_VSCROLLBAR | YORI_WIN_LIST_STYLE_AUTO_HSCROLLBAR);
+    KeyList = YoriWinListCreate(Parent, &Area, YORIWIN_LIST_STY_VSCROLL | YORIWIN_LIST_STY_AUTO_HSCROLL);
     if (KeyList == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
-    YoriWinSetControlId(KeyList, RegeditControlKeyList);
-    YoriWinListSetSelectionNotifyCallback(KeyList, RegeditKeyListSelectionChanged);
+    YoriWinSetCtrlId(KeyList, RegeditControlKeyList);
+    YoriWinListSetSelNotifyCbk(KeyList, RegeditKeyListSelectionChanged);
 
     YoriLibConstantString(&Caption, _T("&Values:"));
 
@@ -2097,26 +2097,26 @@ RegeditCreateMainWindow(
     Ctrl = YoriWinLabelCreate(Parent, &Area, &Caption, 0);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
-    YoriWinSetControlId(Ctrl, RegeditControlValueCaption);
+    YoriWinSetCtrlId(Ctrl, RegeditControlValueCaption);
 
     Area.Top = (WORD)(Area.Bottom + 1);
     Area.Left = (WORD)(Area.Left - 2);
     Area.Bottom = (WORD)(WindowSize.Y - 4);
     Area.Right = (WORD)(WindowSize.X - 2);
 
-    ValueList = YoriWinListCreate(Parent, &Area, YORI_WIN_LIST_STYLE_VSCROLLBAR | YORI_WIN_LIST_STYLE_AUTO_HSCROLLBAR);
+    ValueList = YoriWinListCreate(Parent, &Area, YORIWIN_LIST_STY_VSCROLL | YORIWIN_LIST_STY_AUTO_HSCROLL);
     if (ValueList == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
-    YoriWinSetControlId(ValueList, RegeditControlValueList);
-    YoriWinListSetSelectionNotifyCallback(ValueList, RegeditValueListSelectionChanged);
+    YoriWinSetCtrlId(ValueList, RegeditControlValueList);
+    YoriWinListSetSelNotifyCbk(ValueList, RegeditValueListSelectionChanged);
 
     RegeditPopulateKeyValueList(RegeditContext, KeyList, ValueList, NULL, NULL);
 
@@ -2128,30 +2128,30 @@ RegeditCreateMainWindow(
     Area.Left = (SHORT)(1);
     Area.Right = (WORD)(Area.Left + 1 + Caption.LengthInChars - 1 + 2);
 
-    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORI_WIN_BUTTON_STYLE_CANCEL, RegeditCloseButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORIWIN_BUTTON_STY_CANCEL, RegeditCloseButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
-    YoriWinSetControlId(Ctrl, RegeditControlCloseButton);
+    YoriWinSetCtrlId(Ctrl, RegeditControlCloseButton);
 
     YoriLibConstantString(&Caption, _T("&Go"));
 
     Area.Left = (WORD)(Area.Right + 2);
     Area.Right = (WORD)(Area.Left + 1 + Caption.LengthInChars - 1 + 2);
 
-    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORI_WIN_BUTTON_STYLE_DEFAULT, RegeditGoButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORIWIN_BUTTON_STY_DEFAULT, RegeditGoButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
-    YoriWinSetControlId(Ctrl, RegeditControlGoButton);
+    YoriWinSetCtrlId(Ctrl, RegeditControlGoButton);
 
-    YoriWinSetWindowManagerResizeNotifyCallback(Parent, RegeditResizeWindowManager);
+    YoriWinSetWinMgrResizeNotifyCbk(Parent, RegeditResizeWindowManager);
 
     Result = FALSE;
     if (!YoriWinProcessInputForWindow(Parent, &Result)) {
@@ -2159,7 +2159,7 @@ RegeditCreateMainWindow(
     }
 
     YoriWinDestroyWindow(Parent);
-    YoriWinCloseWindowManager(WinMgr);
+    YoriWinCloseWinMgr(WinMgr);
     return (BOOLEAN)Result;
 }
 

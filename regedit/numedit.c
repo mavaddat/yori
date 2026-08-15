@@ -75,14 +75,14 @@ typedef struct _REGEDIT_NUMEDIT_CONTEXT {
 __success(return)
 BOOLEAN
 RegeditNumEditGetNumberFromDialog(
-    __in PYORI_WIN_CTRL_HANDLE Parent,
+    __in PYORIWIN_CTRL_HANDLE Parent,
     __in WORD ForceBase,
     __out PYORI_MAX_SIGNED_T NumberValue,
     __out_opt PWORD Base
     )
 {
-    PYORI_WIN_CTRL_HANDLE ValueEdit;
-    PYORI_WIN_CTRL_HANDLE Radio;
+    PYORIWIN_CTRL_HANDLE ValueEdit;
+    PYORIWIN_CTRL_HANDLE Radio;
     YORI_STRING ValueText;
     YORI_MAX_SIGNED_T NewNumberValue;
     YORI_ALLOC_SIZE_T CharsConsumed;
@@ -111,14 +111,14 @@ RegeditNumEditGetNumberFromDialog(
         !YoriLibStringToNumberBase(&ValueText, NewBase, TRUE, &NewNumberValue, &CharsConsumed) ||
         CharsConsumed == 0) {
 
-        PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr;
+        PYORIWIN_WINMGR_HANDLE WinMgr;
         YORI_STRING ButtonText[1];
         YORI_STRING Text;
         YORI_STRING Caption;
 
         YoriLibFreeStringContents(&ValueText);
 
-        WinMgr = YoriWinGetWindowManagerHandle(YoriWinGetWindowFromWindowCtrl(Parent));
+        WinMgr = YoriWinGetWinMgrHandle(YoriWinGetWindowFromWindowCtrl(Parent));
 
         YoriLibConstantString(&Caption, _T("Error"));
         YoriLibConstantString(&ButtonText[0], _T("&Ok"));
@@ -145,13 +145,13 @@ RegeditNumEditGetNumberFromDialog(
  */
 VOID
 RegeditNumEditOkButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     YORI_MAX_SIGNED_T NewNumberValue;
 
-    Parent = YoriWinGetControlParent(Ctrl);
+    Parent = YoriWinGetCtrlParent(Ctrl);
 
     //
     //  Query the value and throw it away.  This is just to generate a dialog
@@ -171,11 +171,11 @@ RegeditNumEditOkButtonClicked(
  */
 VOID
 RegeditNumEditCancelButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, FALSE);
 }
 
@@ -189,19 +189,19 @@ RegeditNumEditCancelButtonClicked(
  */
 VOID
 RegeditNumEditChangeNumberBase(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl,
+    __in PYORIWIN_CTRL_HANDLE Ctrl,
     __in WORD NewBase
     )
 {
     PREGEDIT_NUMEDIT_CONTEXT RegeditNumeditContext;
-    PYORI_WIN_CTRL_HANDLE Parent;
-    PYORI_WIN_CTRL_HANDLE ValueEdit;
+    PYORIWIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE ValueEdit;
     YORI_STRING Value;
     YORI_MAX_SIGNED_T NumberValue;
     WORD Base;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    RegeditNumeditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    RegeditNumeditContext = YoriWinGetCtrlContext(Parent);
 
     if (RegeditNumeditContext->CurrentBase == NewBase) {
         return;
@@ -229,7 +229,7 @@ RegeditNumEditChangeNumberBase(
  */
 VOID
 RegeditNumEditDecimalRadioClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
     RegeditNumEditChangeNumberBase(Ctrl, 10);
@@ -242,7 +242,7 @@ RegeditNumEditDecimalRadioClicked(
  */
 VOID
 RegeditNumEditHexadecimalRadioClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
     RegeditNumEditChangeNumberBase(Ctrl, 16);
@@ -277,7 +277,7 @@ __success(return)
 BOOLEAN
 RegeditEditNumericValue(
     __in PREGEDIT_CONTEXT RegeditContext,
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr,
+    __in PYORIWIN_WINMGR_HANDLE WinMgr,
     __inout PYORI_STRING ValueName,
     __in BOOLEAN ValueNameReadOnly,
     __inout PYORI_MAX_UNSIGNED_T Value,
@@ -285,13 +285,13 @@ RegeditEditNumericValue(
     )
 {
     REGEDIT_NUMEDIT_CONTEXT RegeditNumeditContext;
-    PYORI_WIN_WINDOW_HANDLE Parent;
+    PYORIWIN_WINDOW_HANDLE Parent;
     COORD WindowSize;
     SMALL_RECT Area;
     YORI_STRING Caption;
-    PYORI_WIN_CTRL_HANDLE Ctrl;
-    PYORI_WIN_CTRL_HANDLE ValueEdit;
-    PYORI_WIN_CTRL_HANDLE ValueNameEdit;
+    PYORIWIN_CTRL_HANDLE Ctrl;
+    PYORIWIN_CTRL_HANDLE ValueEdit;
+    PYORIWIN_CTRL_HANDLE ValueNameEdit;
     YORI_STRING NewValue;
     YORI_MAX_SIGNED_T NewNumberValue;
     DWORD_PTR Result;
@@ -319,12 +319,12 @@ RegeditEditNumericValue(
         YoriLibConstantString(&Caption, _T("Edit Numeric Value"));
     }
 
-    if (!YoriWinCreateWindow(WinMgr, WindowSize.X, WindowSize.Y, WindowSize.X, WindowSize.Y, YORI_WIN_WINDOW_STYLE_BORDER_SINGLE | YORI_WIN_WINDOW_STYLE_SHADOW_TRANSPARENT, &Caption, &Parent)) {
+    if (!YoriWinCreateWindow(WinMgr, WindowSize.X, WindowSize.Y, WindowSize.X, WindowSize.Y, YORIWIN_WIN_STY_BORDER_SINGLE | YORIWIN_WIN_STY_SHADOW_TRANS, &Caption, &Parent)) {
         return FALSE;
     }
 
     RegeditNumeditContext.CurrentBase = 10;
-    YoriWinSetControlContext(Parent, &RegeditNumeditContext);
+    YoriWinSetCtrlContext(Parent, &RegeditNumeditContext);
     YoriWinGetClientSize(Parent, &WindowSize);
 
     Area.Top = 0;
@@ -370,7 +370,7 @@ RegeditEditNumericValue(
     Area.Top = (WORD)(Area.Top - 1);
     Area.Bottom = (WORD)(Area.Top + 2);
 
-    ValueNameEdit = YoriWinEditCreate(Parent, &Area, ValueName, ValueNameReadOnly?YORI_WIN_EDIT_STYLE_READ_ONLY:0);
+    ValueNameEdit = YoriWinEditCreate(Parent, &Area, ValueName, (WORD)(ValueNameReadOnly?YORIWIN_EDIT_STY_READ_ONLY:0));
     if (ValueNameEdit == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;
@@ -398,13 +398,13 @@ RegeditEditNumericValue(
     Area.Top = (WORD)(Area.Bottom - 1);
     Area.Bottom = (WORD)(Area.Top + 2);
 
-    ValueEdit = YoriWinEditCreate(Parent, &Area, &NewValue, ValueReadOnly?YORI_WIN_EDIT_STYLE_READ_ONLY:0);
+    ValueEdit = YoriWinEditCreate(Parent, &Area, &NewValue, (WORD)(ValueReadOnly?YORIWIN_EDIT_STY_READ_ONLY:0));
     if (ValueEdit == NULL) {
         YoriLibFreeStringContents(&NewValue);
         YoriWinDestroyWindow(Parent);
         return FALSE;
     }
-    YoriWinSetControlId(ValueEdit, RegeditNumeditControlValue);
+    YoriWinSetCtrlId(ValueEdit, RegeditNumeditControlValue);
     if (ValueNameReadOnly || ValueName->LengthInChars > 0) {
         YoriWinSetFocus(Parent, ValueEdit);
     }
@@ -427,7 +427,7 @@ RegeditEditNumericValue(
         return FALSE;
     }
 
-    YoriWinSetControlId(Ctrl, RegeditNumeditControlHexadecimal);
+    YoriWinSetCtrlId(Ctrl, RegeditNumeditControlHexadecimal);
 
     YoriLibConstantString(&Caption, _T("&Decimal"));
 
@@ -441,7 +441,7 @@ RegeditEditNumericValue(
         return FALSE;
     }
 
-    YoriWinSetControlId(Ctrl, RegeditNumeditControlDecimal);
+    YoriWinSetCtrlId(Ctrl, RegeditNumeditControlDecimal);
     YoriWinRadioSelect(Ctrl);
 
     ButtonWidth = 8;
@@ -453,7 +453,7 @@ RegeditEditNumericValue(
     Area.Bottom = (WORD)(Area.Top + 2);
     Area.Right = (WORD)(Area.Left + 1 + ButtonWidth);
 
-    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORI_WIN_BUTTON_STYLE_DEFAULT | YORI_WIN_BUTTON_STYLE_CANCEL, RegeditNumEditOkButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORIWIN_BUTTON_STY_DEFAULT | YORIWIN_BUTTON_STY_CANCEL, RegeditNumEditOkButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;
@@ -464,7 +464,7 @@ RegeditEditNumericValue(
     Area.Left = (WORD)(Area.Right + 2);
     Area.Right = (WORD)(Area.Left + 1 + ButtonWidth);
 
-    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORI_WIN_BUTTON_STYLE_CANCEL, RegeditNumEditCancelButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORIWIN_BUTTON_STY_CANCEL, RegeditNumEditCancelButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;

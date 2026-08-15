@@ -36,8 +36,9 @@ CHAR strReplHelpText[] =
         "Output the contents of one or more files with specified text replaced\n"
         "with alternate text.\n"
         "\n"
-        "REPL [-license] [-b] [-i] [-s] <old text> [<new text> [<file>...]]\n"
+        "REPL [-license] [--] [-b] [-i] [-s] <old text> [<new text> [<file>...]]\n"
         "\n"
+        "   --             Treat all further arguments as display parameters\n"
         "   -b             Use basic search criteria for files only\n"
         "   -i             Match insensitively\n"
         "   -s             Process files from all subdirectories\n";
@@ -70,12 +71,12 @@ typedef struct _REPL_CONTEXT {
      TRUE if matches should be applied case insensitively, FALSE if they
      should be applied case sensitively.
      */
-    BOOL Insensitive;
+    BOOLEAN Insensitive;
 
     /**
      TRUE to indicate that files are being enumerated recursively.
      */
-    BOOL Recursive;
+    BOOLEAN Recursive;
 
     /**
      A string to compare with to determine a match.

@@ -175,7 +175,7 @@ YoriShInit(VOID)
     if (YoriShGetEnvironmentVariableWithoutSubstitution(_T("YORIQUICKEDITBREAKCHARS"), NULL, 0, NULL) == 0) {
         YORI_STRING BreakChars;
         YORI_STRING ExpandedBreakChars;
-        YoriLibGetSelectionDoubleClickBreakChars(&BreakChars);
+        YoriLibGetSelDblClkBreakChars(&BreakChars);
         if (YoriLibAllocateString(&ExpandedBreakChars, BreakChars.LengthInChars * 7)) {
             YORI_ALLOC_SIZE_T ReadIndex;
             YORI_ALLOC_SIZE_T WriteIndex;

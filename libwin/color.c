@@ -49,11 +49,11 @@ CONST UCHAR YoriWinVgaColors[] = {
     BACKGROUND_BLUE | BACKGROUND_INTENSITY | FOREGROUND_GREY | FOREGROUND_INTENSITY, // YoriWinTitleBarActive
     BACKGROUND_GREY,                                          // YoriWinColorMenuDefault
     FOREGROUND_GREY,                                          // YoriWinColorMenuSelected
-    BACKGROUND_GREY | FOREGROUND_GREY | FOREGROUND_INTENSITY, // YoriWinColorMenuAccelerator
-    FOREGROUND_GREY | FOREGROUND_INTENSITY,                   // YoriWinColorMenuSelectedAccelerator
+    BACKGROUND_GREY | FOREGROUND_GREY | FOREGROUND_INTENSITY, // YoriWinColorMenuAccel
+    FOREGROUND_GREY | FOREGROUND_INTENSITY,                   // YoriWinColorMenuSelectedAccel
     BACKGROUND_GREY,                                          // YoriWinColorMultilineCaption
     FOREGROUND_GREY,                                          // YoriWinColorEditSelectedText
-    BACKGROUND_GREY | FOREGROUND_GREY | FOREGROUND_INTENSITY, // YoriWinColorAcceleratorDefault
+    BACKGROUND_GREY | FOREGROUND_GREY | FOREGROUND_INTENSITY, // YoriWinColorAccelDefault
     FOREGROUND_GREY,                                          // YoriWinColorListActive
     FOREGROUND_GREY,                                          // YoriWinColorControlSelected
     BACKGROUND_INTENSITY | FOREGROUND_GREY | FOREGROUND_INTENSITY, // YoriWinTitleBarInactive
@@ -68,11 +68,11 @@ CONST UCHAR YoriWinNanoColors[] = {
     FOREGROUND_GREEN | FOREGROUND_INTENSITY,                  // YoriWinTitleBarActive
     FOREGROUND_GREY,                                          // YoriWinColorMenuDefault
     FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY, // YoriWinColorMenuSelected
-    FOREGROUND_GREY | FOREGROUND_INTENSITY,                   // YoriWinColorMenuAccelerator
-    FOREGROUND_GREY | FOREGROUND_INTENSITY,                   // YoriWinColorMenuSelectedAccelerator
+    FOREGROUND_GREY | FOREGROUND_INTENSITY,                   // YoriWinColorMenuAccel
+    FOREGROUND_GREY | FOREGROUND_INTENSITY,                   // YoriWinColorMenuSelectedAccel
     FOREGROUND_GREEN | FOREGROUND_INTENSITY,                  // YoriWinColorMultilineCaption
     FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY, // YoriWinColorEditSelectedText
-    FOREGROUND_GREY | FOREGROUND_INTENSITY,                   // YoriWinColorAcceleratorDefault
+    FOREGROUND_GREY | FOREGROUND_INTENSITY,                   // YoriWinColorAccelDefault
     FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY, // YoriWinColorListActive
     FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY, // YoriWinColorControlSelected
     FOREGROUND_INTENSITY,                                     // YoriWinTitleBarInactive
@@ -86,11 +86,11 @@ CONST UCHAR YoriWinMonoColors[] = {
     BACKGROUND_GREY | BACKGROUND_INTENSITY,                   // YoriWinTitleBarActive
     BACKGROUND_GREY,                                          // YoriWinColorMenuDefault
     FOREGROUND_GREY,                                          // YoriWinColorMenuSelected
-    BACKGROUND_GREY | FOREGROUND_GREY | FOREGROUND_INTENSITY, // YoriWinColorMenuAccelerator
-    FOREGROUND_GREY | FOREGROUND_INTENSITY,                   // YoriWinColorMenuSelectedAccelerator
+    BACKGROUND_GREY | FOREGROUND_GREY | FOREGROUND_INTENSITY, // YoriWinColorMenuAccel
+    FOREGROUND_GREY | FOREGROUND_INTENSITY,                   // YoriWinColorMenuSelectedAccel
     BACKGROUND_GREY,                                          // YoriWinColorMultilineCaption
     FOREGROUND_GREY,                                          // YoriWinColorEditSelectedText
-    BACKGROUND_GREY | FOREGROUND_GREY | FOREGROUND_INTENSITY, // YoriWinColorAcceleratorDefault
+    BACKGROUND_GREY | FOREGROUND_GREY | FOREGROUND_INTENSITY, // YoriWinColorAccelDefault
     FOREGROUND_GREY,                                          // YoriWinColorListActive
     FOREGROUND_GREY,                                          // YoriWinColorControlSelected
     BACKGROUND_INTENSITY | FOREGROUND_GREY | FOREGROUND_INTENSITY, // YoriWinTitleBarInactive
@@ -101,29 +101,29 @@ CONST UCHAR YoriWinMonoColors[] = {
 
  @param ColorTableId Indicates the color table to return.
  */
-YORI_WIN_COLOR_TABLE_HANDLE
+YORIWIN_COLOR_TABLE_HANDLE
 YoriWinGetColorTable(
-    __in YORI_WIN_COLOR_TABLE_ID ColorTableId
+    __in YORIWIN_COLOR_TABLE_ID ColorTableId
     )
 {
-    YORI_WIN_COLOR_TABLE_HANDLE Result;
+    YORIWIN_COLOR_TABLE_HANDLE Result;
     Result = NULL;
     switch(ColorTableId) {
         case YoriWinColorTableDefault:
-            if (!YoriLibDoesSystemSupportBackgroundColors()) {
-                Result = (YORI_WIN_COLOR_TABLE_HANDLE)YoriWinNanoColors;
+            if (!YoriLibSystemSupportBgColors()) {
+                Result = (YORIWIN_COLOR_TABLE_HANDLE)YoriWinNanoColors;
             } else {
-                Result = (YORI_WIN_COLOR_TABLE_HANDLE)YoriWinVgaColors;
+                Result = (YORIWIN_COLOR_TABLE_HANDLE)YoriWinVgaColors;
             }
             break;
         case YoriWinColorTableVga:
-            Result = (YORI_WIN_COLOR_TABLE_HANDLE)YoriWinVgaColors;
+            Result = (YORIWIN_COLOR_TABLE_HANDLE)YoriWinVgaColors;
             break;
         case YoriWinColorTableNano:
-            Result = (YORI_WIN_COLOR_TABLE_HANDLE)YoriWinNanoColors;
+            Result = (YORIWIN_COLOR_TABLE_HANDLE)YoriWinNanoColors;
             break;
         case YoriWinColorTableMono:
-            Result = (YORI_WIN_COLOR_TABLE_HANDLE)YoriWinMonoColors;
+            Result = (YORIWIN_COLOR_TABLE_HANDLE)YoriWinMonoColors;
             break;
     }
 
@@ -141,8 +141,8 @@ YoriWinGetColorTable(
  */
 UCHAR
 YoriWinDefaultColorLookup(
-    __in YORI_WIN_COLOR_TABLE_HANDLE ColorTableHandle,
-    __in YORI_WIN_COLOR_ID ColorId
+    __in YORIWIN_COLOR_TABLE_HANDLE ColorTableHandle,
+    __in YORIWIN_COLOR_ID ColorId
     )
 {
     PUCHAR ColorTable;

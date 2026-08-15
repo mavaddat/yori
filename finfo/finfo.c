@@ -1446,7 +1446,7 @@ FInfoFileFoundCallback(
         FileInfoToUse = FileInfo;
     } else {
         ZeroMemory(&LocalFileInfo, sizeof(LocalFileInfo));
-        if (!YoriLibUpdateFindDataFromFileInformation(&LocalFileInfo, FilePath->StartOfString, TRUE)) {
+        if (!YoriLibUpdateFindDataFromFile(&LocalFileInfo, FilePath->StartOfString, TRUE)) {
             return FALSE;
         }
         FileInfoToUse = &LocalFileInfo;

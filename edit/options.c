@@ -36,11 +36,11 @@
  */
 VOID
 EditOptsOkButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, TRUE);
 }
 
@@ -51,11 +51,11 @@ EditOptsOkButtonClicked(
  */
 VOID
 EditOptsCancelButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, FALSE);
 }
 
@@ -77,24 +77,24 @@ EditOptsCancelButtonClicked(
 __success(return)
 BOOLEAN
 EditOpts(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in YORI_ALLOC_SIZE_T InitialTabWidth,
     __out PYORI_ALLOC_SIZE_T NewTabWidth
     )
 {
-    PYORI_WIN_WINDOW_HANDLE Parent;
+    PYORIWIN_WINDOW_HANDLE Parent;
     COORD WindowSize;
     SMALL_RECT Area;
     YORI_STRING Caption;
     TCHAR CaptionBuffer[16];
     WORD ButtonWidth;
-    PYORI_WIN_CTRL_HANDLE Ctrl;
-    PYORI_WIN_CTRL_HANDLE Edit;
+    PYORIWIN_CTRL_HANDLE Ctrl;
+    PYORIWIN_CTRL_HANDLE Edit;
     DWORD_PTR Result;
 
     YoriLibConstantString(&Caption, _T("Options"));
 
-    if (!YoriWinCreateWindow(WinMgrHandle, 38, 10, 38, 10, YORI_WIN_WINDOW_STYLE_BORDER_SINGLE | YORI_WIN_WINDOW_STYLE_SHADOW_SOLID, &Caption, &Parent)) {
+    if (!YoriWinCreateWindow(WinMgrHandle, 38, 10, 38, 10, YORIWIN_WIN_STY_BORDER_SINGLE | YORIWIN_WIN_STY_SHADOW_SOLID, &Caption, &Parent)) {
         return FALSE;
     }
 
@@ -140,7 +140,7 @@ EditOpts(
     Area.Left = (SHORT)(1);
     Area.Right = (WORD)(Area.Left + 1 + ButtonWidth);
 
-    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORI_WIN_BUTTON_STYLE_DEFAULT, EditOptsOkButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORIWIN_BUTTON_STY_DEFAULT, EditOptsOkButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;
@@ -150,7 +150,7 @@ EditOpts(
     Area.Right = (WORD)(Area.Right + ButtonWidth + 3);
 
     YoriLibConstantString(&Caption, _T("&Cancel"));
-    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORI_WIN_BUTTON_STYLE_CANCEL, EditOptsCancelButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORIWIN_BUTTON_STY_CANCEL, EditOptsCancelButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;

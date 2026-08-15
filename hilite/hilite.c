@@ -666,8 +666,8 @@ ENTRYPOINT(
                     YoriLibInitEmptyString(&NewCriteria->MatchString);
                     NewCriteria->MatchString.StartOfString = ArgV[i + 1].StartOfString;
                     NewCriteria->MatchString.LengthInChars = ArgV[i + 1].LengthInChars;
-                    YoriLibAttributeFromLiteralString(ArgV[i + 2].StartOfString, &NewCriteria->Color);
-                    YoriLibResolveWindowColorComponents(NewCriteria->Color, HiliteContext.DefaultColor, FALSE, &NewCriteria->Color);
+                    YoriLibAttrFromLitString(ArgV[i + 2].StartOfString, &NewCriteria->Color);
+                    YoriLibResolveWindowColors(NewCriteria->Color, HiliteContext.DefaultColor, FALSE, &NewCriteria->Color);
                     YoriLibAppendList(&HiliteContext.MiddleMatches, &NewCriteria->ListEntry);
                     ArgumentUnderstood = TRUE;
                     i += 2;
@@ -683,8 +683,8 @@ ENTRYPOINT(
                     YoriLibInitEmptyString(&NewCriteria->MatchString);
                     NewCriteria->MatchString.StartOfString = ArgV[i + 1].StartOfString;
                     NewCriteria->MatchString.LengthInChars = ArgV[i + 1].LengthInChars;
-                    YoriLibAttributeFromLiteralString(ArgV[i + 2].StartOfString, &NewCriteria->Color);
-                    YoriLibResolveWindowColorComponents(NewCriteria->Color, HiliteContext.DefaultColor, FALSE, &NewCriteria->Color);
+                    YoriLibAttrFromLitString(ArgV[i + 2].StartOfString, &NewCriteria->Color);
+                    YoriLibResolveWindowColors(NewCriteria->Color, HiliteContext.DefaultColor, FALSE, &NewCriteria->Color);
                     YoriLibAppendList(&HiliteContext.StartMatches, &NewCriteria->ListEntry);
                     ArgumentUnderstood = TRUE;
                     i += 2;
@@ -709,8 +709,8 @@ ENTRYPOINT(
                     YoriLibInitEmptyString(&NewCriteria->MatchString);
                     NewCriteria->MatchString.StartOfString = ArgV[i + 1].StartOfString;
                     NewCriteria->MatchString.LengthInChars = ArgV[i + 1].LengthInChars;
-                    YoriLibAttributeFromLiteralString(ArgV[i + 2].StartOfString, &NewCriteria->Color);
-                    YoriLibResolveWindowColorComponents(NewCriteria->Color, HiliteContext.DefaultColor, FALSE, &NewCriteria->Color);
+                    YoriLibAttrFromLitString(ArgV[i + 2].StartOfString, &NewCriteria->Color);
+                    YoriLibResolveWindowColors(NewCriteria->Color, HiliteContext.DefaultColor, FALSE, &NewCriteria->Color);
                     YoriLibAppendList(&HiliteContext.EndMatches, &NewCriteria->ListEntry);
                     ArgumentUnderstood = TRUE;
                     i += 2;

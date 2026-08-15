@@ -32,28 +32,28 @@
 /**
  A structure describing the contents of a combo control.
  */
-typedef struct _YORI_WIN_CTRL_COMBO {
+typedef struct _YORIWIN_CTRL_COMBO {
 
     /**
      A common header for all controls
      */
-    YORI_WIN_CTRL Ctrl;
+    YORIWIN_CTRL Ctrl;
 
     /**
      Pointer to the child edit control that renders the text within the
      combo.
      */
-    PYORI_WIN_CTRL Edit;
+    PYORIWIN_CTRL Edit;
 
     /**
      The set of options to display in the drop down list.
      */
-    YORI_WIN_ITEM_ARRAY ItemArray;
+    YORIWIN_ITEM_ARRAY ItemArray;
 
     /**
      A function to invoke when the item is changed via any mechanism.
      */
-    PYORI_WIN_NOTIFY ClickCallback;
+    PYORIWIN_NOTIFY ClickCallback;
 
     /**
      The index within ItemArray of the array element that is currently
@@ -72,7 +72,7 @@ typedef struct _YORI_WIN_CTRL_COMBO {
      */
     WORD LinesInList;
 
-} YORI_WIN_CTRL_COMBO, *PYORI_WIN_CTRL_COMBO;
+} YORIWIN_CTRL_COMBO, FAR *PYORIWIN_CTRL_COMBO;
 
 /**
  Returns the currently active option within the combo control.
@@ -87,14 +87,14 @@ typedef struct _YORI_WIN_CTRL_COMBO {
 __success(return)
 BOOLEAN
 YoriWinComboGetActiveOption(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle,
     __out PYORI_ALLOC_SIZE_T CurrentlyActiveIndex
     )
 {
-    PYORI_WIN_CTRL Ctrl;
-    PYORI_WIN_CTRL_COMBO Combo;
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    Combo = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_COMBO, Ctrl);
+    PYORIWIN_CTRL Ctrl;
+    PYORIWIN_CTRL_COMBO Combo;
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    Combo = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_COMBO, Ctrl);
     if (!Combo->ItemActive) {
         return FALSE;
     }
@@ -114,14 +114,14 @@ YoriWinComboGetActiveOption(
 __success(return)
 BOOLEAN
 YoriWinComboSetActiveOption(
-    __inout PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __inout PYORIWIN_CTRL_HANDLE CtrlHandle,
     __in YORI_ALLOC_SIZE_T ActiveOption
     )
 {
-    PYORI_WIN_CTRL Ctrl;
-    PYORI_WIN_CTRL_COMBO Combo;
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    Combo = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_COMBO, Ctrl);
+    PYORIWIN_CTRL Ctrl;
+    PYORIWIN_CTRL_COMBO Combo;
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    Combo = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_COMBO, Ctrl);
 
     if (ActiveOption < Combo->ItemArray.Count) {
         Combo->ItemActive = TRUE;
@@ -148,38 +148,38 @@ YoriWinComboSetActiveOption(
  */
 BOOLEAN
 YoriWinComboChildEvent(
-    __in PYORI_WIN_CTRL Ctrl,
-    __in PYORI_WIN_EVENT Event
+    __in PYORIWIN_CTRL Ctrl,
+    __in PYORIWIN_EVENT Event
     )
 {
-    PYORI_WIN_WINDOW Window;
-    PYORI_WIN_CTRL ListCtrl;
+    PYORIWIN_WINDOW Window;
+    PYORIWIN_CTRL ListCtrl;
     YORI_ALLOC_SIZE_T ActiveIndex;
 
     Window = YoriWinGetWindowFromWindowCtrl(Ctrl);
-    ListCtrl = YoriWinFindControlById(Ctrl, 1);
+    ListCtrl = YoriWinFindControlById(Ctrl, 1L);
     if (ListCtrl == NULL) {
         return FALSE;
     }
 
     switch(Event->EventType) {
         case YoriWinEventKeyDown:
-            if (Event->KeyDown.VirtualKeyCode == VK_ESCAPE) {
-                YoriWinCloseWindow(Window, 0);
-            } else if (Event->KeyDown.VirtualKeyCode == VK_RETURN ||
-                       Event->KeyDown.VirtualKeyCode == VK_TAB) {
+            if (Event->u.KeyDown.VirtualKeyCode == VK_ESCAPE) {
+                YoriWinCloseWindow(Window, 0L);
+            } else if (Event->u.KeyDown.VirtualKeyCode == VK_RETURN ||
+                       Event->u.KeyDown.VirtualKeyCode == VK_TAB) {
                 if (YoriWinListGetActiveOption(ListCtrl, &ActiveIndex)) {
                     YoriWinCloseWindow(Window, ActiveIndex + 1);
                 }
             }
             break;
-        case YoriWinEventMouseDownInClient:
+        case YoriWinEventMouseDownClient:
             if (YoriWinListGetActiveOption(ListCtrl, &ActiveIndex)) {
                 YoriWinCloseWindow(Window, ActiveIndex + 1);
             }
             break;
-        case YoriWinEventMouseDownOutsideWindow:
-            YoriWinCloseWindow(Window, 0);
+        case YoriWinEventMouseDownOutsideWin:
+            YoriWinCloseWindow(Window, 0L);
             break;
     }
     return FALSE;
@@ -195,16 +195,16 @@ YoriWinComboChildEvent(
  */
 BOOLEAN
 YoriWinComboDisplayPullDown(
-    __in PYORI_WIN_CTRL_COMBO Combo
+    __in PYORIWIN_CTRL_COMBO Combo
     )
 {
-    PYORI_WIN_CTRL Ctrl;
+    PYORIWIN_CTRL Ctrl;
     COORD CtrlCoord;
     COORD ScreenCoord;
-    PYORI_WIN_WINDOW TopLevelWindow;
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
-    PYORI_WIN_WINDOW_HANDLE ComboChildWindow;
-    PYORI_WIN_CTRL List;
+    PYORIWIN_WINDOW TopLevelWindow;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle;
+    PYORIWIN_WINDOW_HANDLE ComboChildWindow;
+    PYORIWIN_CTRL List;
     SMALL_RECT ChildRect;
     SMALL_RECT ListRect;
     DWORD_PTR ChildResult;
@@ -213,9 +213,9 @@ YoriWinComboDisplayPullDown(
 
     CtrlCoord.X = 0;
     CtrlCoord.Y = 0;
-    YoriWinTranslateCtrlCoordinatesToScreenCoordinates(Ctrl, FALSE, CtrlCoord, &ScreenCoord);
+    YoriWinTransCtrlCoordToScreen(Ctrl, FALSE, CtrlCoord, &ScreenCoord);
     TopLevelWindow = YoriWinGetTopLevelWindow(Ctrl);
-    WinMgrHandle = YoriWinGetWindowManagerHandle(TopLevelWindow);
+    WinMgrHandle = YoriWinGetWinMgrHandle(TopLevelWindow);
 
     ChildRect.Left = ScreenCoord.X;
     ChildRect.Top = (SHORT)(ScreenCoord.Y + 1);
@@ -230,22 +230,22 @@ YoriWinComboDisplayPullDown(
     ListRect.Top = 0;
     ListRect.Right = (SHORT)(ChildRect.Right - ChildRect.Left);
     ListRect.Bottom = (SHORT)(ChildRect.Bottom - ChildRect.Top);
-    List = YoriWinListCreate(ComboChildWindow, &ListRect, YORI_WIN_LIST_STYLE_VSCROLLBAR);
+    List = YoriWinListCreate(ComboChildWindow, &ListRect, YORIWIN_LIST_STY_VSCROLL);
     if (List == NULL) {
         YoriWinDestroyWindow(ComboChildWindow);
         return FALSE;
     }
 
-    YoriWinSetControlId(List, 1);
+    YoriWinSetCtrlId(List, 1L);
     if (Combo->ItemArray.Count > 0) {
         YoriWinListAddItemArray(List, &Combo->ItemArray);
     }
 
     YoriWinSetCustomNotification(ComboChildWindow, YoriWinEventKeyDown, YoriWinComboChildEvent);
-    YoriWinSetCustomNotification(ComboChildWindow, YoriWinEventMouseDownInClient, YoriWinComboChildEvent);
-    YoriWinSetCustomNotification(ComboChildWindow, YoriWinEventMouseDownOutsideWindow, YoriWinComboChildEvent);
+    YoriWinSetCustomNotification(ComboChildWindow, YoriWinEventMouseDownClient, YoriWinComboChildEvent);
+    YoriWinSetCustomNotification(ComboChildWindow, YoriWinEventMouseDownOutsideWin, YoriWinComboChildEvent);
     ChildResult = 0;
-    YoriWinMgrLockMouseExclusively(WinMgrHandle, ComboChildWindow);
+    YoriWinMgrLockMouseExcl(WinMgrHandle, ComboChildWindow);
     if (!YoriWinProcessInputForWindow(ComboChildWindow, &ChildResult)) {
         ChildResult = 0;
     }
@@ -282,15 +282,15 @@ YoriWinComboDisplayPullDown(
  */
 BOOLEAN
 YoriWinComboEventHandler(
-    __in PYORI_WIN_CTRL Ctrl,
-    __in PYORI_WIN_EVENT Event
+    __in PYORIWIN_CTRL Ctrl,
+    __in PYORIWIN_EVENT Event
     )
 {
-    PYORI_WIN_CTRL_COMBO Combo;
-    Combo = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_COMBO, Ctrl);
+    PYORIWIN_CTRL_COMBO Combo;
+    Combo = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_COMBO, Ctrl);
     switch(Event->EventType) {
         case YoriWinEventKeyDown:
-            if (Event->KeyDown.VirtualKeyCode == VK_DOWN) {
+            if (Event->u.KeyDown.VirtualKeyCode == VK_DOWN) {
                 YoriWinComboDisplayPullDown(Combo);
             }
             break;
@@ -304,15 +304,15 @@ YoriWinComboEventHandler(
             YoriWinDestroyControl(Ctrl);
             YoriLibDereference(Combo);
             break;
-        case YoriWinEventMouseDownInNonClient:
+        case YoriWinEventMouseDownNonCli:
             YoriWinComboDisplayPullDown(Combo);
             break;
-        case YoriWinEventMouseDownInClient:
+        case YoriWinEventMouseDownClient:
             break;
-        case YoriWinEventMouseUpInClient:
-        case YoriWinEventMouseUpInNonClient:
+        case YoriWinEventMouseUpClient:
+        case YoriWinEventMouseUpNonCli:
             break;
-        case YoriWinEventMouseUpOutsideWindow:
+        case YoriWinEventMouseUpOutsideWin:
             break;
         case YoriWinEventLoseFocus:
         case YoriWinEventGetFocus:
@@ -342,16 +342,16 @@ YoriWinComboEventHandler(
 __success(return)
 BOOLEAN
 YoriWinComboAddItems(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle,
     __in PCYORI_STRING ListOptions,
     __in YORI_ALLOC_SIZE_T NumberOptions
     )
 {
-    PYORI_WIN_CTRL Ctrl;
-    PYORI_WIN_CTRL_COMBO Combo;
+    PYORIWIN_CTRL Ctrl;
+    PYORIWIN_CTRL_COMBO Combo;
 
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    Combo = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_COMBO, Ctrl);
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    Combo = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_COMBO, Ctrl);
 
     if (!YoriWinItemArrayAddItems(&Combo->ItemArray, ListOptions, NumberOptions)) {
         return FALSE;
@@ -371,26 +371,26 @@ YoriWinComboAddItems(
  */
 BOOLEAN
 YoriWinComboReposition(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle,
     __in PSMALL_RECT CtrlRect
     )
 {
-    PYORI_WIN_CTRL Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    PYORI_WIN_CTRL_COMBO Combo;
+    PYORIWIN_CTRL Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    PYORIWIN_CTRL_COMBO Combo;
     CONST TCHAR* DownChars;
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle;
 
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    Combo = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_COMBO, Ctrl);
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    Combo = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_COMBO, Ctrl);
 
     if (!YoriWinControlReposition(Ctrl, CtrlRect)) {
         return FALSE;
     }
 
-    WinMgrHandle = YoriWinGetWindowManagerHandle(YoriWinGetTopLevelWindow(Ctrl));
-    DownChars = YoriWinGetDrawingCharacters(WinMgrHandle, YoriWinCharsComboDown);
+    WinMgrHandle = YoriWinGetWinMgrHandle(YoriWinGetTopLevelWindow(Ctrl));
+    DownChars = YoriWinGetDrawingCharacters(WinMgrHandle, YoriWinChrComboDown);
 
-    YoriWinSetControlNonClientCell(&Combo->Ctrl, (SHORT)(Combo->Ctrl.ClientRect.Right + 1), 0, DownChars[0], Combo->Ctrl.DefaultAttributes);
+    YoriWinSetCtrlNonClientCell(&Combo->Ctrl, (SHORT)(Combo->Ctrl.ClientRect.Right + 1), 0, DownChars[0], Combo->Ctrl.DefaultAttributes);
     YoriWinEditReposition(Combo->Edit, &Combo->Ctrl.ClientRect);
     return TRUE;
 }
@@ -418,31 +418,31 @@ YoriWinComboReposition(
 
  @return Pointer to the newly created control or NULL on failure.
  */
-PYORI_WIN_CTRL_HANDLE
+PYORIWIN_CTRL_HANDLE
 YoriWinComboCreate(
-    __in PYORI_WIN_WINDOW_HANDLE ParentHandle,
+    __in PYORIWIN_WINDOW_HANDLE ParentHandle,
     __in PSMALL_RECT Size,
     __in WORD LinesInList,
     __in PYORI_STRING Caption,
-    __in DWORD Style,
-    __in_opt PYORI_WIN_NOTIFY ClickCallback
+    __in WORD Style,
+    __in_opt PYORIWIN_NOTIFY ClickCallback
     )
 {
-    PYORI_WIN_CTRL_COMBO Combo;
-    PYORI_WIN_WINDOW Parent;
+    PYORIWIN_CTRL_COMBO Combo;
+    PYORIWIN_WINDOW Parent;
     CONST TCHAR* DownChars;
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle;
 
-    Parent = (PYORI_WIN_WINDOW)ParentHandle;
+    Parent = (PYORIWIN_WINDOW)ParentHandle;
 
     UNREFERENCED_PARAMETER(Style);
 
-    Combo = YoriLibReferencedMalloc(sizeof(YORI_WIN_CTRL_COMBO));
+    Combo = YoriLibReferencedMalloc(sizeof(YORIWIN_CTRL_COMBO));
     if (Combo == NULL) {
         return NULL;
     }
 
-    ZeroMemory(Combo, sizeof(YORI_WIN_CTRL_COMBO));
+    ZeroMemory(Combo, (DWORD)sizeof(YORIWIN_CTRL_COMBO));
 
     YoriWinItemArrayInitialize(&Combo->ItemArray);
 
@@ -452,15 +452,15 @@ YoriWinComboCreate(
         return NULL;
     }
 
-    WinMgrHandle = YoriWinGetWindowManagerHandle(YoriWinGetTopLevelWindow(&Combo->Ctrl));
-    DownChars = YoriWinGetDrawingCharacters(WinMgrHandle, YoriWinCharsComboDown);
+    WinMgrHandle = YoriWinGetWinMgrHandle(YoriWinGetTopLevelWindow(&Combo->Ctrl));
+    DownChars = YoriWinGetDrawingCharacters(WinMgrHandle, YoriWinChrComboDown);
 
 
-    YoriWinSetControlNonClientCell(&Combo->Ctrl, Combo->Ctrl.ClientRect.Right, 0, DownChars[0], Combo->Ctrl.DefaultAttributes);
+    YoriWinSetCtrlNonClientCell(&Combo->Ctrl, Combo->Ctrl.ClientRect.Right, 0, DownChars[0], Combo->Ctrl.DefaultAttributes);
 
     Combo->Ctrl.ClientRect.Right--;
 
-    Combo->Edit = YoriWinEditCreate(&Combo->Ctrl, &Combo->Ctrl.ClientRect, Caption, YORI_WIN_EDIT_STYLE_READ_ONLY);
+    Combo->Edit = YoriWinEditCreate(&Combo->Ctrl, &Combo->Ctrl.ClientRect, Caption, YORIWIN_EDIT_STY_READ_ONLY);
     if (Combo->Edit == NULL) {
         YoriWinDestroyControl(&Combo->Ctrl);
         YoriLibDereference(Combo);

@@ -46,14 +46,14 @@ SetupTuiUpdateStatus(
     )
 {
     COORD ClientSize;
-    PYORI_WIN_CTRL_HANDLE Ctrl;
-    PYORI_WIN_WINDOW_HANDLE Window;
+    PYORIWIN_CTRL_HANDLE Ctrl;
+    PYORIWIN_WINDOW_HANDLE Window;
     YORI_STRING DisplayText;
 
-    Window = (PYORI_WIN_WINDOW_HANDLE)Context;
+    Window = (PYORIWIN_WINDOW_HANDLE)Context;
 
     Ctrl = YoriWinFindControlById(Window, IDC_STATUS);
-    YoriWinGetControlClientSize(Ctrl, &ClientSize);
+    YoriWinGetCtrlClientSize(Ctrl, &ClientSize);
 
     YoriLibInitEmptyString(&DisplayText);
     DisplayText.StartOfString = Text->StartOfString;
@@ -80,11 +80,11 @@ SetupTuiUpdateStatus(
  */
 BOOLEAN
 SetupIsCheckboxChecked(
-    __in PYORI_WIN_WINDOW_HANDLE Window,
+    __in PYORIWIN_WINDOW_HANDLE Window,
     __in DWORD CtrlId
     )
 {
-    PYORI_WIN_CTRL_HANDLE Ctrl;
+    PYORIWIN_CTRL_HANDLE Ctrl;
     Ctrl = YoriWinFindControlById(Window, CtrlId);
     return YoriWinCheckboxIsChecked(Ctrl);
 }
@@ -100,11 +100,11 @@ SetupIsCheckboxChecked(
  */
 BOOL
 SetupTuiInstallSelectedFromDialog(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr,
-    __in PYORI_WIN_WINDOW_HANDLE Window
+    __in PYORIWIN_WINMGR_HANDLE WinMgr,
+    __in PYORIWIN_WINDOW_HANDLE Window
     )
 {
-    PYORI_WIN_CTRL_HANDLE Ctrl;
+    PYORIWIN_CTRL_HANDLE Ctrl;
     YORI_STRING InstallDir;
     BOOL Result = FALSE;
     YSETUP_INSTALL_TYPE InstallType;
@@ -223,7 +223,7 @@ SetupTuiInstallSelectedFromDialog(
  A global variable to communciate the window manager to button click event
  handlers.  This should probably be obtained from the control/window.
  */
-PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr;
+PYORIWIN_WINMGR_HANDLE WinMgr;
 
 /**
  Indicates that the browse button was clicked within the TUI setup frontend.
@@ -232,16 +232,16 @@ PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr;
  */
 VOID
 SetupTuiBrowseButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
     YORI_STRING Directory;
     YORI_STRING UnescapedDirectory;
     YORI_STRING Title;
-    PYORI_WIN_CTRL_HANDLE Parent;
-    PYORI_WIN_CTRL_HANDLE EditCtrl;
+    PYORIWIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE EditCtrl;
 
-    Parent = YoriWinGetControlParent(Ctrl);
+    Parent = YoriWinGetCtrlParent(Ctrl);
 
     YoriLibInitEmptyString(&Directory);
     YoriLibConstantString(&Title, _T("Browse"));
@@ -270,11 +270,11 @@ SetupTuiBrowseButtonClicked(
  */
 VOID
 SetupTuiInstallButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, TRUE);
 }
 
@@ -285,11 +285,11 @@ SetupTuiInstallButtonClicked(
  */
 VOID
 SetupTuiCancelButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, FALSE);
 }
 
@@ -327,14 +327,14 @@ LPCSTR InstallOptionInfo[] = {
 BOOL
 SetupTuiDisplayUi(VOID)
 {
-    PYORI_WIN_WINDOW_HANDLE Parent;
+    PYORIWIN_WINDOW_HANDLE Parent;
     COORD WindowSize;
     YORI_STRING Title;
     YORI_STRING Caption;
     SMALL_RECT Area;
     YORI_STRING InstallDir;
-    PYORI_WIN_CTRL_HANDLE Ctrl;
-    PYORI_WIN_CTRL_HANDLE FirstRadioCtrl;
+    PYORIWIN_CTRL_HANDLE Ctrl;
+    PYORIWIN_CTRL_HANDLE FirstRadioCtrl;
     DWORD Index;
     DWORD OptionAreaHeight;
     DWORD TopPadding;
@@ -342,7 +342,7 @@ SetupTuiDisplayUi(VOID)
     DWORD ElementCount;
     DWORD_PTR Result;
 
-    if (!YoriWinOpenWindowManager(FALSE, YoriWinColorTableDefault, &WinMgr)) {
+    if (!YoriWinOpenWinMgr(FALSE, YoriWinColorTableDefault, &WinMgr)) {
         return FALSE;
     }
 
@@ -364,7 +364,7 @@ SetupTuiDisplayUi(VOID)
                           0,
                           0);
         YoriLibFreeStringContents(&MessageString);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return TRUE;
     }
 
@@ -383,8 +383,8 @@ SetupTuiDisplayUi(VOID)
         }
     }
 
-    if (!YoriWinCreateWindow(WinMgr, WindowSize.X, WindowSize.Y, WindowSize.X, WindowSize.Y, YORI_WIN_WINDOW_STYLE_BORDER_SINGLE | YORI_WIN_WINDOW_STYLE_SHADOW_SOLID, &Title, &Parent)) {
-        YoriWinCloseWindowManager(WinMgr);
+    if (!YoriWinCreateWindow(WinMgr, WindowSize.X, WindowSize.Y, WindowSize.X, WindowSize.Y, YORIWIN_WIN_STY_BORDER_SINGLE | YORIWIN_WIN_STY_SHADOW_SOLID, &Title, &Parent)) {
+        YoriWinCloseWinMgr(WinMgr);
         YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("ysetup: Could not display window: terminal too small?\n"));
         return FALSE;
     }
@@ -393,7 +393,7 @@ SetupTuiDisplayUi(VOID)
 
     if (!YoriLibAllocateString(&Caption, 100)) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
@@ -407,7 +407,7 @@ SetupTuiDisplayUi(VOID)
     Ctrl = YoriWinLabelCreate(Parent, &Area, &Caption, 0);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         YoriLibFreeStringContents(&Caption);
         return FALSE;
     }
@@ -422,12 +422,12 @@ SetupTuiDisplayUi(VOID)
     Ctrl = YoriWinEditCreate(Parent, &Area, &Caption, 0);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         YoriLibFreeStringContents(&Caption);
         return FALSE;
     }
 
-    YoriWinSetControlId(Ctrl, IDC_INSTALLDIR);
+    YoriWinSetCtrlId(Ctrl, IDC_INSTALLDIR);
 
     SetupGetDefaultInstallDir(&InstallDir);
     YoriWinEditSetText(Ctrl, &InstallDir);
@@ -441,12 +441,12 @@ SetupTuiDisplayUi(VOID)
     Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, 0, SetupTuiBrowseButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         YoriLibFreeStringContents(&Caption);
         return FALSE;
     }
 
-    YoriWinSetControlId(Ctrl, IDC_BROWSE);
+    YoriWinSetCtrlId(Ctrl, IDC_BROWSE);
 
     //
     //  There's three rows used at the top, four at the bottom, so the
@@ -480,12 +480,12 @@ SetupTuiDisplayUi(VOID)
         Ctrl = YoriWinRadioCreate(Parent, &Area, &Caption, FirstRadioCtrl, 0, NULL);
         if (Ctrl == NULL) {
             YoriWinDestroyWindow(Parent);
-            YoriWinCloseWindowManager(WinMgr);
+            YoriWinCloseWinMgr(WinMgr);
             YoriLibFreeStringContents(&Caption);
             return FALSE;
         }
 
-        YoriWinSetControlId(Ctrl, IDC_COREONLY + Index);
+        YoriWinSetCtrlId(Ctrl, IDC_COREONLY + Index);
 
         if (FirstRadioCtrl == NULL) {
             FirstRadioCtrl = Ctrl;
@@ -521,12 +521,12 @@ SetupTuiDisplayUi(VOID)
         Ctrl = YoriWinCheckboxCreate(Parent, &Area, &Caption, 0, NULL);
         if (Ctrl == NULL) {
             YoriWinDestroyWindow(Parent);
-            YoriWinCloseWindowManager(WinMgr);
+            YoriWinCloseWinMgr(WinMgr);
             YoriLibFreeStringContents(&Caption);
             return FALSE;
         }
 
-        YoriWinSetControlId(Ctrl, IDC_DESKTOP_SHORTCUT + Index);
+        YoriWinSetCtrlId(Ctrl, IDC_DESKTOP_SHORTCUT + Index);
     }
 
     YoriLibYPrintf(&Caption, _T("%hs"), YSETUP_DLGTEXT_PLEASESELECT);
@@ -539,11 +539,11 @@ SetupTuiDisplayUi(VOID)
     Ctrl = YoriWinLabelCreate(Parent, &Area, &Caption, 0);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         YoriLibFreeStringContents(&Caption);
         return FALSE;
     }
-    YoriWinSetControlId(Ctrl, IDC_STATUS);
+    YoriWinSetCtrlId(Ctrl, IDC_STATUS);
     YoriLibFreeStringContents(&Caption);
 
     YoriLibConstantString(&Caption, _T("Install"));
@@ -553,10 +553,10 @@ SetupTuiDisplayUi(VOID)
     Area.Right = (WORD)(Area.Left + Caption.LengthInChars + 3);
     Area.Bottom = (WORD)(Area.Top + 2);
 
-    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORI_WIN_BUTTON_STYLE_DEFAULT, SetupTuiInstallButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORIWIN_BUTTON_STY_DEFAULT, SetupTuiInstallButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
@@ -565,10 +565,10 @@ SetupTuiDisplayUi(VOID)
     Area.Left = (WORD)(Area.Right + 2);
     Area.Right = (WORD)(Area.Left + Caption.LengthInChars + 3);
 
-    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORI_WIN_BUTTON_STYLE_CANCEL, SetupTuiCancelButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORIWIN_BUTTON_STY_CANCEL, SetupTuiCancelButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
@@ -588,10 +588,10 @@ SetupTuiDisplayUi(VOID)
 #else
         YoriLibYPrintf(&Caption, _T("%i.%02i"), YORI_VER_MAJOR, YORI_VER_MINOR);
 #endif
-        Ctrl = YoriWinLabelCreate(Parent, &Area, &Caption, YORI_WIN_LABEL_STYLE_RIGHT_ALIGN);
+        Ctrl = YoriWinLabelCreate(Parent, &Area, &Caption, YORIWIN_LABEL_STY_RIGHT_ALIGN);
         if (Ctrl == NULL) {
             YoriWinDestroyWindow(Parent);
-            YoriWinCloseWindowManager(WinMgr);
+            YoriWinCloseWinMgr(WinMgr);
             return FALSE;
         }
     }
@@ -606,7 +606,7 @@ SetupTuiDisplayUi(VOID)
     }
 
     YoriWinDestroyWindow(Parent);
-    YoriWinCloseWindowManager(WinMgr);
+    YoriWinCloseWinMgr(WinMgr);
 
     return TRUE;
 }

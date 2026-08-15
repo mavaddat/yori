@@ -35,11 +35,11 @@
  */
 VOID
 YoriDlgFindOkButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, TRUE);
 }
 
@@ -50,11 +50,11 @@ YoriDlgFindOkButtonClicked(
  */
 VOID
 YoriDlgFindCancelButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, FALSE);
 }
 
@@ -80,24 +80,24 @@ YoriDlgFindCancelButtonClicked(
 __success(return)
 BOOLEAN
 YoriDlgFindText(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in PYORI_STRING Title,
     __in PYORI_STRING InitialText,
     __out PBOOLEAN MatchCase,
     __inout PYORI_STRING Text
     )
 {
-    PYORI_WIN_WINDOW_HANDLE Parent;
+    PYORIWIN_WINDOW_HANDLE Parent;
     COORD WindowSize;
     SMALL_RECT Area;
     YORI_STRING Caption;
     WORD ButtonWidth;
-    PYORI_WIN_CTRL_HANDLE Ctrl;
-    PYORI_WIN_CTRL_HANDLE MatchCaseCheckbox;
-    PYORI_WIN_CTRL_HANDLE Edit;
+    PYORIWIN_CTRL_HANDLE Ctrl;
+    PYORIWIN_CTRL_HANDLE MatchCaseCheckbox;
+    PYORIWIN_CTRL_HANDLE Edit;
     DWORD_PTR Result;
 
-    if (!YoriWinCreateWindow(WinMgrHandle, 50, 13, 70, 13, YORI_WIN_WINDOW_STYLE_BORDER_SINGLE | YORI_WIN_WINDOW_STYLE_SHADOW_SOLID, Title, &Parent)) {
+    if (!YoriWinCreateWindow(WinMgrHandle, 50, 13, 70, 13, YORIWIN_WIN_STY_BORDER_SINGLE | YORIWIN_WIN_STY_SHADOW_SOLID, Title, &Parent)) {
         return FALSE;
     }
 
@@ -156,7 +156,7 @@ YoriDlgFindText(
     Area.Left = (SHORT)(1);
     Area.Right = (WORD)(Area.Left + 1 + ButtonWidth);
 
-    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORI_WIN_BUTTON_STYLE_DEFAULT, YoriDlgFindOkButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORIWIN_BUTTON_STY_DEFAULT, YoriDlgFindOkButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;
@@ -166,7 +166,7 @@ YoriDlgFindText(
     Area.Right = (WORD)(Area.Right + ButtonWidth + 3);
 
     YoriLibConstantString(&Caption, _T("&Cancel"));
-    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORI_WIN_BUTTON_STYLE_CANCEL, YoriDlgFindCancelButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORIWIN_BUTTON_STY_CANCEL, YoriDlgFindCancelButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;

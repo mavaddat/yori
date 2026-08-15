@@ -426,7 +426,7 @@ YoriLibGetSelectionColor(
 {
     WORD SelectionColor;
 
-    if (!YoriLibDoesSystemSupportBackgroundColors()) {
+    if (!YoriLibSystemSupportBgColors()) {
         SelectionColor = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY;
     } else {
         SelectionColor = BACKGROUND_BLUE | FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY;
@@ -1474,8 +1474,8 @@ YoriLibCopySelectionIfPresent(
     //  system clipboard is available, build RTF and HTML forms.
     //
 
-    if (!YoriLibIsSystemClipboardAvailable()) {
-        if (YoriLibCopyTextWithProcessFallback(&TextToCopy)) {
+    if (!YoriLibIsSystemClipboardAvail()) {
+        if (YoriLibCopyTextProcFallback(&TextToCopy)) {
             YoriLibFreeStringContents(&TextToCopy);
             return TRUE;
         }

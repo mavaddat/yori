@@ -76,8 +76,8 @@ SdirUsageHeader(
     )
 {
     TCHAR   Line[80];
-    DWORD   Padding;
-    DWORD   MaxWidth = 80;
+    YORI_ALLOC_SIZE_T Padding;
+    YORI_ALLOC_SIZE_T MaxWidth = 80;
     BOOLEAN ExtraNewline = FALSE;
 
     //
@@ -97,7 +97,7 @@ SdirUsageHeader(
         return FALSE;
     }
 
-    Padding = (DWORD)_tcslen(Line) - 1;
+    Padding = (YORI_ALLOC_SIZE_T)_tcslen(Line) - 1;
     if (Opts->ConsoleBufferWidth > Padding) {
 
         //
@@ -144,13 +144,13 @@ SdirUsageHeader(
 /**
  An ANSI string heading for the top level help options.
  */
-const
+CONST
 CHAR strHelpHeader[] = "HELP OPTIONS";
 
 /**
  An ANSI string for top level options.
  */
-const
+CONST
 CHAR strHelpUsage1[] = 
                    "  Usage: [opts] [pathspec] ...\n"
                    "\n"
@@ -196,14 +196,14 @@ SdirUsageHelp(VOID)
 /**
  An ANSI string heading for generic options.
  */
-const
+CONST
 CHAR strCmdLineHeader[] = "COMMAND LINE OPTIONS";
 
 /**
  An ANSI string for the first section of miscellaneous and generic options.
  */
-const
-CHAR strCmdLineOpts[] = 
+CONST
+CHAR strCmdLineOpts1[] = 
                    "  Usage: [opts] [pathspec] ...\n"
                    "\n"
                    "   -?           Display help\n"
@@ -212,11 +212,18 @@ CHAR strCmdLineOpts[] =
                    "   -cw[num]     Width of console when writing to files\n"
                    "   -fc[string]  Apply custom file color string, see file color section\n"
                    "   -fe[string]  Exclude files matching criteria, see file color section\n"
-                   "   -l/-ln       Traverse symbolic links and mount points when recursing\n"
+                   "   -l/-ln       Traverse symbolic links and mount points when recursing\n";
+
+
+/**
+ An ANSI string for the first section of miscellaneous and generic options.
+ */
+CONST
+CHAR strCmdLineOpts2[] = 
                    "   -p/-pn       Pause/no pause after each screen\n"
                    "   -r           Recurse through directories when enumerating\n"
                    "   -t/-tn       Truncate/no truncate of very long file names\n"
-#ifdef UNICODE
+#if defined(UNICODE) || defined(MSDOS)
                    "   -u/-un       Unicode/no unicode output\n"
 #endif
                    "   -v           Display version/build info and exit\n"
@@ -225,7 +232,7 @@ CHAR strCmdLineOpts[] =
 /**
  An ANSI string for the second section of miscellaneous and generic options.
  */
-const
+CONST
 CHAR strCmdLineUsage2[] = "\n"
                    " Options can also be in the SDIR_OPTS environment variable.\n"
                    " Processed in order, environment then arguments.\n";
@@ -247,7 +254,7 @@ SdirUsageOpts(VOID)
         return FALSE;
     }
 
-    YoriLibYPrintf(&str, _T("%hs"), strCmdLineOpts);
+    YoriLibYPrintf(&str, _T("%hs%hs"), strCmdLineOpts1, strCmdLineOpts2);
 
     if (!SdirWriteString(str.StartOfString)) {
         YoriLibFreeStringContents(&str);
@@ -261,7 +268,7 @@ SdirUsageOpts(VOID)
 /**
  An ANSI string heading for the license section.
  */
-const
+CONST
 CHAR strLicenseHeader[] = "LICENSE";
 
 /**
@@ -293,7 +300,7 @@ SdirUsageLicense(VOID)
 /**
  An ANSI string heading for the metadata display section.
  */
-const
+CONST
 CHAR strDisplayHeader[] = "DISPLAY OPTIONS";
 
 /**
@@ -334,7 +341,7 @@ SdirUsageDisplay(VOID)
 /**
  An ANSI string heading for the file sorting section.
  */
-const
+CONST
 CHAR strSortHeader[] = "SORT OPTIONS";
 
 /**
@@ -390,13 +397,13 @@ SdirUsageSort(VOID)
 /**
  An ANSI string heading for the file color section.
  */
-const
+CONST
 CHAR strFileColorHeader[] = "FILE COLOR CODING";
 
 /**
  An ANSI string for the first section of information about file color.
  */
-const
+CONST
 CHAR strFileColorUsage1[] = 
                    " Color coding for files is defined via three environment variables,\n"
                    " plus the command line, processed in order:\n"
@@ -408,7 +415,13 @@ CHAR strFileColorUsage1[] =
                    " Each variable contains a semicolon delimited list of rules.  Each rule takes\n"
                    " the form of:\n"
                    "\n"
-                   "   [file attribute][operator][criteria],[color]\n"
+                   "   [file attribute][operator][criteria],[color]\n";
+
+/**
+ An ANSI string for the first section of information about file color.
+ */
+CONST
+CHAR strFileColorUsage2[] = 
                    "\n"
                    " The -fe command line option is a shorthand form, which is equivalent to\n"
                    " specifying a color of 'hide', and is condensed to:\n"
@@ -419,7 +432,13 @@ CHAR strFileColorUsage1[] =
                    "   =   File attribute matches criteria\n"
                    "   !=  File attribute does not match criteria\n"
                    "   >   File attribute greater than criteria\n"
-                   "   >=  File attribute greater than or equal to criteria\n"
+                   "   >=  File attribute greater than or equal to criteria\n";
+
+/**
+ An ANSI string for the first section of information about file color.
+ */
+CONST
+CHAR strFileColorUsage3[] = 
                    "   <   File attribute less than criteria\n"
                    "   <=  File attribute less than or equal to criteria\n"
                    "   &   File attribute includes criteria or wildcard string\n"
@@ -430,16 +449,16 @@ CHAR strFileColorUsage1[] =
 /**
  An ANSI string for the second section of information about file color.
  */
-const
-CHAR strFileColorUsage2[] = "\n"
+CONST
+CHAR strFileColorUsage4[] = "\n"
                    " Multiple colors and keywords can be combined, delimited by +. Valid colors\n"
                    " are:\n";
 
 /**
  An ANSI string for the third section of information about file color.
  */
-const
-CHAR strFileColorUsage3[] = "\n"
+CONST
+CHAR strFileColorUsage5[] = "\n"
                    " In addition to regular colors, special keywords can be included.\n"
                    " For file colors, these are:\n"
                    "\n"
@@ -448,7 +467,13 @@ CHAR strFileColorUsage3[] = "\n"
                    "   invert    To swap background and foreground color\n"
                    "   window_bg To use the background color from the window\n"
                    "   window_fg To use the foreground color from the window\n"
-                   "\n"
+                   "\n";
+
+/**
+ An ANSI string for the third section of information about file color.
+ */
+CONST
+CHAR strFileColorUsage6[] = "\n"
                    "   continue  To continue matching further rules and merge with subsequent\n"
                    "             results.\n"
                    "\n"
@@ -476,7 +501,7 @@ SdirUsageFileColor(VOID)
         return FALSE;
     }
 
-    YoriLibYPrintf(&str, _T("%hs"), strFileColorUsage1);
+    YoriLibYPrintf(&str, _T("%hs%hs%hs"), strFileColorUsage1, strFileColorUsage2, strFileColorUsage3);
 
     if (!SdirWriteString(str.StartOfString)) {
         YoriLibFreeStringContents(&str);
@@ -506,7 +531,7 @@ SdirUsageFileColor(VOID)
         }
     }
 
-    YoriLibYPrintf(&str, _T("%hs"), strFileColorUsage2);
+    YoriLibYPrintf(&str, _T("%hs"), strFileColorUsage4);
     if (!SdirWriteString(str.StartOfString)) {
         YoriLibFreeStringContents(&str);
         return FALSE;
@@ -566,7 +591,7 @@ SdirUsageFileColor(VOID)
     }
 
 
-    YoriLibYPrintf(&str, _T("%hs"), strFileColorUsage3);
+    YoriLibYPrintf(&str, _T("%hs%hs"), strFileColorUsage5, strFileColorUsage6);
     if (!SdirWriteString(str.StartOfString)) {
         YoriLibFreeStringContents(&str);
         return FALSE;
@@ -578,7 +603,7 @@ SdirUsageFileColor(VOID)
     //  one per line.  This is the kludge to make that happen.
     //
 
-    This = YoriLibGetDefaultFileColorString();
+    This = YoriLibGetDefaultFileColorStr();
 
     YoriLibSPrintfS(Line,
                 sizeof(Line)/sizeof(Line[0]),
@@ -621,13 +646,13 @@ SdirUsageFileColor(VOID)
 /**
  An ANSI string heading for the metadata color section.
  */
-const
+CONST
 CHAR strMetaColorHeader[] = "METADATA COLOR CODING";
 
 /**
  An ANSI string for the first section of information about metadata color.
  */
-const
+CONST
 CHAR strMetaColorUsage1[] =
                    " Color coding for metadata attributes is defined via YORICOLORMETADATA.\n"
                    " This variable also contains a semicolon delimited list of rules.  Each rule\n"
@@ -640,7 +665,7 @@ CHAR strMetaColorUsage1[] =
 /**
  An ANSI string for the second section of information about metadata color.
  */
-const
+CONST
 CHAR strMetaColorUsage2[] = "\n"
                    " For metadata colors, the keyword 'file' indicates to use the file color,\n"
                    " and not apply any specific metadata color.\n";

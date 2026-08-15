@@ -765,17 +765,17 @@ YoriLibPasteBinaryData(
     );
 
 BOOLEAN
-YoriLibIsSystemClipboardAvailable(VOID);
+YoriLibIsSystemClipboardAvail(VOID);
 
 __success(return)
 BOOL
-YoriLibCopyTextWithProcessFallback(
+YoriLibCopyTextProcFallback(
     __in PYORI_STRING Buffer
     );
 
 __success(return)
 BOOL
-YoriLibPasteTextWithProcessFallback(
+YoriLibPasteTextProcFallback(
     __inout PYORI_STRING Buffer
     );
 
@@ -851,7 +851,7 @@ YoriLibExpandCommandVariables(
     __inout PYORI_STRING ExpandedString
     );
 
-// *** COLOR.C ***
+// *** YLCOLOR.C ***
 
 
 extern YORILIB_ATTRIBUTE_COLOR_STRING YoriLibColorStringTable[];
@@ -905,22 +905,22 @@ extern YORILIB_ATTRIBUTE_COLOR_STRING YoriLibColorStringTable[];
  A mask that represents all possible colors in the Win32Attr member
  of YORILIB_COLOR_ATTRIBUTES, consisting of both a background and a foreground.
  */
-#define YORILIB_ATTRIBUTE_FULLCOLOR_MASK   0xFF
+#define YORILIB_ATTR_FULLCOLOR_MASK   0xFF
 
 /**
  A mask that represents a single color, either a background or foreground, in
  the Win32Attr member of YORILIB_COLOR_ATTRIBUTES.
  */
-#define YORILIB_ATTRIBUTE_ONECOLOR_MASK    0x0F
+#define YORILIB_ATTR_ONECOLOR_MASK    0x0F
 
 VOID
-YoriLibAttributeFromString(
+YoriLibAttrFromString(
     __in PYORI_STRING String,
     __out PYORILIB_COLOR_ATTRIBUTES OutAttributes
     );
 
 VOID
-YoriLibAttributeFromLiteralString(
+YoriLibAttrFromLitString(
     __in LPCTSTR String,
     __out PYORILIB_COLOR_ATTRIBUTES OutAttributes
     );
@@ -939,7 +939,7 @@ YoriLibCombineColors(
     );
 
 VOID
-YoriLibResolveWindowColorComponents(
+YoriLibResolveWindowColors(
     __in YORILIB_COLOR_ATTRIBUTES Color,
     __in YORILIB_COLOR_ATTRIBUTES WindowColor,
     __in BOOL RetainWindowCtrlFlags,
@@ -952,12 +952,14 @@ YoriLibAreColorsIdentical(
     __in YORILIB_COLOR_ATTRIBUTES Color2
     );
 
+// *** YLFILCOL.C ***
+
 LPCSTR
-YoriLibGetDefaultFileColorString(VOID);
+YoriLibGetDefaultFileColorStr(VOID);
 
 __success(return)
 BOOL
-YoriLibLoadCombinedFileColorString(
+YoriLibLoadCombinedFileColorStr(
     __in_opt PYORI_STRING Custom,
     __out PYORI_STRING Combined
     );
@@ -1206,7 +1208,7 @@ YoriLibRtfConvertToRtfFromVt(
 // *** DBLCLK.C ***
 
 BOOL
-YoriLibGetSelectionDoubleClickBreakChars(
+YoriLibGetSelDblClkBreakChars(
     __out PYORI_STRING BreakChars
     );
 
@@ -1629,59 +1631,59 @@ YoriLibDoesFileMatchExpression (
  An object describing a set of criteria to apply against a file to check
  for whether it should be included.
  */
-typedef struct _YORI_LIB_FILE_FILTER {
+typedef struct _YORILIB_FILE_FILTER {
 
     /**
      The number of criteria to apply.
      */
-    DWORD NumberCriteria;
+    YORI_ALLOC_SIZE_T NumberCriteria;
 
     /**
      The size of each element.
      */
-    DWORD ElementSize;
+    YORI_ALLOC_SIZE_T ElementSize;
 
     /**
      An array of criteria to apply.
      */
     PVOID Criteria;
-} YORI_LIB_FILE_FILTER, *PYORI_LIB_FILE_FILTER;
+} YORILIB_FILE_FILTER, *PYORILIB_FILE_FILTER;
 
 /**
  Specifies a pointer to a function which can compare two directory entries
  in some fashion.
  */
-typedef DWORD (* YORI_LIB_FILE_FILT_COMPARE_FN)(PYORI_FILE_INFO, PYORI_FILE_INFO);
+typedef WORD (* YORILIB_FILFLT_COMPARE_FN)(PYORI_FILE_INFO, PYORI_FILE_INFO);
 
 /**
  Specifies a pointer to a function which can collect file information from
  the disk or file system for some particular piece of data.
  */
-typedef BOOL (* YORI_LIB_FILE_FILT_COLLECT_FN)(PYORI_FILE_INFO, PWIN32_FIND_DATA, PYORI_STRING);
+typedef BOOL (* YORILIB_FILFLT_COLLECT_FN)(PYORI_FILE_INFO, PWIN32_FIND_DATA, PYORI_STRING);
 
 /**
  Specifies a pointer to a function which can generate in memory file
  information from a user provided string.
  */
-typedef BOOL (* YORI_LIB_FILE_FILT_GENERATE_FROM_STRING_FN)(PYORI_FILE_INFO, PYORI_STRING);
+typedef BOOL (* YORILIB_FILFLT_GEN_FROM_STR_FN)(PYORI_FILE_INFO, PYORI_STRING);
 
 /**
  An in memory representation of a single match criteria, specifying whether
  a file matches a specified criteria.
  */
-typedef struct _YORI_LIB_FILE_FILT_MATCH_CRITERIA {
+typedef struct _YORILIB_FILFLT_MATCH_CRITERIA {
 
     /**
      Pointer to a function to ingest an incoming directory entry so that we
      have two objects to compare against.
      */
-    YORI_LIB_FILE_FILT_COLLECT_FN CollectFn;
+    YORILIB_FILFLT_COLLECT_FN CollectFn;
 
     /**
      Pointer to a function to compare an incoming directory entry against the
      dummy one contained here.
      */
-    YORI_LIB_FILE_FILT_COMPARE_FN CompareFn;
+    YORILIB_FILFLT_COMPARE_FN CompareFn;
 
     /**
      An array indicating whether a match is found if the comparison returns
@@ -1694,70 +1696,70 @@ typedef struct _YORI_LIB_FILE_FILT_MATCH_CRITERIA {
      used to allow all compare functions to operate on two directory entries.
      */
     YORI_FILE_INFO CompareEntry;
-} YORI_LIB_FILE_FILT_MATCH_CRITERIA, *PYORI_LIB_FILE_FILT_MATCH_CRITERIA;
+} YORILIB_FILFLT_MATCH_CRITERIA, *PYORILIB_FILFLT_MATCH_CRITERIA;
 
 /**
  An in memory representation of a single match criteria and color to apply
  in the event that a file matches the criteria.
  */
-typedef struct _YORI_LIB_FILE_FILT_COLOR_CRITERIA {
+typedef struct _YORILIB_FILFLT_COLOR_CRITERIA {
 
     /**
      Information describing the criteria to match and how to determine whether
      a match took place.
      */
-    YORI_LIB_FILE_FILT_MATCH_CRITERIA Match;
+    YORILIB_FILFLT_MATCH_CRITERIA Match;
 
     /**
      The color to apply in event of a match.
      */
     YORILIB_COLOR_ATTRIBUTES Color;
-} YORI_LIB_FILE_FILT_COLOR_CRITERIA, *PYORI_LIB_FILE_FILT_COLOR_CRITERIA;
+} YORILIB_FILFLT_COLOR_CRITERIA, *PYORILIB_FILFLT_COLOR_CRITERIA;
 
 BOOL
-YoriLibFileFiltHelp(VOID);
+YoriLibFilFltHelp(VOID);
 
 __success(return)
 BOOL
-YoriLibFileFiltParseFilterString(
-    __out PYORI_LIB_FILE_FILTER Filter,
+YoriLibFilFltParseString(
+    __out PYORILIB_FILE_FILTER Filter,
     __in PYORI_STRING FilterString,
     __out _On_failure_(_Post_valid_) PYORI_STRING ErrorSubstring
     );
 
 __success(return)
 BOOL
-YoriLibFileFiltParseColorString(
-    __out PYORI_LIB_FILE_FILTER Filter,
+YoriLibFilFltParseColorStr(
+    __out PYORILIB_FILE_FILTER Filter,
     __in PYORI_STRING ColorString,
     __out _On_failure_(_Post_valid_) PYORI_STRING ErrorSubstring
     );
 
 __success(return)
 BOOL
-YoriLibFileFiltCheckFilterMatch(
-    __in PYORI_LIB_FILE_FILTER Filter,
+YoriLibFilFltCheckFilterMatch(
+    __in PYORILIB_FILE_FILTER Filter,
     __in PYORI_STRING FilePath,
     __in PWIN32_FIND_DATA FileInfo
     );
 
 __success(return)
 BOOL
-YoriLibFileFiltCheckColorMatch(
-    __in PYORI_LIB_FILE_FILTER Filter,
+YoriLibFilFltCheckColorMatch(
+    __in PYORILIB_FILE_FILTER Filter,
     __in PYORI_STRING FilePath,
     __in PWIN32_FIND_DATA FileInfo,
     __out PYORILIB_COLOR_ATTRIBUTES Attribute
     );
 
 VOID
-YoriLibFileFiltFreeFilter(
-    __in PYORI_LIB_FILE_FILTER Filter
+YoriLibFilFltFreeFilter(
+    __in PYORILIB_FILE_FILTER Filter
     );
 
 __success(return)
 BOOL
-YoriLibUpdateFindDataFromFileInformation (
+YoriLibUpdateFindDataFromFile (
     __out PWIN32_FIND_DATA FindData,
     __in LPTSTR FullPath,
     __in BOOL CopyName
@@ -1836,10 +1838,12 @@ YoriLibGetFilePermissionPairs(
     __out PCYORI_LIB_CHAR_TO_DWORD_FLAG * Pairs
     );
 
+#if _WIN32
 BOOL
 YoriLibIsExecutableGui(
     __in PYORI_STRING FullPath
     );
+#endif
 
 BOOL
 YoriLibCollectAccessTime (
@@ -1848,12 +1852,14 @@ YoriLibCollectAccessTime (
     __in PYORI_STRING FullPath
     );
 
+#if _WIN32
 BOOL
 YoriLibCollectAllocatedRangeCount (
     __inout PYORI_FILE_INFO Entry,
     __in PWIN32_FIND_DATA FindData,
     __in PYORI_STRING FullPath
     );
+#endif
 
 BOOL
 YoriLibCollectAllocationSize (
@@ -1862,6 +1868,7 @@ YoriLibCollectAllocationSize (
     __in PYORI_STRING FullPath
     );
 
+#if _WIN32
 BOOL
 YoriLibCollectArch (
     __inout PYORI_FILE_INFO Entry,
@@ -1889,6 +1896,7 @@ YoriLibCollectCompressedFileSize (
     __in PWIN32_FIND_DATA FindData,
     __in PYORI_STRING FullPath
     );
+#endif
 
 BOOL
 YoriLibCollectCreateTime (
@@ -1897,6 +1905,7 @@ YoriLibCollectCreateTime (
     __in PYORI_STRING FullPath
     );
 
+#if _WIN32
 BOOL
 YoriLibCollectDescription (
     __inout PYORI_FILE_INFO Entry,
@@ -1910,6 +1919,7 @@ YoriLibCollectEffectivePermissions (
     __in PWIN32_FIND_DATA FindData,
     __in PYORI_STRING FullPath
     );
+#endif
 
 BOOL
 YoriLibCollectFileAttributes (
@@ -1946,6 +1956,7 @@ YoriLibCollectFileSize (
     __in PYORI_STRING FullPath
     );
 
+#if _WIN32
 BOOL
 YoriLibCollectFileVersionString (
     __inout PYORI_FILE_INFO Entry,
@@ -1959,6 +1970,7 @@ YoriLibCollectFragmentCount (
     __in PWIN32_FIND_DATA FindData,
     __in PYORI_STRING FullPath
     );
+#endif
 
 BOOL
 YoriLibCollectLinkCount (
@@ -1967,6 +1979,7 @@ YoriLibCollectLinkCount (
     __in PYORI_STRING FullPath
     );
 
+#if _WIN32
 BOOL
 YoriLibCollectObjectId (
     __inout PYORI_FILE_INFO Entry,
@@ -1994,6 +2007,7 @@ YoriLibCollectReparseTag (
     __in PWIN32_FIND_DATA FindData,
     __in PYORI_STRING FullPath
     );
+#endif
 
 BOOL
 YoriLibCollectShortName (
@@ -2002,6 +2016,7 @@ YoriLibCollectShortName (
     __in PYORI_STRING FullPath
     );
 
+#if _WIN32
 BOOL
 YoriLibCollectSubsystem (
     __inout PYORI_FILE_INFO Entry,
@@ -2029,6 +2044,7 @@ YoriLibCollectVersion (
     __in PWIN32_FIND_DATA FindData,
     __in PYORI_STRING FullPath
     );
+#endif
 
 BOOL
 YoriLibCollectWriteTime(
@@ -2037,235 +2053,247 @@ YoriLibCollectWriteTime(
     __in PYORI_STRING FullPath
     );
 
-DWORD
+WORD
 YoriLibCompareLargeInt (
     __in PULARGE_INTEGER Left,
     __in PULARGE_INTEGER Right
     );
 
-DWORD
-YoriLibCompareNullTerminatedString (
-    __in LPCTSTR Left,
-    __in LPCTSTR Right
-    );
-
-DWORD
+WORD
 YoriLibCompareDate (
     __in LPSYSTEMTIME Left,
     __in LPSYSTEMTIME Right
     );
 
-DWORD
+WORD
 YoriLibCompareTime (
     __in LPSYSTEMTIME Left,
     __in LPSYSTEMTIME Right
     );
 
-DWORD
+WORD
 YoriLibCompareAccessDate (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
 
-DWORD
+WORD
 YoriLibCompareAccessTime (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
 
-DWORD
+#if _WIN32
+WORD
 YoriLibCompareAllocatedRangeCount (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
+#endif
 
-DWORD
+WORD
 YoriLibCompareAllocationSize (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
 
-DWORD
+#if _WIN32
+WORD
 YoriLibCompareArch (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
 
-DWORD
+WORD
 YoriLibCompareCaseSensitivity (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
 
-DWORD
+WORD
 YoriLibCompareCompressionAlgorithm (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
 
-DWORD
+WORD
 YoriLibCompareCompressedFileSize (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
+#endif
 
-DWORD
+WORD
 YoriLibCompareCreateDate (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
 
-DWORD
+WORD
 YoriLibCompareCreateTime (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
 
-DWORD
+#if _WIN32
+WORD
 YoriLibCompareDescription (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
+#endif
 
-DWORD
+WORD
 YoriLibCompareDirectory (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
 
-DWORD
+#if _WIN32
+WORD
 YoriLibCompareEffectivePermissions (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
+#endif
 
-DWORD
+WORD
 YoriLibCompareFileAttributes (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
 
-DWORD
+WORD
 YoriLibCompareFileExtension (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
 
-DWORD
+WORD
 YoriLibCompareFileId (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
 
-DWORD
+WORD
 YoriLibCompareFileName (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
 
-DWORD
+WORD
 YoriLibCompareFileSize (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
 
-DWORD
+#if _WIN32
+WORD
 YoriLibCompareFileVersionString (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
 
-DWORD
+WORD
 YoriLibCompareFragmentCount (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
+#endif
 
-DWORD
+WORD
 YoriLibCompareLinkCount (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
 
-DWORD
+#if _WIN32
+WORD
 YoriLibCompareObjectId (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
+#endif
 
-DWORD
+WORD
 YoriLibCompareOsVersion (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
 
-DWORD
+#if _WIN32
+WORD
 YoriLibCompareOwner (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
 
-DWORD
+WORD
 YoriLibCompareReparseTag (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
+#endif
 
-DWORD
+WORD
 YoriLibCompareShortName (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
 
-DWORD
+WORD
 YoriLibCompareSubsystem (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
 
-DWORD
+#if _WIN32
+WORD
 YoriLibCompareStreamCount (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
 
-DWORD
+WORD
 YoriLibCompareUsn (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
 
-DWORD
+WORD
 YoriLibCompareVersion (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
+#endif
 
-DWORD
+WORD
 YoriLibCompareWriteDate (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
 
-DWORD
+WORD
 YoriLibCompareWriteTime (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
 
-DWORD
+#if _WIN32
+WORD
 YoriLibBitwiseEffectivePermissions (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
+#endif
 
-DWORD
+WORD
 YoriLibBitwiseFileAttributes (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
     );
 
-DWORD
+WORD
 YoriLibBitwiseFileName (
     __in PYORI_FILE_INFO Left,
     __in PYORI_FILE_INFO Right
@@ -2283,11 +2311,13 @@ YoriLibGenerateAccessTime(
     __in PYORI_STRING String
     );
 
+#if _WIN32
 BOOL
 YoriLibGenerateAllocatedRangeCount(
     __inout PYORI_FILE_INFO Entry,
     __in PYORI_STRING String
     );
+#endif
 
 BOOL
 YoriLibGenerateAllocationSize(
@@ -2295,6 +2325,7 @@ YoriLibGenerateAllocationSize(
     __in PYORI_STRING String
     );
 
+#if _WIN32
 BOOL
 YoriLibGenerateArch(
     __inout PYORI_FILE_INFO Entry,
@@ -2318,6 +2349,7 @@ YoriLibGenerateCompressedFileSize(
     __inout PYORI_FILE_INFO Entry,
     __in PYORI_STRING String
     );
+#endif
 
 BOOL
 YoriLibGenerateCreateDate(
@@ -2331,11 +2363,13 @@ YoriLibGenerateCreateTime(
     __in PYORI_STRING String
     );
 
+#if _WIN32
 BOOL
 YoriLibGenerateDescription(
     __inout PYORI_FILE_INFO Entry,
     __in PYORI_STRING String
     );
+#endif
 
 BOOL
 YoriLibGenerateDirectory(
@@ -2343,11 +2377,13 @@ YoriLibGenerateDirectory(
     __in PYORI_STRING String
     );
 
+#if _WIN32
 BOOL
 YoriLibGenerateEffectivePermissions(
     __inout PYORI_FILE_INFO Entry,
     __in PYORI_STRING String
     );
+#endif
 
 BOOL
 YoriLibGenerateFileAttributes(
@@ -2379,6 +2415,7 @@ YoriLibGenerateFileSize(
     __in PYORI_STRING String
     );
 
+#if _WIN32
 BOOL
 YoriLibGenerateFileVersionString(
     __inout PYORI_FILE_INFO Entry,
@@ -2390,6 +2427,7 @@ YoriLibGenerateFragmentCount(
     __inout PYORI_FILE_INFO Entry,
     __in PYORI_STRING String
     );
+#endif
 
 BOOL
 YoriLibGenerateLinkCount(
@@ -2397,6 +2435,7 @@ YoriLibGenerateLinkCount(
     __in PYORI_STRING String
     );
 
+#if _WIN32
 BOOL
 YoriLibGenerateObjectId(
     __inout PYORI_FILE_INFO Entry,
@@ -2420,6 +2459,7 @@ YoriLibGenerateReparseTag(
     __inout PYORI_FILE_INFO Entry,
     __in PYORI_STRING String
     );
+#endif
 
 BOOL
 YoriLibGenerateShortName(
@@ -2427,6 +2467,7 @@ YoriLibGenerateShortName(
     __in PYORI_STRING String
     );
 
+#if _WIN32
 BOOL
 YoriLibGenerateSubsystem (
     __inout PYORI_FILE_INFO Entry,
@@ -2450,6 +2491,7 @@ YoriLibGenerateVersion(
     __inout PYORI_FILE_INFO Entry,
     __in PYORI_STRING String
     );
+#endif
 
 BOOL
 YoriLibGenerateWriteDate(
@@ -3111,7 +3153,7 @@ YoriLibBuildNumericKey(
     );
 
 BOOLEAN
-YoriLibTranslateNumericKeyToChar(
+YoriLibTransNumKeyToChar(
     __in DWORD NumericKeyValue,
     __in YORI_LIB_NUMERIC_KEY_TYPE NumericKeyType,
     __out PTCHAR Char
@@ -3195,7 +3237,7 @@ BOOLEAN
 YoriLibIsNanoServer(VOID);
 
 BOOLEAN
-YoriLibDoesSystemSupportBackgroundColors(VOID);
+YoriLibSystemSupportBgColors(VOID);
 
 VOID
 YoriLibResetSystemBackgroundColorSupport(VOID);
@@ -4486,7 +4528,59 @@ YoriLibQueryConsoleCapabilities(
     __out_opt PBOOL SupportsAutoLineWrap
     );
 
+// *** YLTICKTM.C ***
 
-// MSFIX Out of order here
+/**
+ Representation of time in system ticks.  Different operating systems have
+ different timer granularity, so this allows time to be calculated in an
+ abstracted way.
+ */
+typedef LONGLONG                 YORI_TICK_TIME_T;
+
+/**
+ Pointer to time in system ticks.
+ */
+typedef YORI_TICK_TIME_T     FAR *PYORI_TICK_TIME_T;
+
+VOID
+YoriLibAssignTickTime(
+    __out PYORI_TICK_TIME_T TickTime1,
+    __in PYORI_TICK_TIME_T TickTime2
+    );
+
+VOID
+YoriLibAssignMsToTickTime(
+    __out PYORI_TICK_TIME_T TickTime,
+    __in DWORD TimeInMs
+    );
+
+VOID
+YoriLibMultiplyTickTime(
+    __inout PYORI_TICK_TIME_T TickTime,
+    __in DWORD Count
+    );
+
+VOID
+YoriLibAddTickTime(
+    __inout PYORI_TICK_TIME_T TickTime1,
+    __in PYORI_TICK_TIME_T TickTime2
+    );
+
+LONG
+YoriLibTickTimeDifferenceInMs(
+    __in PYORI_TICK_TIME_T TickTime1,
+    __in PYORI_TICK_TIME_T TickTime2
+    );
+
+BOOLEAN
+YoriLibTickTimeLessThan(
+    __in PYORI_TICK_TIME_T TickTime1,
+    __in PYORI_TICK_TIME_T TickTime2
+    );
+
+VOID
+YoriLibGetSystemTimeAsTicks(
+    __out PYORI_TICK_TIME_T TickTime
+    );
 
 // vim:sw=4:ts=4:et:

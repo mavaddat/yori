@@ -128,7 +128,7 @@ CONST TCHAR YoriLibLowAsciiToUnicodeTable[] = {
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 BOOLEAN
-YoriLibTranslateNumericKeyToChar(
+YoriLibTransNumKeyToChar(
     __in DWORD NumericKeyValue,
     __in YORI_LIB_NUMERIC_KEY_TYPE NumericKeyType,
     __out PTCHAR Char

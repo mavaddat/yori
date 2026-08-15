@@ -57,8 +57,8 @@
         starts at the requested DisplayChar.
  */
 VOID
-YoriWinTextBufferOffsetFromDisplayCellOffset(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+YoriWinTextBufferOffsetFromDisp(
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in PYORI_STRING String,
     __in YORI_ALLOC_SIZE_T TabWidth,
     __in YORI_ALLOC_SIZE_T CellOffset,
@@ -71,9 +71,9 @@ YoriWinTextBufferOffsetFromDisplayCellOffset(
     YORI_ALLOC_SIZE_T CurrentDisplayIndex;
     YORI_ALLOC_SIZE_T DesiredCursorChar;
     TCHAR Char;
-    BOOLEAN DoubleWideCharSupported;
+    BOOLEAN DblWideSupp;
 
-    DoubleWideCharSupported = YoriWinIsDoubleWideCharSupported(WinMgrHandle);
+    DblWideSupp = YoriWinIsDblWideSupp(WinMgrHandle);
 
     CurrentDisplayIndex = 0;
     for (CharIndex = 0; CharIndex < String->LengthInChars; CharIndex++) {
@@ -89,7 +89,7 @@ YoriWinTextBufferOffsetFromDisplayCellOffset(
 
         if (Char == '\t') {
             CurrentDisplayIndex = CurrentDisplayIndex + TabWidth;
-        } else if (DoubleWideCharSupported && YoriLibIsDoubleWideChar(Char)) {
+        } else if (DblWideSupp && YoriLibIsDoubleWideChar(Char)) {
             CurrentDisplayIndex = CurrentDisplayIndex + 2;
         } else {
             CurrentDisplayIndex++;
@@ -126,8 +126,8 @@ YoriWinTextBufferOffsetFromDisplayCellOffset(
         that would be written by displaying the string.
  */
 VOID
-YoriWinTextDisplayCellOffsetFromBufferOffset(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+YoriWinTextDispOffsetFromBuffer(
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in PYORI_STRING String,
     __in YORI_ALLOC_SIZE_T TabWidth,
     __in YORI_ALLOC_SIZE_T BufferOffset,
@@ -137,9 +137,9 @@ YoriWinTextDisplayCellOffsetFromBufferOffset(
     YORI_ALLOC_SIZE_T CharIndex;
     YORI_ALLOC_SIZE_T CurrentDisplayIndex;
     TCHAR Char;
-    BOOLEAN DoubleWideCharSupported;
+    BOOLEAN DblWideSupp;
 
-    DoubleWideCharSupported = YoriWinIsDoubleWideCharSupported(WinMgrHandle);
+    DblWideSupp = YoriWinIsDblWideSupp(WinMgrHandle);
 
     CurrentDisplayIndex = 0;
     for (CharIndex = 0; CharIndex < String->LengthInChars; CharIndex++) {
@@ -152,7 +152,7 @@ YoriWinTextDisplayCellOffsetFromBufferOffset(
 
         if (Char == '\t') {
             CurrentDisplayIndex = CurrentDisplayIndex + TabWidth;
-        } else if (DoubleWideCharSupported && YoriLibIsDoubleWideChar(Char)) {
+        } else if (DblWideSupp && YoriLibIsDoubleWideChar(Char)) {
             CurrentDisplayIndex = CurrentDisplayIndex + 2;
         } else {
             CurrentDisplayIndex++;
@@ -186,7 +186,7 @@ YoriWinTextDisplayCellOffsetFromBufferOffset(
  */
 BOOLEAN
 YoriWinTextStringToDisplayCells(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in PYORI_STRING String,
     __in YORI_ALLOC_SIZE_T LeftPadding,
     __in YORI_ALLOC_SIZE_T TabWidth,
@@ -198,11 +198,11 @@ YoriWinTextStringToDisplayCells(
     YORI_ALLOC_SIZE_T CellsDisplayed;
     TCHAR Char;
     BOOLEAN NeedDoubleBuffer;
-    BOOLEAN DoubleWideCharSupported;
+    BOOLEAN DblWideSupp;
     BOOLEAN IsNanoServer;
 
     IsNanoServer = YoriLibIsNanoServer();
-    DoubleWideCharSupported = YoriWinIsDoubleWideCharSupported(WinMgrHandle);
+    DblWideSupp = YoriWinIsDblWideSupp(WinMgrHandle);
 
     CellsDisplayed = 0;
     NeedDoubleBuffer = FALSE;
@@ -229,7 +229,7 @@ YoriWinTextStringToDisplayCells(
         if (Char == '\t') {
             NeedDoubleBuffer = TRUE;
             CellsDisplayed = CellsDisplayed + TabWidth;
-        } else if (DoubleWideCharSupported && YoriLibIsDoubleWideChar(Char)) {
+        } else if (DblWideSupp && YoriLibIsDoubleWideChar(Char)) {
             NeedDoubleBuffer = TRUE;
             CellsDisplayed = CellsDisplayed + 2;
         } else if (IsNanoServer && Char == '\0') {
@@ -282,7 +282,7 @@ YoriWinTextStringToDisplayCells(
                 CellsString->StartOfString[CellsDisplayed] = ' ';
                 CellsDisplayed++;
             }
-        } else if (DoubleWideCharSupported && YoriLibIsDoubleWideChar(Char)) {
+        } else if (DblWideSupp && YoriLibIsDoubleWideChar(Char)) {
             if (CellsDisplayed + 1 < MaxCells) {
                 CellsString->StartOfString[CellsDisplayed] = Char;
                 CellsDisplayed++;

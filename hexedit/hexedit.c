@@ -78,22 +78,22 @@ typedef struct _HEXEDIT_CONTEXT {
     /**
      Pointer to the multiline hexedit control.
      */
-    PYORI_WIN_CTRL_HANDLE HexEdit;
+    PYORIWIN_CTRL_HANDLE HexEdit;
 
     /**
      Pointer to the menu bar control.
      */
-    PYORI_WIN_CTRL_HANDLE MenuBar;
+    PYORIWIN_CTRL_HANDLE MenuBar;
 
     /**
      Pointer to the status bar control.
      */
-    PYORI_WIN_CTRL_HANDLE StatusBar;
+    PYORIWIN_CTRL_HANDLE StatusBar;
 
     /**
      Pointer to the window manager.
      */
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr;
+    PYORIWIN_WINMGR_HANDLE WinMgr;
 
     /**
      The string for the file to open, and the name to use when saving.
@@ -412,7 +412,7 @@ HexEditLoadFile(
         return ERROR_NOT_ENOUGH_MEMORY;
     }
     YoriLibDereference(Buffer);
-    YoriWinHexEditSetVisualBufferOffset(HexEditContext->HexEdit, DataOffset);
+    YoriWinHexEditSetVisBuffOffset(HexEditContext->HexEdit, DataOffset);
 
     HexEditContext->DataOffset = DataOffset;
     HexEditContext->DataLength = ReadLength;
@@ -442,7 +442,7 @@ HexEditLoadFile(
 BOOLEAN
 HexEditSaveFile(
     __in PHEXEDIT_CONTEXT HexEditContext,
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in PYORI_STRING FileName,
     __in DWORDLONG DataOffset,
     __in DWORDLONG DataLength
@@ -657,12 +657,12 @@ DisplayErrorAndFail:
 
 VOID
 HexEditSaveButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     );
 
 VOID
 HexEditSaveAsButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     );
 
 /**
@@ -679,18 +679,18 @@ HexEditSaveAsButtonClicked(
  */
 BOOLEAN
 HexEditPromptForSaveIfModified(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl,
+    __in PYORIWIN_CTRL_HANDLE Ctrl,
     __in PHEXEDIT_CONTEXT HexEditContext
     )
 {
     if (YoriWinHexEditGetModifyState(HexEditContext->HexEdit)) {
-        PYORI_WIN_CTRL_HANDLE Parent;
+        PYORIWIN_CTRL_HANDLE Parent;
         YORI_STRING Title;
         YORI_STRING Text;
         YORI_STRING ButtonText[3];
         DWORD ButtonId;
 
-        Parent = YoriWinGetControlParent(HexEditContext->HexEdit);
+        Parent = YoriWinGetCtrlParent(HexEditContext->HexEdit);
 
         YoriLibConstantString(&Title, _T("Save changes"));
         YoriLibConstantString(&Text, _T("The file has been modified.  Save changes?"));
@@ -698,7 +698,7 @@ HexEditPromptForSaveIfModified(
         YoriLibConstantString(&ButtonText[1], _T("&No"));
         YoriLibConstantString(&ButtonText[2], _T("&Cancel"));
 
-        ButtonId = YoriDlgMessageBox(YoriWinGetWindowManagerHandle(Parent),
+        ButtonId = YoriDlgMessageBox(YoriWinGetWinMgrHandle(Parent),
                                      &Title,
                                      &Text,
                                      3,
@@ -753,7 +753,7 @@ HexEditPromptForSaveIfModified(
  */
 VOID
 HexEditOpenDialog(
-    __in PYORI_WIN_CTRL_HANDLE Parent,
+    __in PYORIWIN_CTRL_HANDLE Parent,
     __in PHEXEDIT_CONTEXT HexEditContext,
     __in BOOLEAN OpenDevice
     )
@@ -786,7 +786,7 @@ HexEditOpenDialog(
     DeviceLength = 0;
 
     if (OpenDevice) {
-        YoriDlgDevice(YoriWinGetWindowManagerHandle(Parent),
+        YoriDlgDevice(YoriWinGetWinMgrHandle(Parent),
                       &Title,
                       sizeof(CustomOptionArray)/sizeof(CustomOptionArray[0]),
                       CustomOptionArray,
@@ -795,7 +795,7 @@ HexEditOpenDialog(
                       &DeviceLength);
 
     } else {
-        YoriDlgFile(YoriWinGetWindowManagerHandle(Parent),
+        YoriDlgFile(YoriWinGetWinMgrHandle(Parent),
                     &Title,
                     sizeof(CustomOptionArray)/sizeof(CustomOptionArray[0]),
                     CustomOptionArray,
@@ -827,7 +827,7 @@ HexEditOpenDialog(
 
         YoriLibConstantString(&ButtonText, _T("Ok"));
 
-        YoriDlgMessageBox(YoriWinGetWindowManagerHandle(Parent),
+        YoriDlgMessageBox(YoriWinGetWinMgrHandle(Parent),
                           &Title,
                           &DialogText,
                           1,
@@ -867,7 +867,7 @@ HexEditOpenDialog(
  */
 VOID
 HexEditSaveAsDialog(
-    __in PYORI_WIN_CTRL_HANDLE Parent,
+    __in PYORIWIN_CTRL_HANDLE Parent,
     __in PHEXEDIT_CONTEXT HexEditContext,
     __in BOOLEAN SaveDevice
     )
@@ -877,9 +877,9 @@ HexEditSaveAsDialog(
     YORI_STRING FullName;
     DWORDLONG DeviceOffset;
     DWORDLONG DeviceLength;
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle;
 
-    WinMgrHandle = YoriWinGetWindowManagerHandle(Parent);
+    WinMgrHandle = YoriWinGetWinMgrHandle(Parent);
 
     YoriLibConstantString(&Title, _T("Save As"));
     YoriLibInitEmptyString(&Text);
@@ -935,11 +935,11 @@ HexEditSaveAsDialog(
  */
 VOID
 HexEditOkButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, TRUE);
 }
 
@@ -950,11 +950,11 @@ HexEditOkButtonClicked(
  */
 VOID
 HexEditCancelButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, FALSE);
 }
 
@@ -969,35 +969,35 @@ HexEditCancelButtonClicked(
  */
 VOID
 HexEditNewLocationDialog(
-    __in PYORI_WIN_CTRL_HANDLE Parent,
+    __in PYORIWIN_CTRL_HANDLE Parent,
     __in PHEXEDIT_CONTEXT HexEditContext
     )
 {
     YORI_STRING Title;
     YORI_STRING Text;
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle;
     YORI_MAX_SIGNED_T Signed;
     YORI_MAX_UNSIGNED_T NewOffset;
     YORI_MAX_UNSIGNED_T NewLength;
     YORI_ALLOC_SIZE_T CharsConsumed;
-    PYORI_WIN_WINDOW_HANDLE DlgWindow;
+    PYORIWIN_WINDOW_HANDLE DlgWindow;
     COORD WindowSize;
     SMALL_RECT LabelArea;
     SMALL_RECT EditArea;
     SMALL_RECT ButtonArea;
     YORI_STRING Caption;
     WORD ButtonWidth;
-    PYORI_WIN_CTRL_HANDLE CtrlHandle;
-    PYORI_WIN_CTRL_HANDLE EditOffset;
-    PYORI_WIN_CTRL_HANDLE EditLength;
-    DWORD Style;
+    PYORIWIN_CTRL_HANDLE CtrlHandle;
+    PYORIWIN_CTRL_HANDLE EditOffset;
+    PYORIWIN_CTRL_HANDLE EditLength;
+    WORD Style;
     DWORD_PTR Result;
     SYSERR Err;
 
-    WinMgrHandle = YoriWinGetWindowManagerHandle(Parent);
+    WinMgrHandle = YoriWinGetWinMgrHandle(Parent);
     YoriLibConstantString(&Title, _T("New Location"));
 
-    if (!YoriWinCreateWindow(WinMgrHandle, 50, 14, 70, 14, YORI_WIN_WINDOW_STYLE_BORDER_SINGLE | YORI_WIN_WINDOW_STYLE_SHADOW_SOLID, &Title, &DlgWindow)) {
+    if (!YoriWinCreateWindow(WinMgrHandle, 50, 14, 70, 14, YORIWIN_WIN_STY_BORDER_SINGLE | YORIWIN_WIN_STY_SHADOW_SOLID, &Title, &DlgWindow)) {
         return;
     }
 
@@ -1023,7 +1023,7 @@ HexEditNewLocationDialog(
 
     YoriLibInitEmptyString(&Caption);
     YoriLibYPrintf(&Caption, _T("0x%llx"), HexEditContext->DataOffset);
-    Style = YORI_WIN_EDIT_STYLE_NUMERIC;
+    Style = YORIWIN_EDIT_STY_NUMERIC;
 
     EditOffset = YoriWinEditCreate(DlgWindow, &EditArea, &Caption, Style);
     if (EditOffset == NULL) {
@@ -1068,7 +1068,7 @@ HexEditNewLocationDialog(
     ButtonArea.Left = (SHORT)(1);
     ButtonArea.Right = (WORD)(ButtonArea.Left + 1 + ButtonWidth);
 
-    CtrlHandle = YoriWinButtonCreate(DlgWindow, &ButtonArea, &Caption, YORI_WIN_BUTTON_STYLE_DEFAULT, HexEditOkButtonClicked);
+    CtrlHandle = YoriWinButtonCreate(DlgWindow, &ButtonArea, &Caption, YORIWIN_BUTTON_STY_DEFAULT, HexEditOkButtonClicked);
     if (CtrlHandle == NULL) {
         YoriWinDestroyWindow(DlgWindow);
         return;
@@ -1078,7 +1078,7 @@ HexEditNewLocationDialog(
     ButtonArea.Right = (WORD)(ButtonArea.Right + ButtonWidth + 3);
 
     YoriLibConstantString(&Caption, _T("&Cancel"));
-    CtrlHandle = YoriWinButtonCreate(DlgWindow, &ButtonArea, &Caption, YORI_WIN_BUTTON_STYLE_CANCEL, HexEditCancelButtonClicked);
+    CtrlHandle = YoriWinButtonCreate(DlgWindow, &ButtonArea, &Caption, YORIWIN_BUTTON_STY_CANCEL, HexEditCancelButtonClicked);
     if (CtrlHandle == NULL) {
         YoriWinDestroyWindow(DlgWindow);
         return;
@@ -1149,7 +1149,7 @@ HexEditNewLocationDialog(
 
         YoriLibConstantString(&Caption, _T("Ok"));
 
-        YoriDlgMessageBox(YoriWinGetWindowManagerHandle(Parent),
+        YoriDlgMessageBox(YoriWinGetWinMgrHandle(Parent),
                           &Title,
                           &DialogText,
                           1,
@@ -1168,14 +1168,14 @@ HexEditNewLocationDialog(
  */
 VOID
 HexEditNewButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
     PHEXEDIT_CONTEXT HexEditContext;
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
 
     if (!HexEditPromptForSaveIfModified(Ctrl, HexEditContext)) {
         return;
@@ -1194,14 +1194,14 @@ HexEditNewButtonClicked(
  */
 VOID
 HexEditOpenButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PHEXEDIT_CONTEXT HexEditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
 
     HexEditOpenDialog(Parent, HexEditContext, FALSE);
 }
@@ -1213,21 +1213,21 @@ HexEditOpenButtonClicked(
  */
 VOID
 HexEditOpenDeviceButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PHEXEDIT_CONTEXT HexEditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
 
     HexEditOpenDialog(Parent, HexEditContext, TRUE);
 }
 
 VOID
 HexEditSaveAsButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     );
 
 /**
@@ -1237,17 +1237,17 @@ HexEditSaveAsButtonClicked(
  */
 VOID
 HexEditSaveButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
     PHEXEDIT_CONTEXT HexEditContext;
 
-    PYORI_WIN_CTRL_HANDLE Parent;
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+    PYORIWIN_CTRL_HANDLE Parent;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
-    WinMgrHandle = YoriWinGetWindowManagerHandle(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
+    WinMgrHandle = YoriWinGetWinMgrHandle(Parent);
 
     if (HexEditContext->OpenFileName.StartOfString == NULL) {
         HexEditSaveAsButtonClicked(Ctrl);
@@ -1267,14 +1267,14 @@ HexEditSaveButtonClicked(
  */
 VOID
 HexEditSaveAsButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
     PHEXEDIT_CONTEXT HexEditContext;
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
 
     HexEditSaveAsDialog(Parent, HexEditContext, FALSE);
 }
@@ -1286,14 +1286,14 @@ HexEditSaveAsButtonClicked(
  */
 VOID
 HexEditSaveAsDeviceButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
     PHEXEDIT_CONTEXT HexEditContext;
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
 
     HexEditSaveAsDialog(Parent, HexEditContext, TRUE);
 }
@@ -1305,14 +1305,14 @@ HexEditSaveAsDeviceButtonClicked(
  */
 VOID
 HexEditExitButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PHEXEDIT_CONTEXT HexEditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
 
     if (!HexEditPromptForSaveIfModified(Ctrl, HexEditContext)) {
         return;
@@ -1328,28 +1328,28 @@ HexEditExitButtonClicked(
  */
 VOID
 HexEditEditButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE EditMenu;
-    PYORI_WIN_CTRL_HANDLE CutItem;
-    PYORI_WIN_CTRL_HANDLE CopyItem;
-    PYORI_WIN_CTRL_HANDLE PasteItem;
-    PYORI_WIN_CTRL_HANDLE ClearItem;
+    PYORIWIN_CTRL_HANDLE EditMenu;
+    PYORIWIN_CTRL_HANDLE CutItem;
+    PYORIWIN_CTRL_HANDLE CopyItem;
+    PYORIWIN_CTRL_HANDLE PasteItem;
+    PYORIWIN_CTRL_HANDLE ClearItem;
     BOOLEAN DataSelected;
     PUCHAR ClipboardBuffer;
     YORI_ALLOC_SIZE_T ClipboardBufferLength;
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PHEXEDIT_CONTEXT HexEditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
 
     ClipboardBuffer = NULL;
     ClipboardBufferLength = 0;
     YoriLibPasteBinaryData(&ClipboardBuffer, &ClipboardBufferLength);
 
-    DataSelected = YoriWinHexEditSelectionActive(HexEditContext->HexEdit);
+    DataSelected = YoriWinHexEditSelActive(HexEditContext->HexEdit);
     EditMenu = YoriWinMenuBarGetSubmenuHandle(Ctrl, NULL, HexEditContext->EditMenuIndex);
     CutItem = YoriWinMenuBarGetSubmenuHandle(Ctrl, EditMenu, HexEditContext->EditCutMenuIndex);
     CopyItem = YoriWinMenuBarGetSubmenuHandle(Ctrl, EditMenu, HexEditContext->EditCopyMenuIndex);
@@ -1384,14 +1384,14 @@ HexEditEditButtonClicked(
  */
 VOID
 HexEditCutButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PHEXEDIT_CONTEXT HexEditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
 
     YoriWinHexEditCutSelectedData(HexEditContext->HexEdit);
 }
@@ -1403,14 +1403,14 @@ HexEditCutButtonClicked(
  */
 VOID
 HexEditCopyButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PHEXEDIT_CONTEXT HexEditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
 
     YoriWinHexEditCopySelectedData(HexEditContext->HexEdit);
 }
@@ -1422,14 +1422,14 @@ HexEditCopyButtonClicked(
  */
 VOID
 HexEditPasteButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PHEXEDIT_CONTEXT HexEditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
 
     YoriWinHexEditPasteData(HexEditContext->HexEdit);
 }
@@ -1441,14 +1441,14 @@ HexEditPasteButtonClicked(
  */
 VOID
 HexEditClearButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PHEXEDIT_CONTEXT HexEditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
     YoriWinHexEditDeleteSelection(HexEditContext->HexEdit);
     YoriWinHexEditSetModifyState(HexEditContext->HexEdit, TRUE);
 }
@@ -1460,16 +1460,16 @@ HexEditClearButtonClicked(
  */
 VOID
 HexEditSearchButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE SearchMenu;
-    PYORI_WIN_CTRL_HANDLE NewLocationItem;
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE SearchMenu;
+    PYORIWIN_CTRL_HANDLE NewLocationItem;
+    PYORIWIN_CTRL_HANDLE Parent;
     PHEXEDIT_CONTEXT HexEditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
 
     SearchMenu = YoriWinMenuBarGetSubmenuHandle(Ctrl, NULL, HexEditContext->SearchMenuIndex);
     NewLocationItem = YoriWinMenuBarGetSubmenuHandle(Ctrl, SearchMenu, HexEditContext->SearchNewLocationMenuIndex);
@@ -1710,7 +1710,7 @@ HexEditFindNextFromCurrentPosition(
     UCHAR BitShift;
     BOOLEAN AsChar;
 
-    if (!YoriWinHexEditGetCursorLocation(HexEditContext->HexEdit, &AsChar, &BufferOffset, &BitShift)) {
+    if (!YoriWinHexEditGetCursorPoint(HexEditContext->HexEdit, &AsChar, &BufferOffset, &BitShift)) {
         return FALSE;
     }
 
@@ -1721,7 +1721,7 @@ HexEditFindNextFromCurrentPosition(
 
     if (HexEditFindNextFromPosition(HexEditContext, BufferOffset, &FindOffset)) {
         HexEditByteOffsetToBufferOffsetAndShift(HexEditContext, FindOffset, &BufferOffset, &BitShift);
-        YoriWinHexEditSetCursorLocation(HexEditContext->HexEdit, FALSE, BufferOffset, BitShift);
+        YoriWinHexEditSetCursorPoint(HexEditContext->HexEdit, FALSE, BufferOffset, BitShift);
         YoriWinHexEditSetSelectionRange(HexEditContext->HexEdit, FindOffset, FindOffset + HexEditContext->SearchBufferLength - 1);
         return TRUE;
     }
@@ -1760,7 +1760,7 @@ HexEditFindPreviousFromCurrentPosition(
         return FALSE;
     }
 
-    if (!YoriWinHexEditGetCursorLocation(HexEditContext->HexEdit, &AsChar, &BufferOffset, &BitShift)) {
+    if (!YoriWinHexEditGetCursorPoint(HexEditContext->HexEdit, &AsChar, &BufferOffset, &BitShift)) {
         YoriLibDereference(Buffer);
         return FALSE;
     }
@@ -1776,7 +1776,7 @@ HexEditFindPreviousFromCurrentPosition(
 
     if (HexEditFindPreviousMemorySubset(Buffer, BufferLength, BufferOffset, HexEditContext->SearchBuffer, HexEditContext->SearchBufferLength, &FindOffset)) {
         HexEditByteOffsetToBufferOffsetAndShift(HexEditContext, FindOffset, &BufferOffset, &BitShift);
-        YoriWinHexEditSetCursorLocation(HexEditContext->HexEdit, FALSE, BufferOffset, BitShift);
+        YoriWinHexEditSetCursorPoint(HexEditContext->HexEdit, FALSE, BufferOffset, BitShift);
         YoriWinHexEditSetSelectionRange(HexEditContext->HexEdit, FindOffset, FindOffset + HexEditContext->SearchBufferLength - 1);
         YoriLibDereference(Buffer);
         return TRUE;
@@ -1793,21 +1793,21 @@ HexEditFindPreviousFromCurrentPosition(
  */
 VOID
 HexEditFindButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
     YORI_STRING Title;
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PHEXEDIT_CONTEXT HexEditContext;
     PUCHAR FindData;
     YORI_ALLOC_SIZE_T FindDataLength;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
 
     YoriLibConstantString(&Title, _T("Find"));
 
-    if (!YoriDlgFindHex(YoriWinGetWindowManagerHandle(Parent),
+    if (!YoriDlgFindHex(YoriWinGetWinMgrHandle(Parent),
                         &Title,
                         HexEditContext->SearchBuffer,
                         HexEditContext->SearchBufferLength,
@@ -1836,7 +1836,7 @@ HexEditFindButtonClicked(
         YoriLibConstantString(&Text, _T("Data not found."));
         YoriLibConstantString(&ButtonText[0], _T("&Ok"));
 
-        YoriDlgMessageBox(YoriWinGetWindowManagerHandle(Parent),
+        YoriDlgMessageBox(YoriWinGetWinMgrHandle(Parent),
                           &Title,
                           &Text,
                           1,
@@ -1853,14 +1853,14 @@ HexEditFindButtonClicked(
  */
 VOID
 HexEditFindNextButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PHEXEDIT_CONTEXT HexEditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
 
     if (HexEditContext->SearchBuffer == NULL ||
         HexEditContext->SearchBufferLength == 0) {
@@ -1877,7 +1877,7 @@ HexEditFindNextButtonClicked(
         YoriLibConstantString(&Text, _T("No more matches found."));
         YoriLibConstantString(&ButtonText[0], _T("&Ok"));
 
-        YoriDlgMessageBox(YoriWinGetWindowManagerHandle(Parent),
+        YoriDlgMessageBox(YoriWinGetWinMgrHandle(Parent),
                           &Title,
                           &Text,
                           1,
@@ -1894,14 +1894,14 @@ HexEditFindNextButtonClicked(
  */
 VOID
 HexEditFindPreviousButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PHEXEDIT_CONTEXT HexEditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
 
     if (HexEditContext->SearchBuffer == NULL ||
         HexEditContext->SearchBufferLength == 0) {
@@ -1918,7 +1918,7 @@ HexEditFindPreviousButtonClicked(
         YoriLibConstantString(&Text, _T("No more matches found."));
         YoriLibConstantString(&ButtonText[0], _T("&Ok"));
 
-        YoriDlgMessageBox(YoriWinGetWindowManagerHandle(Parent),
+        YoriDlgMessageBox(YoriWinGetWinMgrHandle(Parent),
                           &Title,
                           &Text,
                           1,
@@ -1935,15 +1935,15 @@ HexEditFindPreviousButtonClicked(
  */
 VOID
 HexEditChangeButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr;
+    PYORIWIN_WINMGR_HANDLE WinMgr;
     YORI_STRING Title;
     BOOLEAN ReplaceAll;
     BOOLEAN MatchFound;
     BOOLEAN AsChar;
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PHEXEDIT_CONTEXT HexEditContext;
     YORI_ALLOC_SIZE_T StartOffset;
     YORI_ALLOC_SIZE_T NextMatchOffset;
@@ -1967,13 +1967,13 @@ HexEditChangeButtonClicked(
     OldDataLength = 0;
     NewData = NULL;
     NewDataLength = 0;
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
-    WinMgr = YoriWinGetWindowManagerHandle(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
+    WinMgr = YoriWinGetWinMgrHandle(Parent);
     ReplaceAll = FALSE;
     MatchFound = FALSE;
 
-    YoriWinHexEditGetCursorLocation(HexEditContext->HexEdit, &AsChar, &StartOffset, &BitShift);
+    YoriWinHexEditGetCursorPoint(HexEditContext->HexEdit, &AsChar, &StartOffset, &BitShift);
 
     while(TRUE) {
 
@@ -1992,7 +1992,7 @@ HexEditChangeButtonClicked(
                 InitialOldData = OldData;
                 InitialOldDataLength = OldDataLength;
             } else {
-                if (YoriWinHexEditSelectionActive(HexEditContext->HexEdit)) {
+                if (YoriWinHexEditSelActive(HexEditContext->HexEdit)) {
                     if (!YoriWinHexEditGetSelectedData(HexEditContext->HexEdit, &InitialOldData, &InitialOldDataLength)) {
                         InitialOldData = NULL;
                         InitialOldDataLength = 0;
@@ -2027,15 +2027,15 @@ HexEditChangeButtonClicked(
                 DialogHeight = YoriDlgReplaceHexGetDialogHeight(WinMgr);
                 DialogTop = (SHORT)(WinMgrSize.Y - DialogHeight - 1);
 
-                YoriWinGetControlClientSize(HexEditContext->HexEdit, &ClientSize);
-                YoriWinHexEditGetVisualCursorLocation(HexEditContext->HexEdit, &CursorOffset, &CursorLine);
-                YoriWinHexEditGetViewportLocation(HexEditContext->HexEdit, &ViewportLeft, &ViewportTop);
+                YoriWinGetCtrlClientSize(HexEditContext->HexEdit, &ClientSize);
+                YoriWinHexEditGetVisCursorPoint(HexEditContext->HexEdit, &CursorOffset, &CursorLine);
+                YoriWinHexEditGetViewportPoint(HexEditContext->HexEdit, &ViewportLeft, &ViewportTop);
 
                 RemainingEditHeight = (SHORT)(ClientSize.Y - DialogHeight);
 
                 if (CursorLine > (DWORD)(ViewportTop + RemainingEditHeight - 1)) {
                     ViewportTop = CursorLine - (RemainingEditHeight / 2);
-                    YoriWinHexEditSetViewportLocation(HexEditContext->HexEdit, ViewportLeft, ViewportTop);
+                    YoriWinHexEditSetViewportPoint(HexEditContext->HexEdit, ViewportLeft, ViewportTop);
                 }
 
                 //
@@ -2056,7 +2056,7 @@ HexEditChangeButtonClicked(
 
             HexEditFreeDataBuffer(&OldData, &OldDataLength);
 
-            if (!YoriDlgReplaceHex(YoriWinGetWindowManagerHandle(Parent),
+            if (!YoriDlgReplaceHex(YoriWinGetWinMgrHandle(Parent),
                                    (WORD)-1,
                                    DialogTop,
                                    &Title,
@@ -2095,7 +2095,7 @@ HexEditChangeButtonClicked(
         }
 
         if (MatchFound) {
-            YoriWinHexEditClearSelection(HexEditContext->HexEdit);
+            YoriWinHexEditClearSel(HexEditContext->HexEdit);
             YoriWinHexEditDeleteData(HexEditContext->HexEdit, StartOffset, OldDataLength);
             YoriWinHexEditInsertData(HexEditContext->HexEdit, StartOffset, NewData, NewDataLength);
             YoriWinHexEditSetModifyState(HexEditContext->HexEdit, TRUE);
@@ -2115,7 +2115,7 @@ HexEditChangeButtonClicked(
         //
 
         YoriWinHexEditSetSelectionRange(HexEditContext->HexEdit, NextMatchOffset, NextMatchOffset + NewDataLength - 1);
-        YoriWinHexEditSetCursorLocation(HexEditContext->HexEdit, FALSE, NextMatchOffset, 0);
+        YoriWinHexEditSetCursorPoint(HexEditContext->HexEdit, FALSE, NextMatchOffset, 0);
         StartOffset = NextMatchOffset;
     }
 
@@ -2131,24 +2131,24 @@ HexEditChangeButtonClicked(
  */
 VOID
 HexEditGoToButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
     YORI_STRING Title;
     YORI_STRING Text;
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PHEXEDIT_CONTEXT HexEditContext;
     YORI_MAX_SIGNED_T SignedNewOffset;
     YORI_MAX_UNSIGNED_T NewOffset;
     YORI_ALLOC_SIZE_T CharsConsumed;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
 
     YoriLibConstantString(&Title, _T("Go to"));
     YoriLibInitEmptyString(&Text);
 
-    YoriDlgInput(YoriWinGetWindowManagerHandle(Parent),
+    YoriDlgInput(YoriWinGetWinMgrHandle(Parent),
                  &Title,
                  TRUE,
                  &Text);
@@ -2167,7 +2167,7 @@ HexEditGoToButtonClicked(
             NewOffset = (YORI_MAX_UNSIGNED_T)SignedNewOffset;
         }
 
-        YoriWinHexEditSetCursorLocation(HexEditContext->HexEdit, FALSE, (YORI_ALLOC_SIZE_T)NewOffset, 0);
+        YoriWinHexEditSetCursorPoint(HexEditContext->HexEdit, FALSE, (YORI_ALLOC_SIZE_T)NewOffset, 0);
     }
 
     YoriLibFreeStringContents(&Text);
@@ -2180,15 +2180,15 @@ HexEditGoToButtonClicked(
  */
 VOID
 HexEditNewLocationButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PHEXEDIT_CONTEXT HexEditContext;
 
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
 
     if (HexEditContext->OpenFileName.StartOfString == NULL) {
         HexEditOpenButtonClicked(Ctrl);
@@ -2205,22 +2205,22 @@ HexEditNewLocationButtonClicked(
  */
 VOID
 HexEditViewButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PHEXEDIT_CONTEXT HexEditContext;
-    PYORI_WIN_CTRL_HANDLE ViewMenu;
-    PYORI_WIN_CTRL_HANDLE ViewBytesItem;
-    PYORI_WIN_CTRL_HANDLE ViewWordsItem;
-    PYORI_WIN_CTRL_HANDLE ViewDwordsItem;
-    PYORI_WIN_CTRL_HANDLE ViewQwordsItem;
-    PYORI_WIN_CTRL_HANDLE ViewNoOffsetItem;
-    PYORI_WIN_CTRL_HANDLE ViewShortOffsetItem;
-    PYORI_WIN_CTRL_HANDLE ViewLongOffsetItem;
+    PYORIWIN_CTRL_HANDLE ViewMenu;
+    PYORIWIN_CTRL_HANDLE ViewBytesItem;
+    PYORIWIN_CTRL_HANDLE ViewWordsItem;
+    PYORIWIN_CTRL_HANDLE ViewDwordsItem;
+    PYORIWIN_CTRL_HANDLE ViewQwordsItem;
+    PYORIWIN_CTRL_HANDLE ViewNoOffsetItem;
+    PYORIWIN_CTRL_HANDLE ViewShortOffsetItem;
+    PYORIWIN_CTRL_HANDLE ViewLongOffsetItem;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
 
     ViewMenu = YoriWinMenuBarGetSubmenuHandle(Ctrl, NULL, HexEditContext->ViewMenuIndex);
     ViewBytesItem = YoriWinMenuBarGetSubmenuHandle(Ctrl, ViewMenu, HexEditContext->ViewBytesMenuIndex);
@@ -2275,14 +2275,14 @@ HexEditViewButtonClicked(
  */
 VOID
 HexEditViewBytesButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PHEXEDIT_CONTEXT HexEditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
 
     HexEditContext->BytesPerWord = 1;
     YoriWinHexEditSetBytesPerWord(HexEditContext->HexEdit, HexEditContext->BytesPerWord);
@@ -2295,14 +2295,14 @@ HexEditViewBytesButtonClicked(
  */
 VOID
 HexEditViewWordsButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PHEXEDIT_CONTEXT HexEditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
 
     HexEditContext->BytesPerWord = 2;
     YoriWinHexEditSetBytesPerWord(HexEditContext->HexEdit, HexEditContext->BytesPerWord);
@@ -2315,14 +2315,14 @@ HexEditViewWordsButtonClicked(
  */
 VOID
 HexEditViewDwordsButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PHEXEDIT_CONTEXT HexEditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
 
     HexEditContext->BytesPerWord = 4;
     YoriWinHexEditSetBytesPerWord(HexEditContext->HexEdit, HexEditContext->BytesPerWord);
@@ -2335,14 +2335,14 @@ HexEditViewDwordsButtonClicked(
  */
 VOID
 HexEditViewQwordsButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PHEXEDIT_CONTEXT HexEditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
 
     HexEditContext->BytesPerWord = 8;
     YoriWinHexEditSetBytesPerWord(HexEditContext->HexEdit, HexEditContext->BytesPerWord);
@@ -2355,16 +2355,16 @@ HexEditViewQwordsButtonClicked(
  */
 VOID
 HexEditViewNoOffsetButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PHEXEDIT_CONTEXT HexEditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
 
-    if (YoriWinHexEditSetStyle(HexEditContext->HexEdit, YORI_WIN_HEX_EDIT_STYLE_VERTICAL_SEPERATOR)) {
+    if (YoriWinHexEditSetStyle(HexEditContext->HexEdit, YORIWIN_HEXEDIT_STY_VSEPERATOR)) {
         HexEditContext->OffsetWidth = 0;
     }
 }
@@ -2376,16 +2376,16 @@ HexEditViewNoOffsetButtonClicked(
  */
 VOID
 HexEditViewShortOffsetButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PHEXEDIT_CONTEXT HexEditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
 
-    if (YoriWinHexEditSetStyle(HexEditContext->HexEdit, YORI_WIN_HEX_EDIT_STYLE_VERTICAL_SEPERATOR | YORI_WIN_HEX_EDIT_STYLE_OFFSET)) {
+    if (YoriWinHexEditSetStyle(HexEditContext->HexEdit, YORIWIN_HEXEDIT_STY_VSEPERATOR | YORIWIN_HEXEDIT_STY_OFFSET)) {
         HexEditContext->OffsetWidth = 32;
     }
 }
@@ -2397,16 +2397,16 @@ HexEditViewShortOffsetButtonClicked(
  */
 VOID
 HexEditViewLongOffsetButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PHEXEDIT_CONTEXT HexEditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
 
-    if (YoriWinHexEditSetStyle(HexEditContext->HexEdit, YORI_WIN_HEX_EDIT_STYLE_VERTICAL_SEPERATOR | YORI_WIN_HEX_EDIT_STYLE_LARGE_OFFSET)) {
+    if (YoriWinHexEditSetStyle(HexEditContext->HexEdit, YORIWIN_HEXEDIT_STY_VSEPERATOR | YORIWIN_HEXEDIT_STY_LOFFSET)) {
         HexEditContext->OffsetWidth = 64;
     }
 }
@@ -2418,10 +2418,10 @@ HexEditViewLongOffsetButtonClicked(
  */
 VOID
 HexEditCalculatePEChecksumButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PHEXEDIT_CONTEXT HexEditContext;
     YORI_STRING Title;
     YORI_STRING Text;
@@ -2434,8 +2434,8 @@ HexEditCalculatePEChecksumButtonClicked(
     YORI_ALLOC_SIZE_T DataOffset;
 
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
 
     YoriLibLoadImageHlpFunctions();
 
@@ -2444,7 +2444,7 @@ HexEditCalculatePEChecksumButtonClicked(
         YoriLibConstantString(&Text, _T("OS support not present"));
         YoriLibConstantString(&ButtonText[0], _T("&Ok"));
 
-        YoriDlgMessageBox(YoriWinGetWindowManagerHandle(Parent),
+        YoriDlgMessageBox(YoriWinGetWinMgrHandle(Parent),
                           &Title,
                           &Text,
                           1,
@@ -2466,7 +2466,7 @@ HexEditCalculatePEChecksumButtonClicked(
         YoriLibConstantString(&Text, _T("Could not calculate checksum.  Possibly not PE file?"));
         YoriLibConstantString(&ButtonText[0], _T("&Ok"));
 
-        YoriDlgMessageBox(YoriWinGetWindowManagerHandle(Parent),
+        YoriDlgMessageBox(YoriWinGetWinMgrHandle(Parent),
                           &Title,
                           &Text,
                           1,
@@ -2490,7 +2490,7 @@ HexEditCalculatePEChecksumButtonClicked(
  */
 VOID
 HexEditAboutButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
     YORI_STRING Title;
@@ -2501,8 +2501,8 @@ HexEditAboutButtonClicked(
     YORI_ALLOC_SIZE_T Index;
     DWORD ButtonClicked;
 
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
 
     YoriLibConstantString(&Title, _T("About"));
     YoriLibInitEmptyString(&Text);
@@ -2556,7 +2556,7 @@ HexEditAboutButtonClicked(
     YoriLibConstantString(&ButtonTexts[0], _T("&Ok"));
     YoriLibConstantString(&ButtonTexts[1], _T("&View License..."));
 
-    ButtonClicked = YoriDlgAbout(YoriWinGetWindowManagerHandle(Parent),
+    ButtonClicked = YoriDlgAbout(YoriWinGetWinMgrHandle(Parent),
                                  &Title,
                                  &CenteredText,
                                  &LeftText,
@@ -2588,7 +2588,7 @@ HexEditAboutButtonClicked(
                 }
             }
 
-            YoriDlgAbout(YoriWinGetWindowManagerHandle(Parent),
+            YoriDlgAbout(YoriWinGetWinMgrHandle(Parent),
                          &Title,
                          &CenteredText,
                          &Text,
@@ -2615,20 +2615,20 @@ HexEditAboutButtonClicked(
  */
 VOID
 HexEditNotifyCursorMove(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl,
+    __in PYORIWIN_CTRL_HANDLE Ctrl,
     __in DWORDLONG BufferOffset,
     __in DWORD BitShift
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PHEXEDIT_CONTEXT HexEditContext;
     YORI_STRING NewStatus;
     LARGE_INTEGER liBufferOffset;
 
     UNREFERENCED_PARAMETER(BitShift);
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    HexEditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    HexEditContext = YoriWinGetCtrlContext(Parent);
 
     liBufferOffset.QuadPart = BufferOffset;
     YoriLibInitEmptyString(&NewStatus);
@@ -2657,59 +2657,59 @@ HexEditNotifyCursorMove(
  @return Pointer to the menu bar control if it was successfully created
          and populated, or NULL on failure.
  */
-PYORI_WIN_CTRL_HANDLE
+PYORIWIN_CTRL_HANDLE
 HexEditPopulateMenuBar(
     __in PHEXEDIT_CONTEXT HexEditContext,
-    __in PYORI_WIN_WINDOW_HANDLE Parent
+    __in PYORIWIN_WINDOW_HANDLE Parent
     )
 {
-    YORI_WIN_MENU_ENTRY FileMenuEntries[8];
-    YORI_WIN_MENU_ENTRY EditMenuEntries[4];
-    YORI_WIN_MENU_ENTRY SearchMenuEntries[7];
-    YORI_WIN_MENU_ENTRY ViewMenuEntries[8];
-    YORI_WIN_MENU_ENTRY ToolsMenuEntries[1];
-    YORI_WIN_MENU_ENTRY HelpMenuEntries[1];
-    YORI_WIN_MENU_ENTRY MenuEntries[6];
-    YORI_WIN_MENU MenuBarItems;
-    PYORI_WIN_CTRL_HANDLE Ctrl;
+    YORIWIN_MENU_ENTRY FileMenuEntries[8];
+    YORIWIN_MENU_ENTRY EditMenuEntries[4];
+    YORIWIN_MENU_ENTRY SearchMenuEntries[7];
+    YORIWIN_MENU_ENTRY ViewMenuEntries[8];
+    YORIWIN_MENU_ENTRY ToolsMenuEntries[1];
+    YORIWIN_MENU_ENTRY HelpMenuEntries[1];
+    YORIWIN_MENU_ENTRY MenuEntries[6];
+    YORIWIN_MENU MenuBarItems;
+    PYORIWIN_CTRL_HANDLE Ctrl;
     YORI_ALLOC_SIZE_T MenuIndex;
 
     ZeroMemory(&FileMenuEntries, sizeof(FileMenuEntries));
     MenuIndex = 0;
     YoriLibConstantString(&FileMenuEntries[MenuIndex].Caption, _T("&New"));
     YoriLibConstantString(&FileMenuEntries[MenuIndex].Hotkey, _T("Ctrl+N"));
-    FileMenuEntries[MenuIndex].NotifyCallback = HexEditNewButtonClicked;
+    FileMenuEntries[MenuIndex].NotifyCbk = HexEditNewButtonClicked;
     MenuIndex++;
 
     YoriLibConstantString(&FileMenuEntries[MenuIndex].Caption, _T("&Open..."));
     YoriLibConstantString(&FileMenuEntries[MenuIndex].Hotkey, _T("Ctrl+O"));
-    FileMenuEntries[MenuIndex].NotifyCallback = HexEditOpenButtonClicked;
+    FileMenuEntries[MenuIndex].NotifyCbk = HexEditOpenButtonClicked;
     MenuIndex++;
 
     YoriLibConstantString(&FileMenuEntries[MenuIndex].Caption, _T("Open &Device..."));
     YoriLibConstantString(&FileMenuEntries[MenuIndex].Hotkey, _T("Ctrl+D"));
-    FileMenuEntries[MenuIndex].NotifyCallback = HexEditOpenDeviceButtonClicked;
+    FileMenuEntries[MenuIndex].NotifyCbk = HexEditOpenDeviceButtonClicked;
     MenuIndex++;
 
     YoriLibConstantString(&FileMenuEntries[MenuIndex].Caption, _T("&Save"));
-    FileMenuEntries[MenuIndex].NotifyCallback = HexEditSaveButtonClicked;
+    FileMenuEntries[MenuIndex].NotifyCbk = HexEditSaveButtonClicked;
     YoriLibConstantString(&FileMenuEntries[MenuIndex].Hotkey, _T("Ctrl+S"));
     MenuIndex++;
 
     YoriLibConstantString(&FileMenuEntries[MenuIndex].Caption, _T("Save &As..."));
-    FileMenuEntries[MenuIndex].NotifyCallback = HexEditSaveAsButtonClicked;
+    FileMenuEntries[MenuIndex].NotifyCbk = HexEditSaveAsButtonClicked;
     MenuIndex++;
 
     YoriLibConstantString(&FileMenuEntries[MenuIndex].Caption, _T("Save As Dev&ice..."));
-    FileMenuEntries[MenuIndex].NotifyCallback = HexEditSaveAsDeviceButtonClicked;
+    FileMenuEntries[MenuIndex].NotifyCbk = HexEditSaveAsDeviceButtonClicked;
     MenuIndex++;
 
-    FileMenuEntries[MenuIndex].Flags = YORI_WIN_MENU_ENTRY_SEPERATOR;
+    FileMenuEntries[MenuIndex].Flags = YORIWIN_MENU_ENTRY_SEPERATOR;
     MenuIndex++;
 
     YoriLibConstantString(&FileMenuEntries[MenuIndex].Caption, _T("E&xit"));
     YoriLibConstantString(&FileMenuEntries[MenuIndex].Hotkey, _T("Ctrl+Q"));
-    FileMenuEntries[MenuIndex].NotifyCallback = HexEditExitButtonClicked;
+    FileMenuEntries[MenuIndex].NotifyCbk = HexEditExitButtonClicked;
     MenuIndex++;
 
     MenuIndex = 0;
@@ -2718,25 +2718,25 @@ HexEditPopulateMenuBar(
     HexEditContext->EditCutMenuIndex = MenuIndex;
     YoriLibConstantString(&EditMenuEntries[MenuIndex].Caption, _T("Cu&t"));
     YoriLibConstantString(&EditMenuEntries[MenuIndex].Hotkey, _T("Ctrl+X"));
-    EditMenuEntries[MenuIndex].NotifyCallback = HexEditCutButtonClicked;
+    EditMenuEntries[MenuIndex].NotifyCbk = HexEditCutButtonClicked;
     MenuIndex++;
 
     HexEditContext->EditCopyMenuIndex = MenuIndex;
     YoriLibConstantString(&EditMenuEntries[MenuIndex].Caption, _T("&Copy"));
     YoriLibConstantString(&EditMenuEntries[MenuIndex].Hotkey, _T("Ctrl+C"));
-    EditMenuEntries[MenuIndex].NotifyCallback = HexEditCopyButtonClicked;
+    EditMenuEntries[MenuIndex].NotifyCbk = HexEditCopyButtonClicked;
     MenuIndex++;
 
     HexEditContext->EditPasteMenuIndex = MenuIndex;
     YoriLibConstantString(&EditMenuEntries[MenuIndex].Caption, _T("&Paste"));
     YoriLibConstantString(&EditMenuEntries[MenuIndex].Hotkey, _T("Ctrl+V"));
-    EditMenuEntries[MenuIndex].NotifyCallback = HexEditPasteButtonClicked;
+    EditMenuEntries[MenuIndex].NotifyCbk = HexEditPasteButtonClicked;
     MenuIndex++;
 
     HexEditContext->EditClearMenuIndex = MenuIndex;
     YoriLibConstantString(&EditMenuEntries[MenuIndex].Caption, _T("Cl&ear"));
     YoriLibConstantString(&EditMenuEntries[MenuIndex].Hotkey, _T("Del"));
-    EditMenuEntries[MenuIndex].NotifyCallback = HexEditClearButtonClicked;
+    EditMenuEntries[MenuIndex].NotifyCbk = HexEditClearButtonClicked;
     MenuIndex++;
 
     ZeroMemory(&SearchMenuEntries, sizeof(SearchMenuEntries));
@@ -2744,36 +2744,36 @@ HexEditPopulateMenuBar(
 
     YoriLibConstantString(&SearchMenuEntries[MenuIndex].Caption, _T("&Find..."));
     YoriLibConstantString(&SearchMenuEntries[MenuIndex].Hotkey, _T("Ctrl+F"));
-    SearchMenuEntries[MenuIndex].NotifyCallback = HexEditFindButtonClicked;
+    SearchMenuEntries[MenuIndex].NotifyCbk = HexEditFindButtonClicked;
     MenuIndex++;
 
     YoriLibConstantString(&SearchMenuEntries[MenuIndex].Caption, _T("&Repeat Last Find"));
     YoriLibConstantString(&SearchMenuEntries[MenuIndex].Hotkey, _T("F3"));
-    SearchMenuEntries[MenuIndex].NotifyCallback = HexEditFindNextButtonClicked;
+    SearchMenuEntries[MenuIndex].NotifyCbk = HexEditFindNextButtonClicked;
     MenuIndex++;
 
     YoriLibConstantString(&SearchMenuEntries[MenuIndex].Caption, _T("Find &Previous"));
     YoriLibConstantString(&SearchMenuEntries[MenuIndex].Hotkey, _T("Shift+F3"));
-    SearchMenuEntries[MenuIndex].NotifyCallback = HexEditFindPreviousButtonClicked;
+    SearchMenuEntries[MenuIndex].NotifyCbk = HexEditFindPreviousButtonClicked;
     MenuIndex++;
 
     YoriLibConstantString(&SearchMenuEntries[MenuIndex].Caption, _T("&Change..."));
     YoriLibConstantString(&SearchMenuEntries[MenuIndex].Hotkey, _T("Ctrl+R"));
-    SearchMenuEntries[MenuIndex].NotifyCallback = HexEditChangeButtonClicked;
+    SearchMenuEntries[MenuIndex].NotifyCbk = HexEditChangeButtonClicked;
     MenuIndex++;
 
-    SearchMenuEntries[MenuIndex].Flags = YORI_WIN_MENU_ENTRY_SEPERATOR;
+    SearchMenuEntries[MenuIndex].Flags = YORIWIN_MENU_ENTRY_SEPERATOR;
     MenuIndex++;
 
     YoriLibConstantString(&SearchMenuEntries[MenuIndex].Caption, _T("&Go to..."));
     YoriLibConstantString(&SearchMenuEntries[MenuIndex].Hotkey, _T("Ctrl+G"));
-    SearchMenuEntries[MenuIndex].NotifyCallback = HexEditGoToButtonClicked;
+    SearchMenuEntries[MenuIndex].NotifyCbk = HexEditGoToButtonClicked;
     MenuIndex++;
 
     HexEditContext->SearchNewLocationMenuIndex = MenuIndex;
     YoriLibConstantString(&SearchMenuEntries[MenuIndex].Caption, _T("Reopen new &location..."));
     YoriLibConstantString(&SearchMenuEntries[MenuIndex].Hotkey, _T("Ctrl+L"));
-    SearchMenuEntries[MenuIndex].NotifyCallback = HexEditNewLocationButtonClicked;
+    SearchMenuEntries[MenuIndex].NotifyCbk = HexEditNewLocationButtonClicked;
     MenuIndex++;
 
     ZeroMemory(&ViewMenuEntries, sizeof(ViewMenuEntries));
@@ -2781,52 +2781,52 @@ HexEditPopulateMenuBar(
     HexEditContext->ViewBytesMenuIndex = MenuIndex;
     YoriLibConstantString(&ViewMenuEntries[MenuIndex].Caption, _T("&Bytes"));
     YoriLibConstantString(&ViewMenuEntries[MenuIndex].Hotkey, _T("Ctrl+B"));
-    ViewMenuEntries[MenuIndex].NotifyCallback = HexEditViewBytesButtonClicked;
+    ViewMenuEntries[MenuIndex].NotifyCbk = HexEditViewBytesButtonClicked;
     MenuIndex++;
 
     HexEditContext->ViewWordsMenuIndex = MenuIndex;
     YoriLibConstantString(&ViewMenuEntries[MenuIndex].Caption, _T("&Words"));
-    ViewMenuEntries[MenuIndex].NotifyCallback = HexEditViewWordsButtonClicked;
+    ViewMenuEntries[MenuIndex].NotifyCbk = HexEditViewWordsButtonClicked;
     MenuIndex++;
 
     HexEditContext->ViewDwordsMenuIndex = MenuIndex;
     YoriLibConstantString(&ViewMenuEntries[MenuIndex].Caption, _T("&DWords"));
     YoriLibConstantString(&ViewMenuEntries[MenuIndex].Hotkey, _T("Ctrl+D"));
-    ViewMenuEntries[MenuIndex].NotifyCallback = HexEditViewDwordsButtonClicked;
+    ViewMenuEntries[MenuIndex].NotifyCbk = HexEditViewDwordsButtonClicked;
     MenuIndex++;
 
     HexEditContext->ViewQwordsMenuIndex = MenuIndex;
     YoriLibConstantString(&ViewMenuEntries[MenuIndex].Caption, _T("&QWords"));
-    ViewMenuEntries[MenuIndex].NotifyCallback = HexEditViewQwordsButtonClicked;
+    ViewMenuEntries[MenuIndex].NotifyCbk = HexEditViewQwordsButtonClicked;
     MenuIndex++;
 
-    ViewMenuEntries[MenuIndex].Flags = YORI_WIN_MENU_ENTRY_SEPERATOR;
+    ViewMenuEntries[MenuIndex].Flags = YORIWIN_MENU_ENTRY_SEPERATOR;
     MenuIndex++;
 
     HexEditContext->ViewNoOffsetMenuIndex = MenuIndex;
     YoriLibConstantString(&ViewMenuEntries[MenuIndex].Caption, _T("&No Offset"));
-    ViewMenuEntries[MenuIndex].NotifyCallback = HexEditViewNoOffsetButtonClicked;
+    ViewMenuEntries[MenuIndex].NotifyCbk = HexEditViewNoOffsetButtonClicked;
     MenuIndex++;
 
     HexEditContext->ViewShortOffsetMenuIndex = MenuIndex;
     YoriLibConstantString(&ViewMenuEntries[MenuIndex].Caption, _T("&Short offset"));
-    ViewMenuEntries[MenuIndex].NotifyCallback = HexEditViewShortOffsetButtonClicked;
+    ViewMenuEntries[MenuIndex].NotifyCbk = HexEditViewShortOffsetButtonClicked;
     MenuIndex++;
 
     HexEditContext->ViewLongOffsetMenuIndex = MenuIndex;
     YoriLibConstantString(&ViewMenuEntries[MenuIndex].Caption, _T("&Long offset"));
-    ViewMenuEntries[MenuIndex].NotifyCallback = HexEditViewLongOffsetButtonClicked;
+    ViewMenuEntries[MenuIndex].NotifyCbk = HexEditViewLongOffsetButtonClicked;
     MenuIndex++;
 
     ZeroMemory(&ToolsMenuEntries, sizeof(ToolsMenuEntries));
     MenuIndex = 0;
     YoriLibConstantString(&ToolsMenuEntries[MenuIndex].Caption, _T("&Calculate PE Checksum"));
-    ToolsMenuEntries[MenuIndex].NotifyCallback = HexEditCalculatePEChecksumButtonClicked;
+    ToolsMenuEntries[MenuIndex].NotifyCbk = HexEditCalculatePEChecksumButtonClicked;
 
     ZeroMemory(&HelpMenuEntries, sizeof(HelpMenuEntries));
     MenuIndex = 0;
     YoriLibConstantString(&HelpMenuEntries[MenuIndex].Caption, _T("&About..."));
-    HelpMenuEntries[MenuIndex].NotifyCallback = HexEditAboutButtonClicked;
+    HelpMenuEntries[MenuIndex].NotifyCbk = HexEditAboutButtonClicked;
 
     MenuBarItems.ItemCount = sizeof(MenuEntries)/sizeof(MenuEntries[0]);
     MenuBarItems.Items = MenuEntries;
@@ -2840,21 +2840,21 @@ HexEditPopulateMenuBar(
 
     HexEditContext->EditMenuIndex = MenuIndex;
     YoriLibConstantString(&MenuEntries[MenuIndex].Caption, _T("&Edit"));
-    MenuEntries[MenuIndex].NotifyCallback = HexEditEditButtonClicked;
+    MenuEntries[MenuIndex].NotifyCbk = HexEditEditButtonClicked;
     MenuEntries[MenuIndex].ChildMenu.ItemCount = sizeof(EditMenuEntries)/sizeof(EditMenuEntries[0]);
     MenuEntries[MenuIndex].ChildMenu.Items = EditMenuEntries;
     MenuIndex++;
 
     HexEditContext->SearchMenuIndex = MenuIndex;
     YoriLibConstantString(&MenuEntries[MenuIndex].Caption, _T("&Search"));
-    MenuEntries[MenuIndex].NotifyCallback = HexEditSearchButtonClicked;
+    MenuEntries[MenuIndex].NotifyCbk = HexEditSearchButtonClicked;
     MenuEntries[MenuIndex].ChildMenu.ItemCount = sizeof(SearchMenuEntries)/sizeof(SearchMenuEntries[0]);
     MenuEntries[MenuIndex].ChildMenu.Items = SearchMenuEntries;
     MenuIndex++;
 
     HexEditContext->ViewMenuIndex = MenuIndex;
     YoriLibConstantString(&MenuEntries[MenuIndex].Caption, _T("&View"));
-    MenuEntries[MenuIndex].NotifyCallback = HexEditViewButtonClicked;
+    MenuEntries[MenuIndex].NotifyCbk = HexEditViewButtonClicked;
     MenuEntries[MenuIndex].ChildMenu.ItemCount = sizeof(ViewMenuEntries)/sizeof(ViewMenuEntries[0]);
     MenuEntries[MenuIndex].ChildMenu.Items = ViewMenuEntries;
     MenuIndex++;
@@ -2905,20 +2905,20 @@ HexEditPopulateMenuBar(
  */
 VOID
 HexEditResizeWindowManager(
-    __in PYORI_WIN_WINDOW_HANDLE WindowHandle,
+    __in PYORIWIN_WINDOW_HANDLE WindowHandle,
     __in PSMALL_RECT OldPosition,
     __in PSMALL_RECT NewPosition
     )
 {
     PHEXEDIT_CONTEXT HexEditContext;
-    PYORI_WIN_CTRL_HANDLE WindowCtrl;
+    PYORIWIN_CTRL_HANDLE WindowCtrl;
     SMALL_RECT Rect;
     COORD NewSize;
 
     UNREFERENCED_PARAMETER(OldPosition);
 
     WindowCtrl = YoriWinGetCtrlFromWindow(WindowHandle);
-    HexEditContext = YoriWinGetControlContext(WindowCtrl);
+    HexEditContext = YoriWinGetCtrlContext(WindowCtrl);
 
     NewSize.X = (SHORT)(NewPosition->Right - NewPosition->Left + 1);
     NewSize.Y = (SHORT)(NewPosition->Bottom - NewPosition->Top + 1);
@@ -2978,18 +2978,18 @@ HexEditCreateMainWindow(
     __in PHEXEDIT_CONTEXT HexEditContext
     )
 {
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr;
-    PYORI_WIN_CTRL_HANDLE HexEdit;
-    PYORI_WIN_WINDOW_HANDLE Parent;
+    PYORIWIN_WINMGR_HANDLE WinMgr;
+    PYORIWIN_CTRL_HANDLE HexEdit;
+    PYORIWIN_WINDOW_HANDLE Parent;
     SMALL_RECT Rect;
     COORD WindowSize;
-    PYORI_WIN_CTRL_HANDLE MenuBar;
-    PYORI_WIN_CTRL_HANDLE StatusBar;
+    PYORIWIN_CTRL_HANDLE MenuBar;
+    PYORIWIN_CTRL_HANDLE StatusBar;
     DWORD_PTR Result;
     YORI_STRING Caption;
-    DWORD Style;
+    WORD Style;
 
-    if (!YoriWinOpenWindowManager(TRUE, YoriWinColorTableDefault, &WinMgr)) {
+    if (!YoriWinOpenWinMgr(TRUE, YoriWinColorTableDefault, &WinMgr)) {
         return FALSE;
     }
 
@@ -2998,13 +2998,13 @@ HexEditCreateMainWindow(
     }
 
     if (!YoriWinGetWinMgrDimensions(WinMgr, &WindowSize)) {
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
     if (WindowSize.X < 60 || WindowSize.Y < 20) {
         YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("hexedit: window size too small\n"));
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
@@ -3025,14 +3025,14 @@ HexEditCreateMainWindow(
     }
 
     if (!YoriWinCreateWindow(WinMgr, WindowSize.X, WindowSize.Y, WindowSize.X, WindowSize.Y, 0, NULL, &Parent)) {
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
     MenuBar = HexEditPopulateMenuBar(HexEditContext, Parent);
     if (MenuBar == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
@@ -3045,16 +3045,16 @@ HexEditCreateMainWindow(
 
     Style = 0;
     if (HexEditContext->OffsetWidth == 64) {
-        Style = YORI_WIN_HEX_EDIT_STYLE_LARGE_OFFSET;
+        Style = YORIWIN_HEXEDIT_STY_LOFFSET;
     } else if (HexEditContext->OffsetWidth == 32) {
-        Style = YORI_WIN_HEX_EDIT_STYLE_OFFSET;
+        Style = YORIWIN_HEXEDIT_STY_OFFSET;
     }
 
-    Style = Style | YORI_WIN_HEX_EDIT_STYLE_VERTICAL_SEPERATOR | YORI_WIN_HEX_EDIT_STYLE_VSCROLLBAR;
+    Style = (WORD)(Style | YORIWIN_HEXEDIT_STY_VSEPERATOR | YORIWIN_HEXEDIT_STY_VSCROLL);
     HexEdit = YoriWinHexEditCreate(Parent, NULL, &Rect, HexEditContext->BytesPerWord, Style);
     if (HexEdit == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
@@ -3063,14 +3063,14 @@ HexEditCreateMainWindow(
 
     YoriLibInitEmptyString(&Caption);
 
-    StatusBar = YoriWinLabelCreate(Parent, &Rect, &Caption, YORI_WIN_LABEL_STYLE_RIGHT_ALIGN);
+    StatusBar = YoriWinLabelCreate(Parent, &Rect, &Caption, YORIWIN_LABEL_STY_RIGHT_ALIGN);
     if (StatusBar == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
-    if (YoriLibDoesSystemSupportBackgroundColors()) {
+    if (YoriLibSystemSupportBgColors()) {
         YoriWinLabelSetTextAttributes(StatusBar, BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE);
     }
 
@@ -3079,15 +3079,15 @@ HexEditCreateMainWindow(
     HexEditContext->MenuBar = MenuBar;
     HexEditContext->StatusBar = StatusBar;
 
-    if (YoriLibDoesSystemSupportBackgroundColors()) {
+    if (YoriLibSystemSupportBgColors()) {
         YoriWinHexEditSetColor(HexEdit,
                                      BACKGROUND_BLUE | FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,
                                      BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE);
     }
-    YoriWinSetControlContext(Parent, HexEditContext);
-    YoriWinHexEditSetCursorMoveNotifyCallback(HexEdit, HexEditNotifyCursorMove);
+    YoriWinSetCtrlContext(Parent, HexEditContext);
+    YoriWinHexEditSetCursorCbk(HexEdit, HexEditNotifyCursorMove);
 
-    YoriWinSetWindowManagerResizeNotifyCallback(Parent, HexEditResizeWindowManager);
+    YoriWinSetWinMgrResizeNotifyCbk(Parent, HexEditResizeWindowManager);
 
     if (HexEditContext->OpenFileName.StartOfString != NULL) {
         HexEditLoadFile(HexEditContext, &HexEditContext->OpenFileName, 0, 0);
@@ -3101,7 +3101,7 @@ HexEditCreateMainWindow(
     }
 
     YoriWinDestroyWindow(Parent);
-    YoriWinCloseWindowManager(WinMgr);
+    YoriWinCloseWinMgr(WinMgr);
     return (BOOL)Result;
 }
 

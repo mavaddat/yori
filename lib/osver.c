@@ -578,7 +578,7 @@ YoriLibIsNanoServer(VOID)
  explicitly enabled.
  */
 BOOLEAN
-YoriLibDoesSystemSupportBackgroundColors(VOID)
+YoriLibSystemSupportBgColors(VOID)
 {
     if (!YoriLibIsNanoServer()) {
         return TRUE;

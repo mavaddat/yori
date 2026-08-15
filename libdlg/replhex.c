@@ -44,11 +44,11 @@ typedef enum _YORI_DLG_REPLACE_HEX_CONTROLS {
  */
 VOID
 YoriDlgReplaceHexChangeOneButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, 1);
 }
 
@@ -59,11 +59,11 @@ YoriDlgReplaceHexChangeOneButtonClicked(
  */
 VOID
 YoriDlgReplaceHexChangeAllButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, 2);
 }
 
@@ -74,11 +74,11 @@ YoriDlgReplaceHexChangeAllButtonClicked(
  */
 VOID
 YoriDlgReplaceHexCancelButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, FALSE);
 }
 
@@ -140,7 +140,7 @@ YoriDlgReplaceHexIndexToBytesPerWord(
  */
 WORD
 YoriDlgReplaceHexGetDialogHeight(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle
     )
 {
     COORD WindowSize;
@@ -172,16 +172,16 @@ YoriDlgReplaceHexGetDialogHeight(
  */
 VOID
 YoriDlgReplaceHexBytesPerWordChanged(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    PYORI_WIN_CTRL_HANDLE HexEdit;
-    PYORI_WIN_WINDOW_HANDLE Window;
+    PYORIWIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE HexEdit;
+    PYORIWIN_WINDOW_HANDLE Window;
     YORI_ALLOC_SIZE_T Active;
     UCHAR BytesPerWord;
 
-    Parent = YoriWinGetControlParent(Ctrl);
+    Parent = YoriWinGetCtrlParent(Ctrl);
     Window = YoriWinGetWindowFromWindowCtrl(Parent);
     if (!YoriWinComboGetActiveOption(Ctrl, &Active)) {
         return;
@@ -251,7 +251,7 @@ YoriDlgReplaceHexBytesPerWordChanged(
 __success(return)
 BOOLEAN
 YoriDlgReplaceHex(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in WORD DesiredLeft,
     __in WORD DesiredTop,
     __in PYORI_STRING Title,
@@ -267,17 +267,17 @@ YoriDlgReplaceHex(
     __out PYORI_ALLOC_SIZE_T NewDataLength
     )
 {
-    PYORI_WIN_WINDOW_HANDLE Parent;
+    PYORIWIN_WINDOW_HANDLE Parent;
     COORD WindowSize;
     SMALL_RECT Area;
     YORI_STRING Caption;
     WORD ButtonWidth;
-    PYORI_WIN_CTRL_HANDLE Ctrl;
-    PYORI_WIN_CTRL_HANDLE HexEditFind;
-    PYORI_WIN_CTRL_HANDLE HexEditChangeTo;
+    PYORIWIN_CTRL_HANDLE Ctrl;
+    PYORIWIN_CTRL_HANDLE HexEditFind;
+    PYORIWIN_CTRL_HANDLE HexEditChangeTo;
     DWORD_PTR Result;
-    DWORD HexStyle;
-    DWORD WindowStyle;
+    WORD HexStyle;
+    WORD WindowStyle;
     DWORD HexEditHeight;
     WORD DialogWidth;
     WORD DialogHeight;
@@ -290,7 +290,7 @@ YoriDlgReplaceHex(
         return FALSE;
     }
 
-    HexStyle = YORI_WIN_HEX_EDIT_STYLE_VSCROLLBAR | YORI_WIN_HEX_EDIT_STYLE_VERTICAL_SEPERATOR;
+    HexStyle = YORIWIN_HEXEDIT_STY_VSCROLL | YORIWIN_HEXEDIT_STY_VSEPERATOR;
 
     //
     //  The dialog wants space for three borders on the left, 16 3 cell
@@ -308,11 +308,11 @@ YoriDlgReplaceHex(
     //
 
     if (WindowSize.X >= (WORD)(DialogWidth + 10)) {
-        HexStyle = HexStyle | YORI_WIN_HEX_EDIT_STYLE_OFFSET;
+        HexStyle = (WORD)(HexStyle | YORIWIN_HEXEDIT_STY_OFFSET);
         DialogWidth = (WORD)(DialogWidth + 10);
     }
 
-    WindowStyle = YORI_WIN_WINDOW_STYLE_BORDER_SINGLE | YORI_WIN_WINDOW_STYLE_SHADOW_SOLID;
+    WindowStyle = YORIWIN_WIN_STY_BORDER_SINGLE | YORIWIN_WIN_STY_SHADOW_SOLID;
 
     DialogHeight = YoriDlgReplaceHexGetDialogHeight(WinMgrHandle);
 
@@ -352,7 +352,7 @@ YoriDlgReplaceHex(
         return FALSE;
     }
 
-    YoriWinSetControlId(HexEditFind, YoriDlgReplaceHexControlFindBuffer);
+    YoriWinSetCtrlId(HexEditFind, YoriDlgReplaceHexControlFindBuffer);
 
     YoriLibConstantString(&Caption, _T("&Change To:"));
 
@@ -380,7 +380,7 @@ YoriDlgReplaceHex(
         return FALSE;
     }
 
-    YoriWinSetControlId(HexEditChangeTo, YoriDlgReplaceHexControlChangeToBuffer);
+    YoriWinSetCtrlId(HexEditChangeTo, YoriDlgReplaceHexControlChangeToBuffer);
 
     if (InitialBeforeData != NULL) {
 
@@ -448,7 +448,7 @@ YoriDlgReplaceHex(
         return FALSE;
     }
 
-    YoriWinSetControlId(Ctrl, YoriDlgReplaceHexControlBytesPerWord);
+    YoriWinSetCtrlId(Ctrl, YoriDlgReplaceHexControlBytesPerWord);
 
     if (!YoriWinComboAddItems(Ctrl, BytesPerWordOptions, sizeof(BytesPerWordOptions)/sizeof(BytesPerWordOptions[0]))) {
         YoriWinDestroyWindow(Parent);
@@ -466,7 +466,7 @@ YoriDlgReplaceHex(
     Area.Left = (SHORT)(1);
     Area.Right = (WORD)(Area.Left + 1 + ButtonWidth);
 
-    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORI_WIN_BUTTON_STYLE_DEFAULT, YoriDlgReplaceHexChangeOneButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORIWIN_BUTTON_STY_DEFAULT, YoriDlgReplaceHexChangeOneButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;
@@ -486,7 +486,7 @@ YoriDlgReplaceHex(
     Area.Right = (WORD)(Area.Right + ButtonWidth + 3);
 
     YoriLibConstantString(&Caption, _T("&Cancel"));
-    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORI_WIN_BUTTON_STYLE_CANCEL, YoriDlgReplaceHexCancelButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORIWIN_BUTTON_STY_CANCEL, YoriDlgReplaceHexCancelButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;

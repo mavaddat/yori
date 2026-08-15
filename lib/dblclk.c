@@ -38,7 +38,7 @@
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 BOOL
-YoriLibGetSelectionDoubleClickBreakChars(
+YoriLibGetSelDblClkBreakChars(
     __out PYORI_STRING BreakChars
     )
 {

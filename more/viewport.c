@@ -2501,7 +2501,7 @@ MoreProcessMouseDoubleClick(
         if (!GetConsoleScreenBufferInfo(ConsoleHandle, &ScreenInfo)) {
             return FALSE;
         }
-        YoriLibGetSelectionDoubleClickBreakChars(&BreakChars);
+        YoriLibGetSelDblClkBreakChars(&BreakChars);
 
         BufferChanged = YoriLibClearSelection(&MoreContext->Selection);
 

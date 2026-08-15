@@ -35,11 +35,11 @@
  */
 VOID
 YoriDlgReplaceChangeOneButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, 1);
 }
 
@@ -50,11 +50,11 @@ YoriDlgReplaceChangeOneButtonClicked(
  */
 VOID
 YoriDlgReplaceChangeAllButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, 2);
 }
 
@@ -65,11 +65,11 @@ YoriDlgReplaceChangeAllButtonClicked(
  */
 VOID
 YoriDlgReplaceCancelButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, FALSE);
 }
 
@@ -98,7 +98,7 @@ YoriDlgReplaceCancelButtonClicked(
  */
 WORD
 YoriDlgReplaceGetDialogHeight(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle
     )
 {
     COORD WindowSize;
@@ -190,7 +190,7 @@ YoriDlgReplaceGetDialogHeight(
 __success(return)
 BOOLEAN
 YoriDlgReplaceText(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in WORD DesiredLeft,
     __in WORD DesiredTop,
     __in PYORI_STRING Title,
@@ -202,21 +202,21 @@ YoriDlgReplaceText(
     __inout PYORI_STRING AfterText
     )
 {
-    PYORI_WIN_WINDOW_HANDLE Parent;
+    PYORIWIN_WINDOW_HANDLE Parent;
     COORD WindowSize;
     SMALL_RECT Area;
     YORI_STRING Caption;
     WORD ButtonWidth;
-    PYORI_WIN_CTRL_HANDLE Ctrl;
-    PYORI_WIN_CTRL_HANDLE MatchCaseCheckbox;
-    PYORI_WIN_CTRL_HANDLE BeforeEdit;
-    PYORI_WIN_CTRL_HANDLE AfterEdit;
+    PYORIWIN_CTRL_HANDLE Ctrl;
+    PYORIWIN_CTRL_HANDLE MatchCaseCheckbox;
+    PYORIWIN_CTRL_HANDLE BeforeEdit;
+    PYORIWIN_CTRL_HANDLE AfterEdit;
     DWORD_PTR Result;
     SMALL_RECT WindowRect;
-    DWORD Style;
+    WORD Style;
     WORD DialogHeight;
 
-    Style = YORI_WIN_WINDOW_STYLE_BORDER_SINGLE | YORI_WIN_WINDOW_STYLE_SHADOW_SOLID;
+    Style = YORIWIN_WIN_STY_BORDER_SINGLE | YORIWIN_WIN_STY_SHADOW_SOLID;
 
     DialogHeight = YoriDlgReplaceGetDialogHeight(WinMgrHandle);
 
@@ -331,7 +331,7 @@ YoriDlgReplaceText(
     Area.Left = (SHORT)(1);
     Area.Right = (WORD)(Area.Left + 1 + ButtonWidth);
 
-    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORI_WIN_BUTTON_STYLE_DEFAULT, YoriDlgReplaceChangeOneButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORIWIN_BUTTON_STY_DEFAULT, YoriDlgReplaceChangeOneButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;
@@ -353,7 +353,7 @@ YoriDlgReplaceText(
     Area.Left = (WORD)(Area.Left + ButtonWidth + 3);
     Area.Right = (WORD)(Area.Right + ButtonWidth + 3);
 
-    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORI_WIN_BUTTON_STYLE_CANCEL, YoriDlgReplaceCancelButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORIWIN_BUTTON_STY_CANCEL, YoriDlgReplaceCancelButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;

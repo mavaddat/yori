@@ -74,11 +74,11 @@ HistoryHelp(VOID)
  */
 VOID
 HistoryOkButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, TRUE);
 }
 
@@ -89,11 +89,11 @@ HistoryOkButtonClicked(
  */
 VOID
 HistoryCancelButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, FALSE);
 }
 
@@ -189,19 +189,19 @@ HistoryGetControlRectsFromWindowManagerSize(
  */
 VOID
 HistoryResizeWindowManager(
-    __in PYORI_WIN_WINDOW_HANDLE WindowHandle,
+    __in PYORIWIN_WINDOW_HANDLE WindowHandle,
     __in PSMALL_RECT OldPosition,
     __in PSMALL_RECT NewPosition
     )
 {
-    PYORI_WIN_CTRL_HANDLE WindowCtrl;
+    PYORIWIN_CTRL_HANDLE WindowCtrl;
     SMALL_RECT Rect;
     COORD NewSize;
     COORD WindowSize;
     SMALL_RECT ListRect;
     SMALL_RECT OkButtonRect;
     SMALL_RECT CancelButtonRect;
-    PYORI_WIN_CTRL_HANDLE Ctrl;
+    PYORIWIN_CTRL_HANDLE Ctrl;
 
     UNREFERENCED_PARAMETER(OldPosition);
 
@@ -269,23 +269,23 @@ HistoryCreateSynchronousMenu(
     __out PYORI_ALLOC_SIZE_T ActiveOption
     )
 {
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr;
-    PYORI_WIN_CTRL_HANDLE List;
-    PYORI_WIN_WINDOW_HANDLE Parent;
+    PYORIWIN_WINMGR_HANDLE WinMgr;
+    PYORIWIN_CTRL_HANDLE List;
+    PYORIWIN_WINDOW_HANDLE Parent;
     COORD WindowSize;
     YORI_STRING Title;
     SMALL_RECT ListRect;
     SMALL_RECT OkButtonRect;
     SMALL_RECT CancelButtonRect;
     YORI_STRING Caption;
-    PYORI_WIN_CTRL_HANDLE Ctrl;
+    PYORIWIN_CTRL_HANDLE Ctrl;
     DWORD_PTR Result;
 
     if (NumberOptions == 0) {
         return FALSE;
     }
 
-    if (!YoriWinOpenWindowManager(FALSE, YoriWinColorTableDefault, &WinMgr)) {
+    if (!YoriWinOpenWinMgr(FALSE, YoriWinColorTableDefault, &WinMgr)) {
         return FALSE;
     }
 
@@ -302,48 +302,48 @@ HistoryCreateSynchronousMenu(
 
     YoriLibConstantString(&Title, _T("History"));
 
-    if (!YoriWinCreateWindow(WinMgr, WindowSize.X, WindowSize.Y, WindowSize.X, WindowSize.Y, YORI_WIN_WINDOW_STYLE_BORDER_SINGLE | YORI_WIN_WINDOW_STYLE_SHADOW_SOLID, &Title, &Parent)) {
-        YoriWinCloseWindowManager(WinMgr);
+    if (!YoriWinCreateWindow(WinMgr, WindowSize.X, WindowSize.Y, WindowSize.X, WindowSize.Y, YORIWIN_WIN_STY_BORDER_SINGLE | YORIWIN_WIN_STY_SHADOW_SOLID, &Title, &Parent)) {
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
     YoriWinGetClientSize(Parent, &WindowSize);
 
-    List = YoriWinListCreate(Parent, &ListRect, YORI_WIN_LIST_STYLE_VSCROLLBAR | YORI_WIN_LIST_STYLE_AUTO_HSCROLLBAR);
+    List = YoriWinListCreate(Parent, &ListRect, YORIWIN_LIST_STY_VSCROLL | YORIWIN_LIST_STY_AUTO_HSCROLL);
     if (List == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
-    YoriWinSetControlId(List, HistoryCtrlList);
+    YoriWinSetCtrlId(List, HistoryCtrlList);
 
     if (!YoriWinListAddItems(List, MenuOptions, NumberOptions)) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
     YoriWinListSetActiveOption(List, NumberOptions - 1);
 
     YoriLibConstantString(&Caption, _T("&Ok"));
-    Ctrl = YoriWinButtonCreate(Parent, &OkButtonRect, &Caption, YORI_WIN_BUTTON_STYLE_DEFAULT, HistoryOkButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &OkButtonRect, &Caption, YORIWIN_BUTTON_STY_DEFAULT, HistoryOkButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
-    YoriWinSetControlId(Ctrl, HistoryCtrlOk);
+    YoriWinSetCtrlId(Ctrl, HistoryCtrlOk);
 
     YoriLibConstantString(&Caption, _T("&Cancel"));
-    Ctrl = YoriWinButtonCreate(Parent, &CancelButtonRect, &Caption, YORI_WIN_BUTTON_STYLE_CANCEL, HistoryCancelButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &CancelButtonRect, &Caption, YORIWIN_BUTTON_STY_CANCEL, HistoryCancelButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
-    YoriWinSetControlId(Ctrl, HistoryCtrlCancel);
+    YoriWinSetCtrlId(Ctrl, HistoryCtrlCancel);
 
-    YoriWinSetWindowManagerResizeNotifyCallback(Parent, HistoryResizeWindowManager);
+    YoriWinSetWinMgrResizeNotifyCbk(Parent, HistoryResizeWindowManager);
 
     Result = FALSE;
     if (!YoriWinProcessInputForWindow(Parent, &Result)) {
@@ -356,7 +356,7 @@ HistoryCreateSynchronousMenu(
     }
 
     YoriWinDestroyWindow(Parent);
-    YoriWinCloseWindowManager(WinMgr);
+    YoriWinCloseWinMgr(WinMgr);
     if (Result) {
         return TRUE;
     }

@@ -35,13 +35,13 @@
  */
 VOID
 YoriDlgAboutDlgButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     DWORD_PTR CtrlId;
-    Parent = YoriWinGetControlParent(Ctrl);
-    CtrlId = YoriWinGetControlId(Ctrl);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    CtrlId = YoriWinGetCtrlId(Ctrl);
     YoriWinCloseWindow(Parent, CtrlId);
 }
 
@@ -74,7 +74,7 @@ YoriDlgAboutDlgButtonClicked(
 __success(return)
 DWORD
 YoriDlgAbout(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in PYORI_STRING Title,
     __in PYORI_STRING CenteredText,
     __in PYORI_STRING LeftText,
@@ -84,7 +84,7 @@ YoriDlgAbout(
     __in DWORD CancelIndex
     )
 {
-    PYORI_WIN_WINDOW_HANDLE Parent;
+    PYORIWIN_WINDOW_HANDLE Parent;
     COORD WindowSize;
     SMALL_RECT TextArea;
     SMALL_RECT ButtonArea;
@@ -94,12 +94,12 @@ YoriDlgAbout(
     YORI_ALLOC_SIZE_T CenteredLabelWidthRequired;
     YORI_ALLOC_SIZE_T LeftLabelLinesRequired;
     YORI_ALLOC_SIZE_T LeftLabelWidthRequired;
-    DWORD Style;
+    WORD Style;
     DWORD Index;
     WORD WindowWidth;
     WORD WindowHeight;
     DWORD_PTR Result;
-    PYORI_WIN_CTRL_HANDLE Ctrl;
+    PYORIWIN_CTRL_HANDLE Ctrl;
 
     if (!YoriWinGetWinMgrDimensions(WinMgrHandle, &WindowSize)) {
         return 0;
@@ -113,19 +113,19 @@ YoriDlgAbout(
 
     DisplayLength = WindowSize.X - 10;
     if (CenteredText->LengthInChars > 0) {
-        CenteredLabelLinesRequired = YoriWinLabelCountLinesRequiredForText(WinMgrHandle,
-                                                                           CenteredText,
-                                                                           DisplayLength,
-                                                                           &CenteredLabelWidthRequired);
+        CenteredLabelLinesRequired = YoriWinLabelLinesNeededForText(WinMgrHandle,
+                                                                    CenteredText,
+                                                                    DisplayLength,
+                                                                    &CenteredLabelWidthRequired);
     } else {
         CenteredLabelLinesRequired = 0;
         CenteredLabelWidthRequired = 0;
     }
     if (LeftText->LengthInChars > 0) {
-        LeftLabelLinesRequired = YoriWinLabelCountLinesRequiredForText(WinMgrHandle,
-                                                                       LeftText,
-                                                                       DisplayLength,
-                                                                       &LeftLabelWidthRequired);
+        LeftLabelLinesRequired = YoriWinLabelLinesNeededForText(WinMgrHandle,
+                                                                LeftText,
+                                                                DisplayLength,
+                                                                &LeftLabelWidthRequired);
     } else {
         LeftLabelLinesRequired = 0;
         LeftLabelWidthRequired = 0;
@@ -160,7 +160,7 @@ YoriDlgAbout(
         WindowHeight = (WORD)(CenteredLabelLinesRequired + LeftLabelLinesRequired + 7);
     }
 
-    if (!YoriWinCreateWindow(WinMgrHandle, WindowWidth, WindowHeight, WindowWidth, WindowHeight, YORI_WIN_WINDOW_STYLE_BORDER_SINGLE | YORI_WIN_WINDOW_STYLE_SHADOW_SOLID, Title, &Parent)) {
+    if (!YoriWinCreateWindow(WinMgrHandle, WindowWidth, WindowHeight, WindowWidth, WindowHeight, YORIWIN_WIN_STY_BORDER_SINGLE | YORIWIN_WIN_STY_SHADOW_SOLID, Title, &Parent)) {
         return FALSE;
     }
 
@@ -174,7 +174,7 @@ YoriDlgAbout(
     if (CenteredLabelLinesRequired > 0) {
         TextArea.Bottom = (SHORT)(TextArea.Top + CenteredLabelLinesRequired - 1);
 
-        Ctrl = YoriWinLabelCreate(Parent, &TextArea, CenteredText, YORI_WIN_LABEL_STYLE_CENTER | YORI_WIN_LABEL_NO_ACCELERATOR);
+        Ctrl = YoriWinLabelCreate(Parent, &TextArea, CenteredText, YORIWIN_LABEL_STY_CENTER | YORIWIN_LABEL_NO_ACCELERATOR);
         if (Ctrl == NULL) {
             YoriWinDestroyWindow(Parent);
             return FALSE;
@@ -187,7 +187,7 @@ YoriDlgAbout(
         }
         TextArea.Bottom = (SHORT)(TextArea.Top + LeftLabelLinesRequired - 1);
 
-        Ctrl = YoriWinLabelCreate(Parent, &TextArea, LeftText, YORI_WIN_LABEL_NO_ACCELERATOR);
+        Ctrl = YoriWinLabelCreate(Parent, &TextArea, LeftText, YORIWIN_LABEL_NO_ACCELERATOR);
         if (Ctrl == NULL) {
             YoriWinDestroyWindow(Parent);
             return FALSE;
@@ -234,11 +234,11 @@ YoriDlgAbout(
         Style = 0;
 
         if (Index == DefaultIndex) {
-            Style |= YORI_WIN_BUTTON_STYLE_DEFAULT;
+            Style |= YORIWIN_BUTTON_STY_DEFAULT;
         }
 
         if (Index == CancelIndex) {
-            Style |= YORI_WIN_BUTTON_STYLE_CANCEL;
+            Style |= YORIWIN_BUTTON_STY_CANCEL;
         }
 
         Ctrl = YoriWinButtonCreate(Parent, &ButtonArea, &ButtonTexts[Index], Style, YoriDlgAboutDlgButtonClicked);
@@ -247,7 +247,7 @@ YoriDlgAbout(
             return FALSE;
         }
 
-        YoriWinSetControlId(Ctrl, Index + 1);
+        YoriWinSetCtrlId(Ctrl, Index + 1);
         ButtonArea.Left = (SHORT)(ButtonArea.Right + 2);
     }
 

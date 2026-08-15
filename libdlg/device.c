@@ -100,7 +100,7 @@ typedef struct _YORI_DLG_DEV_STATE {
  */
 VOID
 YoriDlgDevWarnNonNumeric(
-    __in PYORI_WIN_CTRL_HANDLE Parent
+    __in PYORIWIN_CTRL_HANDLE Parent
     )
 {
     YORI_STRING Title;
@@ -111,7 +111,7 @@ YoriDlgDevWarnNonNumeric(
     YoriLibConstantString(&Title, _T("Error"));
     YoriLibConstantString(&ButtonText, _T("Ok"));
 
-    YoriDlgMessageBox(YoriWinGetWindowManagerHandle(Parent),
+    YoriDlgMessageBox(YoriWinGetWinMgrHandle(Parent),
                       &Title,
                       &DialogText,
                       1,
@@ -128,11 +128,11 @@ YoriDlgDevWarnNonNumeric(
  */
 VOID
 YoriDlgDevOkButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    PYORI_WIN_CTRL_HANDLE EditCtrl;
+    PYORIWIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE EditCtrl;
     YORI_STRING DeviceName;
     YORI_STRING OffsetLengthText;
     PYORI_DLG_DEV_STATE State;
@@ -142,8 +142,8 @@ YoriDlgDevOkButtonClicked(
     YORI_MAX_SIGNED_T LengthNumber;
     DWORD Pass;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    State = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    State = YoriWinGetCtrlContext(Parent);
 
     EditCtrl = YoriWinFindControlById(Parent, YoriDlgDevControlFileText);
     ASSERT(EditCtrl != NULL);
@@ -237,11 +237,11 @@ YoriDlgDevOkButtonClicked(
  */
 VOID
 YoriDlgDevCancelButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, FALSE);
 }
 
@@ -252,21 +252,21 @@ YoriDlgDevCancelButtonClicked(
  */
 VOID
 YoriDlgDevDeviceSelectionChanged(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
     YORI_ALLOC_SIZE_T ActiveOption;
     YORI_STRING String;
-    PYORI_WIN_CTRL_HANDLE Parent;
-    PYORI_WIN_CTRL_HANDLE EditCtrl;
+    PYORIWIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE EditCtrl;
     PYORI_DLG_DEV_STATE State;
 
     if (!YoriWinListGetActiveOption(Ctrl, &ActiveOption)) {
         return;
     }
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    State = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    State = YoriWinGetCtrlContext(Parent);
     YoriLibInitEmptyString(&String);
     if (!YoriWinListGetItemText(Ctrl, ActiveOption, &String)) {
         return;
@@ -344,7 +344,7 @@ YoriDlgDevObjectFoundCallback(
         }
     }
 
-    State = (PYORI_WIN_CTRL_HANDLE)Context;
+    State = (PYORIWIN_CTRL_HANDLE)Context;
 
     if (IncludeObject) {
         PYORI_DLG_DEV_KNOWN_DEVICE NewDevice;
@@ -435,10 +435,10 @@ YoriDlgDevClearDeviceList(
  */
 VOID
 YoriDlgDevRefreshView(
-    __in PYORI_WIN_CTRL_HANDLE Dialog
+    __in PYORIWIN_CTRL_HANDLE Dialog
     )
 {
-    PYORI_WIN_CTRL_HANDLE DeviceList;
+    PYORIWIN_CTRL_HANDLE DeviceList;
     PYORI_DLG_DEV_STATE State;
     YORI_STRING SearchPath;
 
@@ -446,7 +446,7 @@ YoriDlgDevRefreshView(
     ASSERT(DeviceList != NULL);
     __analysis_assume(DeviceList != NULL);
 
-    State = YoriWinGetControlContext(Dialog);
+    State = YoriWinGetCtrlContext(Dialog);
 
     YoriWinListClearAllItems(DeviceList);
     YoriDlgDevClearDeviceList(State);
@@ -518,7 +518,7 @@ YoriDlgDevRefreshView(
 __success(return)
 BOOLEAN
 YoriDlgDevice(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in PYORI_STRING Title,
     __in DWORD OptionCount,
     __in_opt PYORI_DLG_FILE_CUSTOM_OPTION Options,
@@ -527,13 +527,13 @@ YoriDlgDevice(
     __out PDWORDLONG DeviceLength
     )
 {
-    PYORI_WIN_WINDOW_HANDLE Parent;
+    PYORIWIN_WINDOW_HANDLE Parent;
     COORD WindowSize;
     SMALL_RECT Area;
     YORI_STRING Caption;
     WORD ButtonWidth;
-    PYORI_WIN_CTRL_HANDLE Ctrl;
-    PYORI_WIN_CTRL_HANDLE Edit;
+    PYORIWIN_CTRL_HANDLE Ctrl;
+    PYORIWIN_CTRL_HANDLE Edit;
     DWORD_PTR Result;
     COORD WinMgrSize;
     YORI_DLG_DEV_STATE State;
@@ -572,11 +572,11 @@ YoriDlgDevice(
     YoriLibInitializeListHead(&State.DeviceEntryList);
     State.DeviceEntryCount = 0;
     YoriLibInitEmptyString(&State.FileToReturn);
-    if (!YoriWinCreateWindow(WinMgrHandle, 50, (WORD)(13 + OptionCount), WinMgrSize.X, WinMgrSize.Y, YORI_WIN_WINDOW_STYLE_BORDER_SINGLE | YORI_WIN_WINDOW_STYLE_SHADOW_SOLID, Title, &Parent)) {
+    if (!YoriWinCreateWindow(WinMgrHandle, 50, (WORD)(13 + OptionCount), WinMgrSize.X, WinMgrSize.Y, YORIWIN_WIN_STY_BORDER_SINGLE | YORIWIN_WIN_STY_SHADOW_SOLID, Title, &Parent)) {
         return FALSE;
     }
 
-    YoriWinSetControlContext(Parent, &State);
+    YoriWinSetCtrlContext(Parent, &State);
     YoriWinGetClientSize(Parent, &WindowSize);
 
     YoriLibConstantString(&Caption, _T("Device &Name:"));
@@ -605,7 +605,7 @@ YoriDlgDevice(
         return FALSE;
     }
 
-    YoriWinSetControlId(Edit, YoriDlgDevControlFileText);
+    YoriWinSetCtrlId(Edit, YoriDlgDevControlFileText);
 
     YoriLibConstantString(&Caption, _T("&Devices:"));
 
@@ -625,15 +625,15 @@ YoriDlgDevice(
     Area.Bottom = (WORD)(WindowSize.Y - OptionCount - 6);
     Area.Right = (WORD)(WindowSize.X - 2);
 
-    Ctrl = YoriWinListCreate(Parent, &Area, YORI_WIN_LIST_STYLE_VSCROLLBAR | YORI_WIN_LIST_STYLE_DESELECT_ON_LOSE_FOCUS | YORI_WIN_LIST_STYLE_AUTO_HSCROLLBAR);
+    Ctrl = YoriWinListCreate(Parent, &Area, YORIWIN_LIST_STY_VSCROLL | YORIWIN_LIST_STY_DESEL_FOCUS | YORIWIN_LIST_STY_AUTO_HSCROLL);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;
     }
 
-    YoriWinControlSetFocusOnMouseClick(Ctrl, FALSE);
-    YoriWinSetControlId(Ctrl, YoriDlgDevControlDeviceList);
-    YoriWinListSetSelectionNotifyCallback(Ctrl, YoriDlgDevDeviceSelectionChanged);
+    YoriWinCtrlSetFocusOnMouseClick(Ctrl, FALSE);
+    YoriWinSetCtrlId(Ctrl, YoriDlgDevControlDeviceList);
+    YoriWinListSetSelNotifyCbk(Ctrl, YoriDlgDevDeviceSelectionChanged);
 
     LongestOptionDescription = sizeof("Offset");
     for (Index = 0; Index < OptionCount; Index++) {
@@ -665,12 +665,12 @@ YoriDlgDevice(
     Area.Left = (WORD)(LongestOptionDescription + 2);
     Area.Right = (WORD)(WindowSize.X - 2);
 
-    Ctrl = YoriWinEditCreate(Parent, &Area, &Caption, YORI_WIN_EDIT_STYLE_RIGHT_ALIGN | YORI_WIN_EDIT_STYLE_NUMERIC);
+    Ctrl = YoriWinEditCreate(Parent, &Area, &Caption, YORIWIN_EDIT_STY_RIGHT_ALIGN | YORIWIN_EDIT_STY_NUMERIC);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;
     }
-    YoriWinSetControlId(Ctrl, YoriDlgDevControlDeviceOffset);
+    YoriWinSetCtrlId(Ctrl, YoriDlgDevControlDeviceOffset);
     YoriWinEditSetSelectionRange(Ctrl, 0, Caption.LengthInChars);
 
     YoriLibConstantString(&Caption, _T("&Length:"));
@@ -691,12 +691,12 @@ YoriDlgDevice(
     Area.Left = (WORD)(LongestOptionDescription + 2);
     Area.Right = (WORD)(WindowSize.X - 2);
 
-    Ctrl = YoriWinEditCreate(Parent, &Area, &Caption, YORI_WIN_EDIT_STYLE_RIGHT_ALIGN | YORI_WIN_EDIT_STYLE_NUMERIC);
+    Ctrl = YoriWinEditCreate(Parent, &Area, &Caption, YORIWIN_EDIT_STY_RIGHT_ALIGN | YORIWIN_EDIT_STY_NUMERIC);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;
     }
-    YoriWinSetControlId(Ctrl, YoriDlgDevControlDeviceLength);
+    YoriWinSetCtrlId(Ctrl, YoriDlgDevControlDeviceLength);
     YoriWinEditSetSelectionRange(Ctrl, 0, Caption.LengthInChars);
 
     for (Index = 0; Index < OptionCount; Index++) {
@@ -725,7 +725,7 @@ YoriDlgDevice(
             return FALSE;
         }
 
-        YoriWinSetControlId(Ctrl, YoriDlgDevFirstCustomCombo + Index);
+        YoriWinSetCtrlId(Ctrl, YoriDlgDevFirstCustomCombo + Index);
 
         if (!YoriWinComboAddItems(Ctrl, (PYORI_STRING)Options[Index].Values, Options[Index].ValueCount)) {
             YoriWinDestroyWindow(Parent);
@@ -744,7 +744,7 @@ YoriDlgDevice(
     Area.Left = (SHORT)(1);
     Area.Right = (WORD)(Area.Left + 1 + ButtonWidth);
 
-    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORI_WIN_BUTTON_STYLE_DEFAULT, YoriDlgDevOkButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORIWIN_BUTTON_STY_DEFAULT, YoriDlgDevOkButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;
@@ -754,7 +754,7 @@ YoriDlgDevice(
     Area.Right = (WORD)(Area.Right + ButtonWidth + 3);
 
     YoriLibConstantString(&Caption, _T("&Cancel"));
-    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORI_WIN_BUTTON_STYLE_CANCEL, YoriDlgDevCancelButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORIWIN_BUTTON_STY_CANCEL, YoriDlgDevCancelButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;

@@ -33,31 +33,31 @@
  Specifies legitimate values for horizontal text alignment within the
  label.
  */
-typedef enum _YORI_WIN_TEXT_ALIGNMENT {
+typedef enum _YORIWIN_TEXT_ALIGNMENT {
     YoriWinTextAlignLeft = 0,
     YoriWinTextAlignCenter = 1,
     YoriWinTextAlignRight = 2
-} YORI_WIN_TEXT_ALIGNMENT;
+} YORIWIN_TEXT_ALIGNMENT;
 
 /**
  Specifies legitimate values for vertical text alignment within the
  label.
  */
-typedef enum _YORI_WIN_TEXT_VERTICAL_ALIGNMENT {
+typedef enum _YORIWIN_TEXT_VERTICAL_ALIGN {
     YoriWinTextVerticalAlignTop = 0,
     YoriWinTextVerticalAlignCenter = 1,
     YoriWinTextVerticalAlignBottom = 2
-} YORI_WIN_TEXT_VERTICAL_ALIGNMENT;
+} YORIWIN_TEXT_VERTICAL_ALIGN;
 
 /**
  A structure describing the contents of a label control.
  */
-typedef struct _YORI_WIN_CTRL_LABEL {
+typedef struct _YORIWIN_CTRL_LABEL {
 
     /**
      A common header for all controls
      */
-    YORI_WIN_CTRL Ctrl;
+    YORIWIN_CTRL Ctrl;
 
     /**
      The display text of the label
@@ -74,18 +74,18 @@ typedef struct _YORI_WIN_CTRL_LABEL {
      Specifies if the text should be rendered to the left, center, or right of
      each line horizontally.
      */
-    YORI_WIN_TEXT_ALIGNMENT TextAlign;
+    YORIWIN_TEXT_ALIGNMENT TextAlign;
 
     /**
      Specifies if the text should be rendered at the top, center, or bottom of
      the control vertically.
      */
-    YORI_WIN_TEXT_VERTICAL_ALIGNMENT TextVerticalAlign;
+    YORIWIN_TEXT_VERTICAL_ALIGN TextVerticalAlign;
 
     /**
      Style flags.
      */
-    DWORD Style;
+    WORD Style;
 
     /**
      The attributes to display text in.
@@ -103,7 +103,7 @@ typedef struct _YORI_WIN_CTRL_LABEL {
      */
     BOOLEAN DisplayAccelerator;
 
-} YORI_WIN_CTRL_LABEL, *PYORI_WIN_CTRL_LABEL;
+} YORIWIN_CTRL_LABEL, FAR *PYORIWIN_CTRL_LABEL;
 
 /**
  Return TRUE to indicate that the character should always break a line
@@ -157,7 +157,7 @@ YoriWinLabelIsCharSoftBreakChar(
          line break occurred.
  */
 BOOLEAN
-YoriWinLabelShouldSwallowBreakChar(
+YoriWinLabelSwallowBreakChar(
     __in TCHAR Char
     )
 {
@@ -198,7 +198,7 @@ YoriWinLabelShouldSwallowBreakChar(
  */
 VOID
 YoriWinLabelGetNextDisplayLine(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __inout PYORI_STRING Remaining,
     __in YORI_ALLOC_SIZE_T ClientWidth,
     __out PYORI_STRING Display,
@@ -216,9 +216,9 @@ YoriWinLabelGetNextDisplayLine(
     BOOLEAN BreakCharFound;
     TCHAR TestChar;
     BOOLEAN SoftTruncationRequired;
-    BOOLEAN DoubleWideCharSupported;
+    BOOLEAN DblWideSupp;
 
-    DoubleWideCharSupported = YoriWinIsDoubleWideCharSupported(WinMgrHandle);
+    DblWideSupp = YoriWinIsDblWideSupp(WinMgrHandle);
 
     //
     //  Check if the text is longer than can fit on one line
@@ -245,7 +245,7 @@ YoriWinLabelGetNextDisplayLine(
             break;
         }
 
-        if (DoubleWideCharSupported && YoriLibIsDoubleWideChar(TestChar)) {
+        if (DblWideSupp && YoriLibIsDoubleWideChar(TestChar)) {
             CellsProcessed = CellsProcessed + 2;
         } else {
             CellsProcessed++;
@@ -259,9 +259,9 @@ YoriWinLabelGetNextDisplayLine(
 
         if (CellsProcessed > ClientWidth) {
             if (!YoriWinLabelIsCharSoftBreakChar(TestChar) ||
-                !YoriWinLabelShouldSwallowBreakChar(TestChar)) {
+                !YoriWinLabelSwallowBreakChar(TestChar)) {
 
-                if (DoubleWideCharSupported && YoriLibIsDoubleWideChar(TestChar)) {
+                if (DblWideSupp && YoriLibIsDoubleWideChar(TestChar)) {
                     CellsProcessed = CellsProcessed - 2;
                 } else {
                     CellsProcessed--;
@@ -296,7 +296,7 @@ YoriWinLabelGetNextDisplayLine(
             }
             PotentialBreakOffset--;
             TestChar = Remaining->StartOfString[PotentialBreakOffset];
-            if (DoubleWideCharSupported && YoriLibIsDoubleWideChar(TestChar)) {
+            if (DblWideSupp && YoriLibIsDoubleWideChar(TestChar)) {
                 CellsProcessed = CellsProcessed - 2;
             } else {
                 CellsProcessed--;
@@ -326,7 +326,7 @@ YoriWinLabelGetNextDisplayLine(
     CharsToConsumeThisLine = CharsToDisplayThisLine;
 
     if (CharsToConsumeThisLine < Remaining->LengthInChars) {
-        while (YoriWinLabelShouldSwallowBreakChar(Remaining->StartOfString[CharsToConsumeThisLine])) {
+        while (YoriWinLabelSwallowBreakChar(Remaining->StartOfString[CharsToConsumeThisLine])) {
             CharsToConsumeThisLine++;
             if (CharsToConsumeThisLine >= Remaining->LengthInChars) {
                 break;
@@ -375,7 +375,7 @@ YoriWinLabelTrimSwallowChars(
     )
 {
     while (Remaining->LengthInChars > 0) {
-        if (!YoriWinLabelShouldSwallowBreakChar(Remaining->StartOfString[0])) {
+        if (!YoriWinLabelSwallowBreakChar(Remaining->StartOfString[0])) {
             break;
         }
         Remaining->StartOfString++;
@@ -405,8 +405,8 @@ YoriWinLabelTrimSwallowChars(
  @return The number of lines of text within the control.
  */
 YORI_ALLOC_SIZE_T
-YoriWinLabelCountLinesRequiredForText(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+YoriWinLabelLinesNeededForText(
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in PCYORI_STRING Text,
     __in YORI_ALLOC_SIZE_T CtrlWidth,
     __out_opt PYORI_ALLOC_SIZE_T MaximumWidth
@@ -466,22 +466,22 @@ YoriWinLabelCountLinesRequiredForText(
  */
 DWORD
 YoriWinLabelCountLinesRequired(
-    __in PYORI_WIN_CTRL_LABEL Label
+    __in PYORIWIN_CTRL_LABEL Label
     )
 {
     COORD ClientSize;
     DWORD LinesRequired;
-    PYORI_WIN_WINDOW TopLevelWindow;
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+    PYORIWIN_WINDOW TopLevelWindow;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle;
 
     TopLevelWindow = YoriWinGetTopLevelWindow(Label->Ctrl.Parent);
-    WinMgrHandle = YoriWinGetWindowManagerHandle(TopLevelWindow);
+    WinMgrHandle = YoriWinGetWinMgrHandle(TopLevelWindow);
 
-    YoriWinGetControlClientSize(&Label->Ctrl, &ClientSize);
-    LinesRequired = YoriWinLabelCountLinesRequiredForText(WinMgrHandle,
-                                                          &Label->Caption,
-                                                          ClientSize.X,
-                                                          NULL);
+    YoriWinGetCtrlClientSize(&Label->Ctrl, &ClientSize);
+    LinesRequired = YoriWinLabelLinesNeededForText(WinMgrHandle,
+                                                   &Label->Caption,
+                                                   ClientSize.X,
+                                                   NULL);
     return LinesRequired;
 }
 
@@ -581,7 +581,7 @@ YoriWinLabelParseAccelerator(
  */
 VOID
 YoriWinLabelClearClientLine(
-    __in PYORI_WIN_CTRL_LABEL Label,
+    __in PYORIWIN_CTRL_LABEL Label,
     __in PCOORD ClientSize,
     __in WORD TextAttributes,
     __in WORD LineIndex
@@ -589,8 +589,8 @@ YoriWinLabelClearClientLine(
 {
     WORD CharIndex;
 
-    for (CharIndex = 0; CharIndex < (DWORD)ClientSize->X; CharIndex++) {
-        YoriWinSetControlClientCell(&Label->Ctrl, CharIndex, LineIndex, ' ', TextAttributes);
+    for (CharIndex = 0; CharIndex < (WORD)ClientSize->X; CharIndex++) {
+        YoriWinSetCtrlClientCell(&Label->Ctrl, CharIndex, LineIndex, ' ', TextAttributes);
     }
 }
 
@@ -603,7 +603,7 @@ YoriWinLabelClearClientLine(
  */
 BOOLEAN
 YoriWinLabelPaint(
-    __in PYORI_WIN_CTRL_LABEL Label
+    __in PYORIWIN_CTRL_LABEL Label
     )
 {
     WORD WinAttributes;
@@ -614,8 +614,8 @@ YoriWinLabelPaint(
     WORD CharIndex;
     WORD LineIndex;
     COORD ClientSize;
-    DWORD LineCount;
-    DWORD StartLine;
+    YORI_ALLOC_SIZE_T LineCount;
+    YORI_ALLOC_SIZE_T StartLine;
     YORI_STRING Remaining;
     YORI_STRING DisplayLine;
     YORI_STRING DisplayCells;
@@ -625,18 +625,18 @@ YoriWinLabelPaint(
     YORI_ALLOC_SIZE_T OffsetToAcceleratorInCells;
     YORI_ALLOC_SIZE_T RemainingOffsetToAccelerator;
     YORI_ALLOC_SIZE_T AcceleratorLength;
-    PYORI_WIN_WINDOW TopLevelWindow;
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+    PYORIWIN_WINDOW TopLevelWindow;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle;
 
     TopLevelWindow = YoriWinGetTopLevelWindow(Label->Ctrl.Parent);
-    WinMgrHandle = YoriWinGetWindowManagerHandle(TopLevelWindow);
+    WinMgrHandle = YoriWinGetWinMgrHandle(TopLevelWindow);
 
-    YoriWinGetControlClientSize(&Label->Ctrl, &ClientSize);
-    LineCount = YoriWinLabelCountLinesRequiredForText(WinMgrHandle,
-                                                      &Label->Caption,
-                                                      ClientSize.X,
-                                                      NULL);
-    if (LineCount > (DWORD)ClientSize.Y) {
+    YoriWinGetCtrlClientSize(&Label->Ctrl, &ClientSize);
+    LineCount = YoriWinLabelLinesNeededForText(WinMgrHandle,
+                                               &Label->Caption,
+                                               ClientSize.X,
+                                               NULL);
+    if (LineCount > (YORI_ALLOC_SIZE_T)ClientSize.Y) {
         StartLine = 0;
     } else {
         if (Label->TextVerticalAlign == YoriWinTextVerticalAlignTop) {
@@ -670,7 +670,7 @@ YoriWinLabelPaint(
         AcceleratorPreviouslyFound = TRUE;
     }
 
-    for (LineIndex = 0; LineIndex < (DWORD)ClientSize.Y; LineIndex++) {
+    for (LineIndex = 0; LineIndex < (WORD)ClientSize.Y; LineIndex++) {
         if (LineIndex < StartLine || StartLine + LineCount <= LineIndex) {
             YoriWinLabelClearClientLine(Label, &ClientSize, WinAttributes, LineIndex);
         } else {
@@ -707,19 +707,19 @@ YoriWinLabelPaint(
                 DisplayCells.StartOfString = DisplayLine.StartOfString;
                 DisplayCells.LengthInChars = DisplayLine.LengthInChars;
             } else if (AcceleratorFound && !AcceleratorPreviouslyFound) {
-                if (YoriWinIsDoubleWideCharSupported(WinMgrHandle) &&
+                if (YoriWinIsDblWideSupp(WinMgrHandle) &&
                     YoriLibIsDoubleWideChar(DisplayLine.StartOfString[OffsetToAcceleratorInBuffer])) {
                     AcceleratorLength = 2;
                 }
 
-                YoriWinTextDisplayCellOffsetFromBufferOffset(WinMgrHandle,
-                                                             &DisplayLine,
-                                                             1,
-                                                             OffsetToAcceleratorInBuffer,
-                                                             &OffsetToAcceleratorInCells);
+                YoriWinTextDispOffsetFromBuffer(WinMgrHandle,
+                                                &DisplayLine,
+                                                1,
+                                                OffsetToAcceleratorInBuffer,
+                                                &OffsetToAcceleratorInCells);
             }
 
-            ASSERT(DisplayCells.LengthInChars <= (DWORD)ClientSize.X && DisplayCells.LengthInChars > 0);
+            ASSERT(DisplayCells.LengthInChars <= (WORD)ClientSize.X && DisplayCells.LengthInChars > 0);
 
             //
             //  Calculate the starting cell for the text from the left based
@@ -737,7 +737,7 @@ YoriWinLabelPaint(
             //
 
             for (CellIndex = 0; CellIndex < StartColumn; CellIndex++) {
-                YoriWinSetControlClientCell(&Label->Ctrl, CellIndex, LineIndex, ' ', WinAttributes);
+                YoriWinSetCtrlClientCell(&Label->Ctrl, CellIndex, LineIndex, ' ', WinAttributes);
             }
 
             //
@@ -757,15 +757,15 @@ YoriWinLabelPaint(
                 } else {
                     CharAttributes = TextAttributes;
                 }
-                YoriWinSetControlClientCell(&Label->Ctrl, (WORD)(StartColumn + CharIndex), LineIndex, DisplayCells.StartOfString[CharIndex], CharAttributes);
+                YoriWinSetCtrlClientCell(&Label->Ctrl, (WORD)(StartColumn + CharIndex), LineIndex, DisplayCells.StartOfString[CharIndex], CharAttributes);
             }
 
             //
             //  Pad the area after the text
             //
 
-            for (CellIndex = (WORD)(StartColumn + DisplayCells.LengthInChars); CellIndex < (DWORD)(ClientSize.X); CellIndex++) {
-                YoriWinSetControlClientCell(&Label->Ctrl, CellIndex, LineIndex, ' ', WinAttributes);
+            for (CellIndex = (WORD)(StartColumn + DisplayCells.LengthInChars); CellIndex < (WORD)(ClientSize.X); CellIndex++) {
+                YoriWinSetCtrlClientCell(&Label->Ctrl, CellIndex, LineIndex, ' ', WinAttributes);
             }
 
             if (AcceleratorFound) {
@@ -790,14 +790,14 @@ YoriWinLabelPaint(
  */
 VOID
 YoriWinLabelSetTextAttributes(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle,
     __in WORD TextAttributes
     )
 {
-    PYORI_WIN_CTRL_LABEL Label;
-    PYORI_WIN_CTRL Ctrl;
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    Label = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_LABEL, Ctrl);
+    PYORIWIN_CTRL_LABEL Label;
+    PYORIWIN_CTRL Ctrl;
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    Label = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_LABEL, Ctrl);
     Label->TextAttributes = TextAttributes;
     YoriWinLabelPaint(Label);
 }
@@ -814,21 +814,21 @@ YoriWinLabelSetTextAttributes(
  */
 BOOLEAN
 YoriWinLabelSetCaption(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle,
     __in PCYORI_STRING Caption
     )
 {
-    PYORI_WIN_CTRL_LABEL Label;
-    PYORI_WIN_CTRL Ctrl;
+    PYORIWIN_CTRL_LABEL Label;
+    PYORIWIN_CTRL Ctrl;
     YORI_STRING CaptionCopy;
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    Label = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_LABEL, Ctrl);
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    Label = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_LABEL, Ctrl);
 
     if (!YoriLibAllocateString(&CaptionCopy, Caption->LengthInChars + 1)) {
         return FALSE;
     }
 
-    if (Label->Style & YORI_WIN_LABEL_NO_ACCELERATOR) {
+    if (Label->Style & YORIWIN_LABEL_NO_ACCELERATOR) {
         memcpy(CaptionCopy.StartOfString, Caption->StartOfString, Caption->LengthInChars * sizeof(TCHAR));
         CaptionCopy.StartOfString[Caption->LengthInChars] = '\0';
         CaptionCopy.LengthInChars = Caption->LengthInChars;
@@ -866,15 +866,15 @@ YoriWinLabelSetCaption(
  */
 BOOLEAN
 YoriWinLabelReposition(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle,
     __in PSMALL_RECT CtrlRect
     )
 {
-    PYORI_WIN_CTRL Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    PYORI_WIN_CTRL_LABEL Label;
+    PYORIWIN_CTRL Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    PYORIWIN_CTRL_LABEL Label;
 
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    Label = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_LABEL, Ctrl);
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    Label = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_LABEL, Ctrl);
 
     if (!YoriWinControlReposition(Ctrl, CtrlRect)) {
         return FALSE;
@@ -899,12 +899,12 @@ YoriWinLabelReposition(
  */
 BOOLEAN
 YoriWinLabelEventHandler(
-    __in PYORI_WIN_CTRL Ctrl,
-    __in PYORI_WIN_EVENT Event
+    __in PYORIWIN_CTRL Ctrl,
+    __in PYORIWIN_EVENT Event
     )
 {
-    PYORI_WIN_CTRL_LABEL Label;
-    Label = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_LABEL, Ctrl);
+    PYORIWIN_CTRL_LABEL Label;
+    Label = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_LABEL, Ctrl);
     switch(Event->EventType) {
         case YoriWinEventParentDestroyed:
             YoriLibFreeStringContents(&Label->Caption);
@@ -938,37 +938,37 @@ YoriWinLabelEventHandler(
 
  @return Pointer to the newly created control or NULL on failure.
  */
-PYORI_WIN_CTRL_HANDLE
+PYORIWIN_CTRL_HANDLE
 YoriWinLabelCreate(
-    __in PYORI_WIN_CTRL_HANDLE ParentHandle,
+    __in PYORIWIN_CTRL_HANDLE ParentHandle,
     __in PSMALL_RECT Size,
     __in PCYORI_STRING Caption,
-    __in DWORD Style
+    __in WORD Style
     )
 {
-    PYORI_WIN_CTRL_LABEL Label;
-    PYORI_WIN_CTRL Parent;
-    PYORI_WIN_WINDOW TopLevelWindow;
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+    PYORIWIN_CTRL_LABEL Label;
+    PYORIWIN_CTRL Parent;
+    PYORIWIN_WINDOW TopLevelWindow;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle;
 
-    Parent = (PYORI_WIN_CTRL)ParentHandle;
+    Parent = (PYORIWIN_CTRL)ParentHandle;
 
-    Label = YoriLibReferencedMalloc(sizeof(YORI_WIN_CTRL_LABEL));
+    Label = YoriLibReferencedMalloc(sizeof(YORIWIN_CTRL_LABEL));
     if (Label == NULL) {
         return NULL;
     }
 
-    ZeroMemory(Label, sizeof(YORI_WIN_CTRL_LABEL));
+    ZeroMemory(Label, (DWORD)sizeof(YORIWIN_CTRL_LABEL));
 
-    if (Style & YORI_WIN_LABEL_STYLE_RIGHT_ALIGN) {
+    if (Style & YORIWIN_LABEL_STY_RIGHT_ALIGN) {
         Label->TextAlign = YoriWinTextAlignRight;
-    } else if (Style & YORI_WIN_LABEL_STYLE_CENTER) {
+    } else if (Style & YORIWIN_LABEL_STY_CENTER) {
         Label->TextAlign = YoriWinTextAlignCenter;
     }
 
-    if (Style & YORI_WIN_LABEL_STYLE_BOTTOM_ALIGN) {
+    if (Style & YORIWIN_LABEL_STY_BOTTOM_ALIGN) {
         Label->TextVerticalAlign = YoriWinTextVerticalAlignBottom;
-    } else if (Style & YORI_WIN_LABEL_STYLE_VERTICAL_CENTER) {
+    } else if (Style & YORIWIN_LABEL_STY_VCENTER) {
         Label->TextVerticalAlign = YoriWinTextVerticalAlignCenter;
     }
 
@@ -989,9 +989,9 @@ YoriWinLabelCreate(
     Label->TextAttributes = Label->Ctrl.DefaultAttributes;
 
     TopLevelWindow = YoriWinGetTopLevelWindow(&Label->Ctrl);
-    WinMgrHandle = YoriWinGetWindowManagerHandle(TopLevelWindow);
+    WinMgrHandle = YoriWinGetWinMgrHandle(TopLevelWindow);
 
-    Label->AcceleratorTextAttributes = YoriWinMgrDefaultColorLookup(WinMgrHandle, YoriWinColorAcceleratorDefault);
+    Label->AcceleratorTextAttributes = YoriWinMgrDefaultColorLookup(WinMgrHandle, YoriWinColorAccelDefault);
 
     if (Parent->Parent != NULL) {
         Label->Ctrl.RelativeToParentClient = FALSE;

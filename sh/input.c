@@ -2147,7 +2147,7 @@ YoriShProcessShiftEnhancedKeyDown(
     if (KeyCode == VK_INSERT) {
         YORI_STRING ClipboardData;
         YoriLibInitEmptyString(&ClipboardData);
-        if (YoriLibPasteTextWithProcessFallback(&ClipboardData)) {
+        if (YoriLibPasteTextProcFallback(&ClipboardData)) {
             if (ClipboardData.LengthInChars > 0) {
                 YoriShAddYoriStringToInput(Buffer, &ClipboardData);
             }
@@ -2432,7 +2432,7 @@ YoriShProcessKeyDown(
         } else if (KeyCode == 'V') {
             YORI_STRING ClipboardData;
             YoriLibInitEmptyString(&ClipboardData);
-            if (YoriLibPasteTextWithProcessFallback(&ClipboardData)) {
+            if (YoriLibPasteTextProcFallback(&ClipboardData)) {
                 if (ClipboardData.LengthInChars > 0) {
                     YoriShAddYoriStringToInput(Buffer, &ClipboardData);
                 }
@@ -2586,7 +2586,7 @@ YoriShProcessKeyUp(
             NumericKeyValue = InputRecord->Event.KeyEvent.uChar.UnicodeChar;
         }
 
-        YoriLibTranslateNumericKeyToChar(NumericKeyValue, Buffer->NumericKeyType, &HostKeyValue[0]);
+        YoriLibTransNumKeyToChar(NumericKeyValue, Buffer->NumericKeyType, &HostKeyValue[0]);
 
         HostKeyValue[1] = '\0';
         if (HostKeyValue[0] != 0) {
@@ -2647,7 +2647,7 @@ YoriShFindAutoBreakSelectionRange(
         return FALSE;
     }
 
-    YoriLibGetSelectionDoubleClickBreakChars(&BreakChars);
+    YoriLibGetSelDblClkBreakChars(&BreakChars);
 
     //
     //  Read the line that the user is selecting.
@@ -2794,7 +2794,7 @@ YoriShProcessMouseButtonDown(
         } else {
             YORI_STRING ClipboardData;
             YoriLibInitEmptyString(&ClipboardData);
-            if (YoriLibPasteTextWithProcessFallback(&ClipboardData)) {
+            if (YoriLibPasteTextProcFallback(&ClipboardData)) {
                 if (ClipboardData.LengthInChars > 0) {
                     YoriShAddYoriStringToInput(Buffer, &ClipboardData);
                     BufferChanged = TRUE;

@@ -35,13 +35,13 @@
  */
 VOID
 YoriDlgMsgButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     DWORD_PTR CtrlId;
-    Parent = YoriWinGetControlParent(Ctrl);
-    CtrlId = YoriWinGetControlId(Ctrl);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    CtrlId = YoriWinGetCtrlId(Ctrl);
     YoriWinCloseWindow(Parent, CtrlId);
 }
 
@@ -73,7 +73,7 @@ YoriDlgMsgButtonClicked(
 __success(return)
 DWORD
 YoriDlgMessageBox(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in PCYORI_STRING Title,
     __in PCYORI_STRING Text,
     __in DWORD NumButtons,
@@ -82,7 +82,7 @@ YoriDlgMessageBox(
     __in DWORD CancelIndex
     )
 {
-    PYORI_WIN_WINDOW_HANDLE Parent;
+    PYORIWIN_WINDOW_HANDLE Parent;
     COORD WindowSize;
     SMALL_RECT TextArea;
     SMALL_RECT ButtonArea;
@@ -91,10 +91,10 @@ YoriDlgMessageBox(
     DWORD TotalButtonWidth;
     YORI_ALLOC_SIZE_T LabelLinesRequired;
     YORI_ALLOC_SIZE_T LabelWidthRequired;
-    DWORD Style;
+    WORD Style;
     WORD WindowWidth;
     WORD WindowHeight;
-    PYORI_WIN_CTRL_HANDLE Ctrl;
+    PYORIWIN_CTRL_HANDLE Ctrl;
     DWORD_PTR Result;
 
     if (!YoriWinGetWinMgrDimensions(WinMgrHandle, &WindowSize)) {
@@ -108,10 +108,10 @@ YoriDlgMessageBox(
     //
 
     DisplayLength = WindowSize.X - 8;
-    LabelLinesRequired = YoriWinLabelCountLinesRequiredForText(WinMgrHandle,
-                                                               Text,
-                                                               DisplayLength,
-                                                               &LabelWidthRequired);
+    LabelLinesRequired = YoriWinLabelLinesNeededForText(WinMgrHandle,
+                                                        Text,
+                                                        DisplayLength,
+                                                        &LabelWidthRequired);
 
     //
     //  Vertically, the window has 7 lines of overhead (title bar, padding
@@ -159,7 +159,7 @@ YoriDlgMessageBox(
     }
     WindowHeight = (WORD)(LabelLinesRequired + 7);
 
-    if (!YoriWinCreateWindow(WinMgrHandle, WindowWidth, WindowHeight, WindowWidth, WindowHeight, YORI_WIN_WINDOW_STYLE_BORDER_SINGLE | YORI_WIN_WINDOW_STYLE_SHADOW_SOLID, Title, &Parent)) {
+    if (!YoriWinCreateWindow(WinMgrHandle, WindowWidth, WindowHeight, WindowWidth, WindowHeight, YORIWIN_WIN_STY_BORDER_SINGLE | YORIWIN_WIN_STY_SHADOW_SOLID, Title, &Parent)) {
         return FALSE;
     }
 
@@ -170,7 +170,7 @@ YoriDlgMessageBox(
     TextArea.Right = (WORD)(WindowSize.X - 2);
     TextArea.Bottom = (SHORT)(TextArea.Top + LabelLinesRequired - 1);
 
-    Ctrl = YoriWinLabelCreate(Parent, &TextArea, Text, YORI_WIN_LABEL_STYLE_CENTER | YORI_WIN_LABEL_NO_ACCELERATOR);
+    Ctrl = YoriWinLabelCreate(Parent, &TextArea, Text, YORIWIN_LABEL_STY_CENTER | YORIWIN_LABEL_NO_ACCELERATOR);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;
@@ -197,11 +197,11 @@ YoriDlgMessageBox(
         Style = 0;
 
         if (Index == DefaultIndex) {
-            Style |= YORI_WIN_BUTTON_STYLE_DEFAULT;
+            Style |= YORIWIN_BUTTON_STY_DEFAULT;
         }
 
         if (Index == CancelIndex) {
-            Style |= YORI_WIN_BUTTON_STYLE_CANCEL;
+            Style |= YORIWIN_BUTTON_STY_CANCEL;
         }
 
         Ctrl = YoriWinButtonCreate(Parent, &ButtonArea, &ButtonTexts[Index], Style, YoriDlgMsgButtonClicked);
@@ -210,7 +210,7 @@ YoriDlgMessageBox(
             return FALSE;
         }
 
-        YoriWinSetControlId(Ctrl, Index + 1);
+        YoriWinSetCtrlId(Ctrl, Index + 1);
         ButtonArea.Left = (SHORT)(ButtonArea.Right + 2);
     }
 

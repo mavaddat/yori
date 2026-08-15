@@ -100,7 +100,7 @@ __success(return)
 BOOLEAN
 RegeditEditBinaryValue(
     __in PREGEDIT_CONTEXT RegeditContext,
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr,
+    __in PYORIWIN_WINMGR_HANDLE WinMgr,
     __inout PYORI_STRING ValueName,
     __in BOOLEAN ValueNameReadOnly,
     __inout PUCHAR *Value,
@@ -112,7 +112,7 @@ __success(return)
 BOOLEAN
 RegeditEditNumericValue(
     __in PREGEDIT_CONTEXT RegeditContext,
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr,
+    __in PYORIWIN_WINMGR_HANDLE WinMgr,
     __inout PYORI_STRING ValueName,
     __in BOOLEAN ValueNameReadOnly,
     __inout PYORI_MAX_UNSIGNED_T Value,
@@ -123,7 +123,7 @@ __success(return)
 BOOLEAN
 RegeditEditStringValue(
     __in PREGEDIT_CONTEXT RegeditContext,
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr,
+    __in PYORIWIN_WINMGR_HANDLE WinMgr,
     __inout PYORI_STRING ValueName,
     __in BOOLEAN ValueNameReadOnly,
     __inout PYORI_STRING Value,

@@ -66,7 +66,7 @@ typedef struct _YORI_DLG_FILE_CUSTOM_OPTION {
 __success(return)
 DWORD
 YoriDlgAbout(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in PYORI_STRING Title,
     __in PYORI_STRING CenteredText,
     __in PYORI_STRING LeftText,
@@ -79,7 +79,7 @@ YoriDlgAbout(
 __success(return)
 BOOLEAN
 YoriDlgDevice(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in PYORI_STRING Title,
     __in DWORD OptionCount,
     __in_opt PYORI_DLG_FILE_CUSTOM_OPTION Options,
@@ -91,7 +91,7 @@ YoriDlgDevice(
 __success(return)
 BOOLEAN
 YoriDlgDir(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in PYORI_STRING Title,
     __in DWORD OptionCount,
     __in_opt PYORI_DLG_FILE_CUSTOM_OPTION Options,
@@ -101,7 +101,7 @@ YoriDlgDir(
 __success(return)
 BOOLEAN
 YoriDlgFile(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in PYORI_STRING Title,
     __in DWORD OptionCount,
     __in_opt PYORI_DLG_FILE_CUSTOM_OPTION Options,
@@ -111,7 +111,7 @@ YoriDlgFile(
 __success(return)
 BOOLEAN
 YoriDlgFindText(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in PYORI_STRING Title,
     __in PYORI_STRING InitialText,
     __out PBOOLEAN MatchCase,
@@ -121,7 +121,7 @@ YoriDlgFindText(
 __success(return)
 BOOLEAN
 YoriDlgFindHex(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in PYORI_STRING Title,
     __in_opt PUCHAR InitialData,
     __in YORI_ALLOC_SIZE_T InitialDataLength,
@@ -133,7 +133,7 @@ YoriDlgFindHex(
 __success(return)
 BOOLEAN
 YoriDlgInput(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in PYORI_STRING Title,
     __in BOOLEAN RequireNumeric,
     __inout PYORI_STRING Text
@@ -142,7 +142,7 @@ YoriDlgInput(
 __success(return)
 DWORD
 YoriDlgMessageBox(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in PCYORI_STRING Title,
     __in PCYORI_STRING Text,
     __in DWORD NumButtons,
@@ -153,13 +153,13 @@ YoriDlgMessageBox(
 
 WORD
 YoriDlgReplaceHexGetDialogHeight(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle
     );
 
 __success(return)
 BOOLEAN
 YoriDlgReplaceHex(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in WORD DesiredLeft,
     __in WORD DesiredTop,
     __in PYORI_STRING Title,
@@ -177,13 +177,13 @@ YoriDlgReplaceHex(
 
 WORD
 YoriDlgReplaceGetDialogHeight(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle
     );
 
 __success(return)
 BOOLEAN
 YoriDlgReplaceText(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in WORD DesiredLeft,
     __in WORD DesiredTop,
     __in PYORI_STRING Title,

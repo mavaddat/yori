@@ -32,12 +32,12 @@
 /**
  A structure describing the contents of a scroll bar control.
  */
-typedef struct _YORI_WIN_CTRL_SCROLLBAR {
+typedef struct _YORIWIN_CTRL_SCROLLBAR {
 
     /**
      A common header for all controls
      */
-    YORI_WIN_CTRL Ctrl;
+    YORIWIN_CTRL Ctrl;
 
     /**
      The maximum value that the scrollbar will report when it has been
@@ -59,7 +59,7 @@ typedef struct _YORI_WIN_CTRL_SCROLLBAR {
      A function to invoke when the scroll bar value is changed via any
      mechanism.
      */
-     PYORI_WIN_NOTIFY ChangeCallback;
+     PYORIWIN_NOTIFY ChangeCallback;
 
     /**
      Indicates if the scroll bar is in a vertical or horizontal orientation.
@@ -69,7 +69,7 @@ typedef struct _YORI_WIN_CTRL_SCROLLBAR {
         YoriWinScrollbarVertical = 2
     } Alignment;
 
-} YORI_WIN_CTRL_SCROLLBAR, *PYORI_WIN_CTRL_SCROLLBAR;
+} YORIWIN_CTRL_SCROLLBAR, FAR *PYORIWIN_CTRL_SCROLLBAR;
 
 /**
  Returns the height of the control for a vertical scroll bar, or the width of
@@ -81,7 +81,7 @@ typedef struct _YORI_WIN_CTRL_SCROLLBAR {
  */
 WORD
 YoriWinScrollBarGetClientSize(
-    __in PYORI_WIN_CTRL_SCROLLBAR ScrollBar
+    __in PYORIWIN_CTRL_SCROLLBAR ScrollBar
     )
 {
     WORD ClientSize;
@@ -109,7 +109,7 @@ YoriWinScrollBarGetClientSize(
  */
 YORI_MAX_UNSIGNED_T
 YoriWinScrollBarValueCountPerCell(
-    __in PYORI_WIN_CTRL_SCROLLBAR ScrollBar
+    __in PYORIWIN_CTRL_SCROLLBAR ScrollBar
     )
 {
     WORD ClientSize;
@@ -144,7 +144,7 @@ YoriWinScrollBarValueCountPerCell(
  */
 BOOLEAN
 YoriWinScrollBarPaint(
-    __in PYORI_WIN_CTRL_SCROLLBAR ScrollBar
+    __in PYORIWIN_CTRL_SCROLLBAR ScrollBar
     )
 {
     WORD WindowAttributes;
@@ -155,12 +155,12 @@ YoriWinScrollBarPaint(
     WORD Index;
     YORI_MAX_UNSIGNED_T ValueCountPerCell;
     CONST TCHAR* ScrollChars;
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle;
 
     WindowAttributes = ScrollBar->Ctrl.DefaultAttributes;
 
-    WinMgrHandle = YoriWinGetWindowManagerHandle(YoriWinGetTopLevelWindow(&ScrollBar->Ctrl));
-    ScrollChars = YoriWinGetDrawingCharacters(WinMgrHandle, YoriWinCharsScrollBar);
+    WinMgrHandle = YoriWinGetWinMgrHandle(YoriWinGetTopLevelWindow(&ScrollBar->Ctrl));
+    ScrollChars = YoriWinGetDrawingCharacters(WinMgrHandle, YoriWinChrScrollBar);
 
     ClientSize = YoriWinScrollBarGetClientSize(ScrollBar);
     NumberPositionCells = (WORD)(ClientSize - 2);
@@ -189,25 +189,25 @@ YoriWinScrollBarPaint(
     }
 
     if (ScrollBar->Alignment == YoriWinScrollbarHorizontal) {
-        YoriWinSetControlClientCell(&ScrollBar->Ctrl, 0, 0, ScrollChars[1], WindowAttributes);
+        YoriWinSetCtrlClientCell(&ScrollBar->Ctrl, 0, 0, ScrollChars[1], WindowAttributes);
         for (Index = 0; Index < NumberPositionCells; Index++) {
             if (Index >= FirstSelectedPositionCell && Index < FirstSelectedPositionCell + NumberSelectedPositionCells) {
-                YoriWinSetControlClientCell(&ScrollBar->Ctrl, (WORD)(1 + Index), 0, ScrollChars[2], WindowAttributes);
+                YoriWinSetCtrlClientCell(&ScrollBar->Ctrl, (WORD)(1 + Index), 0, ScrollChars[2], WindowAttributes);
             } else {
-                YoriWinSetControlClientCell(&ScrollBar->Ctrl, (WORD)(1 + Index), 0, ScrollChars[3], WindowAttributes);
+                YoriWinSetCtrlClientCell(&ScrollBar->Ctrl, (WORD)(1 + Index), 0, ScrollChars[3], WindowAttributes);
             }
         }
-        YoriWinSetControlClientCell(&ScrollBar->Ctrl, (WORD)(1 + Index), 0, ScrollChars[5], WindowAttributes);
+        YoriWinSetCtrlClientCell(&ScrollBar->Ctrl, (WORD)(1 + Index), 0, ScrollChars[5], WindowAttributes);
     } else {
-        YoriWinSetControlClientCell(&ScrollBar->Ctrl, 0, 0, ScrollChars[0], WindowAttributes);
+        YoriWinSetCtrlClientCell(&ScrollBar->Ctrl, 0, 0, ScrollChars[0], WindowAttributes);
         for (Index = 0; Index < NumberPositionCells; Index++) {
             if (Index >= FirstSelectedPositionCell && Index < FirstSelectedPositionCell + NumberSelectedPositionCells) {
-                YoriWinSetControlClientCell(&ScrollBar->Ctrl, 0, (WORD)(1 + Index), ScrollChars[2], WindowAttributes);
+                YoriWinSetCtrlClientCell(&ScrollBar->Ctrl, 0, (WORD)(1 + Index), ScrollChars[2], WindowAttributes);
             } else {
-                YoriWinSetControlClientCell(&ScrollBar->Ctrl, 0, (WORD)(1 + Index), ScrollChars[3], WindowAttributes);
+                YoriWinSetCtrlClientCell(&ScrollBar->Ctrl, 0, (WORD)(1 + Index), ScrollChars[3], WindowAttributes);
             }
         }
-        YoriWinSetControlClientCell(&ScrollBar->Ctrl, 0, (WORD)(1 + Index), ScrollChars[4], WindowAttributes);
+        YoriWinSetCtrlClientCell(&ScrollBar->Ctrl, 0, (WORD)(1 + Index), ScrollChars[4], WindowAttributes);
     }
 
     return TRUE;
@@ -226,7 +226,7 @@ YoriWinScrollBarPaint(
  */
 BOOLEAN
 YoriWinScrollBarIsLocationSmallerButton(
-    __in PYORI_WIN_CTRL_SCROLLBAR ScrollBar,
+    __in PYORIWIN_CTRL_SCROLLBAR ScrollBar,
     __in PCOORD Location
     )
 {
@@ -256,7 +256,7 @@ YoriWinScrollBarIsLocationSmallerButton(
  */
 BOOLEAN
 YoriWinScrollBarIsLocationLargerButton(
-    __in PYORI_WIN_CTRL_SCROLLBAR ScrollBar,
+    __in PYORIWIN_CTRL_SCROLLBAR ScrollBar,
     __in PCOORD Location
     )
 {
@@ -288,12 +288,12 @@ YoriWinScrollBarIsLocationLargerButton(
  */
 BOOLEAN
 YoriWinScrollBarEventHandler(
-    __in PYORI_WIN_CTRL Ctrl,
-    __in PYORI_WIN_EVENT Event
+    __in PYORIWIN_CTRL Ctrl,
+    __in PYORIWIN_EVENT Event
     )
 {
-    PYORI_WIN_CTRL_SCROLLBAR ScrollBar;
-    ScrollBar = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_SCROLLBAR, Ctrl);
+    PYORIWIN_CTRL_SCROLLBAR ScrollBar;
+    ScrollBar = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_SCROLLBAR, Ctrl);
     switch(Event->EventType) {
         case YoriWinEventKeyDown:
             // MSFIX Generically a scrollbar should handle up/down etc,
@@ -305,9 +305,9 @@ YoriWinScrollBarEventHandler(
             YoriWinDestroyControl(Ctrl);
             YoriLibDereference(ScrollBar);
             break;
-        case YoriWinEventMouseDownInClient:
-        case YoriWinEventMouseDownInNonClient:
-            if (YoriWinScrollBarIsLocationSmallerButton(ScrollBar, &Event->MouseDown.Location)) {
+        case YoriWinEventMouseDownClient:
+        case YoriWinEventMouseDownNonCli:
+            if (YoriWinScrollBarIsLocationSmallerButton(ScrollBar, &Event->u.MouseDown.Location)) {
                 if (ScrollBar->CurrentValue > 0) {
                     ScrollBar->CurrentValue--;
                     if (ScrollBar->ChangeCallback != NULL) {
@@ -315,7 +315,7 @@ YoriWinScrollBarEventHandler(
                     }
                     YoriWinScrollBarPaint(ScrollBar);
                 }
-            } else if (YoriWinScrollBarIsLocationLargerButton(ScrollBar, &Event->MouseDown.Location)) {
+            } else if (YoriWinScrollBarIsLocationLargerButton(ScrollBar, &Event->u.MouseDown.Location)) {
                 if (ScrollBar->CurrentValue < ScrollBar->MaximumValue) {
                     ScrollBar->CurrentValue++;
                     if (ScrollBar->ChangeCallback != NULL) {
@@ -332,9 +332,9 @@ YoriWinScrollBarEventHandler(
                 ClientSize = YoriWinScrollBarGetClientSize(ScrollBar);
                 NumberPositionCells = (WORD)(ClientSize - 2);
                 if (ScrollBar->Alignment == YoriWinScrollbarHorizontal) {
-                    ClickedPositionCell = (WORD)(Event->MouseDown.Location.X - 1);
+                    ClickedPositionCell = (WORD)(Event->u.MouseDown.Location.X - 1);
                 } else {
-                    ClickedPositionCell = (WORD)(Event->MouseDown.Location.Y - 1);
+                    ClickedPositionCell = (WORD)(Event->u.MouseDown.Location.Y - 1);
                 }
                 ASSERT(ClickedPositionCell <= NumberPositionCells);
                 ValueCountPerCell = YoriWinScrollBarValueCountPerCell(ScrollBar);
@@ -350,14 +350,14 @@ YoriWinScrollBarEventHandler(
                 YoriWinScrollBarPaint(ScrollBar);
             }
             break;
-        case YoriWinEventMouseUpInClient:
-        case YoriWinEventMouseUpInNonClient:
+        case YoriWinEventMouseUpClient:
+        case YoriWinEventMouseUpNonCli:
             break;
-        case YoriWinEventMouseUpOutsideWindow:
+        case YoriWinEventMouseUpOutsideWin:
             break;
-        case YoriWinEventMouseDoubleClickInClient:
-        case YoriWinEventMouseDoubleClickInNonClient:
-            if (YoriWinScrollBarIsLocationSmallerButton(ScrollBar, &Event->MouseDown.Location)) {
+        case YoriWinEventMouseDblClickClient:
+        case YoriWinEventMouseDblClickNonCli:
+            if (YoriWinScrollBarIsLocationSmallerButton(ScrollBar, &Event->u.MouseDown.Location)) {
                 if (ScrollBar->CurrentValue > 0) {
                     ScrollBar->CurrentValue--;
                     if (ScrollBar->CurrentValue > 0) {
@@ -368,7 +368,7 @@ YoriWinScrollBarEventHandler(
                     }
                     YoriWinScrollBarPaint(ScrollBar);
                 }
-            } else if (YoriWinScrollBarIsLocationLargerButton(ScrollBar, &Event->MouseDown.Location)) {
+            } else if (YoriWinScrollBarIsLocationLargerButton(ScrollBar, &Event->u.MouseDown.Location)) {
                 if (ScrollBar->CurrentValue < ScrollBar->MaximumValue) {
                     ScrollBar->CurrentValue++;
                     if (ScrollBar->CurrentValue < ScrollBar->MaximumValue) {
@@ -395,11 +395,11 @@ YoriWinScrollBarEventHandler(
  */
 YORI_MAX_UNSIGNED_T
 YoriWinScrollBarGetPosition(
-    __in PYORI_WIN_CTRL Ctrl
+    __in PYORIWIN_CTRL Ctrl
     )
 {
-    PYORI_WIN_CTRL_SCROLLBAR ScrollBar;
-    ScrollBar = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_SCROLLBAR, Ctrl);
+    PYORIWIN_CTRL_SCROLLBAR ScrollBar;
+    ScrollBar = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_SCROLLBAR, Ctrl);
     return ScrollBar->CurrentValue;
 }
 
@@ -418,14 +418,14 @@ YoriWinScrollBarGetPosition(
  */
 VOID
 YoriWinScrollBarSetPosition(
-    __in PYORI_WIN_CTRL Ctrl,
+    __in PYORIWIN_CTRL Ctrl,
     __in YORI_MAX_UNSIGNED_T CurrentValue,
     __in YORI_MAX_UNSIGNED_T NumberVisible,
     __in YORI_MAX_UNSIGNED_T MaximumValue
     )
 {
-    PYORI_WIN_CTRL_SCROLLBAR ScrollBar;
-    ScrollBar = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_SCROLLBAR, Ctrl);
+    PYORIWIN_CTRL_SCROLLBAR ScrollBar;
+    ScrollBar = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_SCROLLBAR, Ctrl);
 
     ScrollBar->CurrentValue = CurrentValue;
     ScrollBar->MaximumValue = MaximumValue;
@@ -444,15 +444,15 @@ YoriWinScrollBarSetPosition(
  */
 BOOLEAN
 YoriWinScrollBarReposition(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle,
     __in PSMALL_RECT CtrlRect
     )
 {
-    PYORI_WIN_CTRL Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    PYORI_WIN_CTRL_SCROLLBAR ScrollBar;
+    PYORIWIN_CTRL Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    PYORIWIN_CTRL_SCROLLBAR ScrollBar;
 
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    ScrollBar = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_SCROLLBAR, Ctrl);
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    ScrollBar = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_SCROLLBAR, Ctrl);
 
     if (ScrollBar->Alignment == YoriWinScrollbarHorizontal) {
         if (CtrlRect->Top != CtrlRect->Bottom) {
@@ -487,15 +487,15 @@ YoriWinScrollBarReposition(
 
  @return Pointer to the newly created control or NULL on failure.
  */
-PYORI_WIN_CTRL
+PYORIWIN_CTRL
 YoriWinScrollBarCreate(
-    __in PYORI_WIN_CTRL Parent,
+    __in PYORIWIN_CTRL Parent,
     __in PSMALL_RECT Size,
     __in DWORD Style,
-    __in_opt PYORI_WIN_NOTIFY ChangeCallback
+    __in_opt PYORIWIN_NOTIFY ChangeCallback
     )
 {
-    PYORI_WIN_CTRL_SCROLLBAR ScrollBar;
+    PYORIWIN_CTRL_SCROLLBAR ScrollBar;
     WORD CellCount;
 
     UNREFERENCED_PARAMETER(Style);
@@ -517,12 +517,12 @@ YoriWinScrollBarCreate(
         return NULL;
     }
 
-    ScrollBar = YoriLibReferencedMalloc(sizeof(YORI_WIN_CTRL_SCROLLBAR));
+    ScrollBar = YoriLibReferencedMalloc(sizeof(YORIWIN_CTRL_SCROLLBAR));
     if (ScrollBar == NULL) {
         return NULL;
     }
 
-    ZeroMemory(ScrollBar, sizeof(YORI_WIN_CTRL_SCROLLBAR));
+    ZeroMemory(ScrollBar, (DWORD)sizeof(YORIWIN_CTRL_SCROLLBAR));
 
     if (Size->Left == Size->Right) {
         ScrollBar->Alignment = YoriWinScrollbarVertical;

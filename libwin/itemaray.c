@@ -36,7 +36,7 @@
  */
 VOID
 YoriWinItemArrayInitialize(
-    __out PYORI_WIN_ITEM_ARRAY ItemArray
+    __out PYORIWIN_ITEM_ARRAY ItemArray
     )
 {
     ItemArray->Items = NULL;
@@ -55,10 +55,10 @@ YoriWinItemArrayInitialize(
  */
 VOID
 YoriWinItemArrayCleanup(
-    __inout PYORI_WIN_ITEM_ARRAY ItemArray
+    __inout PYORIWIN_ITEM_ARRAY ItemArray
     )
 {
-    DWORD Index;
+    YORI_ALLOC_SIZE_T Index;
 
     for (Index = 0; Index < ItemArray->Count; Index++) {
         YoriLibFreeStringContents(&ItemArray->Items[Index].String);
@@ -90,8 +90,8 @@ YoriWinItemArrayCleanup(
  */
 __success(return)
 BOOLEAN
-YoriWinItemArrayReallocateArrayForNewItems(
-    __inout PYORI_WIN_ITEM_ARRAY ItemArray,
+YoriWinItemArrayReallocForItems(
+    __inout PYORIWIN_ITEM_ARRAY ItemArray,
     __in YORI_ALLOC_SIZE_T NumNewItems
     )
 {
@@ -103,7 +103,7 @@ YoriWinItemArrayReallocateArrayForNewItems(
     //
 
     if (NumNewItems > ItemArray->CountAllocated - ItemArray->Count) {
-        PYORI_WIN_ITEM_ENTRY CombinedOptions;
+        PYORIWIN_ITEM_ENTRY CombinedOptions;
         DWORD BytesRequired;
         DWORD ItemsToAllocate;
 
@@ -119,18 +119,18 @@ YoriWinItemArrayReallocateArrayForNewItems(
 
         ItemsToAllocate = ItemsToAllocate + ItemArray->CountAllocated;
 
-        BytesRequired = ItemsToAllocate * sizeof(YORI_WIN_ITEM_ENTRY);
+        BytesRequired = ItemsToAllocate * sizeof(YORIWIN_ITEM_ENTRY);
 
         if (!YoriLibIsSizeAllocatable(BytesRequired)) {
             return FALSE;
         }
 
-        CombinedOptions = YoriLibReferencedMalloc(BytesRequired);
+        CombinedOptions = YoriLibReferencedMalloc((YORI_ALLOC_SIZE_T)BytesRequired);
         if (CombinedOptions == NULL) {
             return FALSE;
         }
         if (ItemArray->Count > 0) {
-            memcpy(CombinedOptions, ItemArray->Items, ItemArray->Count * sizeof(YORI_WIN_ITEM_ENTRY));
+            memcpy(CombinedOptions, ItemArray->Items, ItemArray->Count * sizeof(YORIWIN_ITEM_ENTRY));
             YoriLibDereference(ItemArray->Items);
         }
 
@@ -159,8 +159,8 @@ YoriWinItemArrayReallocateArrayForNewItems(
  */
 __success(return)
 BOOLEAN
-YoriWinItemArrayEnsureSpaceForStrings(
-    __inout PYORI_WIN_ITEM_ARRAY ItemArray,
+YoriWinItemArrayEnsureSpace(
+    __inout PYORIWIN_ITEM_ARRAY ItemArray,
     __in YORI_ALLOC_SIZE_T CharsRequired
     )
 {
@@ -206,7 +206,7 @@ YoriWinItemArrayEnsureSpaceForStrings(
 __success(return)
 BOOLEAN
 YoriWinItemArrayAddItems(
-    __inout PYORI_WIN_ITEM_ARRAY ItemArray,
+    __inout PYORIWIN_ITEM_ARRAY ItemArray,
     __in PCYORI_STRING NewItems,
     __in YORI_ALLOC_SIZE_T NumNewItems
     )
@@ -216,7 +216,7 @@ YoriWinItemArrayAddItems(
     YORI_ALLOC_SIZE_T LengthInChars;
     YORI_ALLOC_SIZE_T Index;
 
-    if (!YoriWinItemArrayReallocateArrayForNewItems(ItemArray, NumNewItems)) {
+    if (!YoriWinItemArrayReallocForItems(ItemArray, NumNewItems)) {
         return FALSE;
     }
 
@@ -231,7 +231,7 @@ YoriWinItemArrayAddItems(
         LengthInChars += (NewItems[Index].LengthInChars + 1) * sizeof(TCHAR);
     }
 
-    if (!YoriWinItemArrayEnsureSpaceForStrings(ItemArray, LengthInChars)) {
+    if (!YoriWinItemArrayEnsureSpace(ItemArray, LengthInChars)) {
         return FALSE;
     }
 
@@ -269,8 +269,8 @@ YoriWinItemArrayAddItems(
 __success(return)
 BOOLEAN
 YoriWinItemArrayAddItemArray(
-    __inout PYORI_WIN_ITEM_ARRAY ItemArray,
-    __in PYORI_WIN_ITEM_ARRAY NewItems
+    __inout PYORIWIN_ITEM_ARRAY ItemArray,
+    __in PYORIWIN_ITEM_ARRAY NewItems
     )
 {
     LPTSTR StringAllocation;
@@ -278,7 +278,7 @@ YoriWinItemArrayAddItemArray(
     YORI_ALLOC_SIZE_T LengthInChars;
     YORI_ALLOC_SIZE_T Index;
 
-    if (!YoriWinItemArrayReallocateArrayForNewItems(ItemArray, NewItems->Count)) {
+    if (!YoriWinItemArrayReallocForItems(ItemArray, NewItems->Count)) {
         return FALSE;
     }
 
@@ -292,7 +292,7 @@ YoriWinItemArrayAddItemArray(
         LengthInChars += (NewItems->Items[Index].String.LengthInChars + 1) * sizeof(TCHAR);
     }
 
-    if (!YoriWinItemArrayEnsureSpaceForStrings(ItemArray, LengthInChars)) {
+    if (!YoriWinItemArrayEnsureSpace(ItemArray, LengthInChars)) {
         return FALSE;
     }
 

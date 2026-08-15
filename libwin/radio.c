@@ -32,18 +32,18 @@
 /**
  A structure describing the contents of a radio control.
  */
-typedef struct _YORI_WIN_CTRL_RADIO {
+typedef struct _YORIWIN_CTRL_RADIO {
 
     /**
      A common header for all controls
      */
-    YORI_WIN_CTRL Ctrl;
+    YORIWIN_CTRL Ctrl;
 
     /**
      Pointer to the child label control that renders the text within the
      radio control.
      */
-    PYORI_WIN_CTRL Label;
+    PYORIWIN_CTRL Label;
 
     /**
      A list of radio controls forming part of the same group.  When one is
@@ -54,7 +54,7 @@ typedef struct _YORI_WIN_CTRL_RADIO {
     /**
      A function to invoke when the radio is toggled via any mechanism.
      */
-    PYORI_WIN_NOTIFY ToggleCallback;
+    PYORIWIN_NOTIFY ToggleCallback;
 
     /**
      The color to display text in when the control has focus.
@@ -78,7 +78,7 @@ typedef struct _YORI_WIN_CTRL_RADIO {
      */
     BOOLEAN Selected;
 
-} YORI_WIN_CTRL_RADIO, *PYORI_WIN_CTRL_RADIO;
+} YORIWIN_CTRL_RADIO, FAR *PYORIWIN_CTRL_RADIO;
 
 /**
  Draw the radio button with its current state applied.
@@ -89,7 +89,7 @@ typedef struct _YORI_WIN_CTRL_RADIO {
  */
 BOOLEAN
 YoriWinRadioPaint(
-    __in PYORI_WIN_CTRL_RADIO Radio
+    __in PYORIWIN_CTRL_RADIO Radio
     )
 {
     WORD TextAttributes;
@@ -100,18 +100,18 @@ YoriWinRadioPaint(
         TextAttributes = Radio->SelectedTextAttributes;
     }
 
-    YoriWinSetControlClientCell(&Radio->Ctrl, 0, 0, '(', TextAttributes);
+    YoriWinSetCtrlClientCell(&Radio->Ctrl, 0, 0, '(', TextAttributes);
     if (Radio->Selected) {
-        PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+        PYORIWIN_WINMGR_HANDLE WinMgrHandle;
         CONST TCHAR *SelectedChars;
-        WinMgrHandle = YoriWinGetWindowManagerHandle(YoriWinGetTopLevelWindow(&Radio->Ctrl));
-        SelectedChars = YoriWinGetDrawingCharacters(WinMgrHandle, YoriWinCharsRadioSelection);
-        YoriWinSetControlClientCell(&Radio->Ctrl, 1, 0, SelectedChars[0], TextAttributes);
+        WinMgrHandle = YoriWinGetWinMgrHandle(YoriWinGetTopLevelWindow(&Radio->Ctrl));
+        SelectedChars = YoriWinGetDrawingCharacters(WinMgrHandle, YoriWinChrRadioSelection);
+        YoriWinSetCtrlClientCell(&Radio->Ctrl, 1, 0, SelectedChars[0], TextAttributes);
     } else {
-        YoriWinSetControlClientCell(&Radio->Ctrl, 1, 0, ' ', TextAttributes);
+        YoriWinSetCtrlClientCell(&Radio->Ctrl, 1, 0, ' ', TextAttributes);
     }
-    YoriWinSetControlClientCell(&Radio->Ctrl, 2, 0, ')', TextAttributes);
-    YoriWinSetControlClientCell(&Radio->Ctrl, 3, 0, ' ', TextAttributes);
+    YoriWinSetCtrlClientCell(&Radio->Ctrl, 2, 0, ')', TextAttributes);
+    YoriWinSetCtrlClientCell(&Radio->Ctrl, 3, 0, ' ', TextAttributes);
 
     YoriWinLabelSetTextAttributes(Radio->Label, TextAttributes);
 
@@ -126,15 +126,15 @@ YoriWinRadioPaint(
  */
 VOID
 YoriWinRadioSelectControl(
-    __in PYORI_WIN_CTRL_RADIO Radio
+    __in PYORIWIN_CTRL_RADIO Radio
     )
 {
     PYORI_LIST_ENTRY ListEntry;
-    PYORI_WIN_CTRL_RADIO RelatedRadio;
+    PYORIWIN_CTRL_RADIO RelatedRadio;
 
     ListEntry = YoriLibGetNextListEntry(&Radio->RelatedRadioControls, NULL);
     while (ListEntry != NULL) {
-        RelatedRadio = CONTAINING_RECORD(ListEntry, YORI_WIN_CTRL_RADIO, RelatedRadioControls);
+        RelatedRadio = CONTAINING_RECORD(ListEntry, YORIWIN_CTRL_RADIO, RelatedRadioControls);
         if (RelatedRadio->Selected) {
             RelatedRadio->Selected = FALSE;
             YoriWinRadioPaint(RelatedRadio);
@@ -165,17 +165,17 @@ YoriWinRadioSelectControl(
  */
 BOOLEAN
 YoriWinRadioEventHandler(
-    __in PYORI_WIN_CTRL Ctrl,
-    __in PYORI_WIN_EVENT Event
+    __in PYORIWIN_CTRL Ctrl,
+    __in PYORIWIN_EVENT Event
     )
 {
-    PYORI_WIN_CTRL_RADIO Radio;
-    Radio = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_RADIO, Ctrl);
+    PYORIWIN_CTRL_RADIO Radio;
+    Radio = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_RADIO, Ctrl);
     switch(Event->EventType) {
         case YoriWinEventKeyDown:
-            if (Event->KeyDown.CtrlMask == 0) {
-                if ((Event->KeyDown.VirtualKeyCode == VK_RETURN) ||
-                    (Event->KeyDown.VirtualKeyCode == VK_SPACE)) {
+            if (Event->u.KeyDown.CtrlMask == 0) {
+                if ((Event->u.KeyDown.VirtualKeyCode == VK_RETURN) ||
+                    (Event->u.KeyDown.VirtualKeyCode == VK_SPACE)) {
                     YoriWinRadioSelectControl(Radio);
                 }
             }
@@ -190,17 +190,17 @@ YoriWinRadioEventHandler(
             YoriWinDestroyControl(Ctrl);
             YoriLibDereference(Radio);
             break;
-        case YoriWinEventMouseDownInClient:
-        case YoriWinEventMouseDownInNonClient:
+        case YoriWinEventMouseDownClient:
+        case YoriWinEventMouseDownNonCli:
             Radio->PressedAppearance = TRUE;
             YoriWinRadioPaint(Radio);
             break;
-        case YoriWinEventMouseUpInClient:
-        case YoriWinEventMouseUpInNonClient:
+        case YoriWinEventMouseUpClient:
+        case YoriWinEventMouseUpNonCli:
             Radio->PressedAppearance = FALSE;
             YoriWinRadioSelectControl(Radio);
             break;
-        case YoriWinEventMouseUpOutsideWindow:
+        case YoriWinEventMouseUpOutsideWin:
             Radio->PressedAppearance = FALSE;
             YoriWinRadioPaint(Radio);
             break;
@@ -238,14 +238,14 @@ YoriWinRadioEventHandler(
  */
 BOOLEAN
 YoriWinRadioIsSelected(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle
     )
 {
-    PYORI_WIN_CTRL Ctrl;
-    PYORI_WIN_CTRL_RADIO Radio;
+    PYORIWIN_CTRL Ctrl;
+    PYORIWIN_CTRL_RADIO Radio;
 
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    Radio = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_RADIO, Ctrl);
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    Radio = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_RADIO, Ctrl);
 
     return Radio->Selected;
 }
@@ -257,14 +257,14 @@ YoriWinRadioIsSelected(
  */
 VOID
 YoriWinRadioSelect(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle
     )
 {
-    PYORI_WIN_CTRL Ctrl;
-    PYORI_WIN_CTRL_RADIO Radio;
+    PYORIWIN_CTRL Ctrl;
+    PYORIWIN_CTRL_RADIO Radio;
 
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    Radio = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_RADIO, Ctrl);
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    Radio = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_RADIO, Ctrl);
 
     YoriWinRadioSelectControl(Radio);
 }
@@ -280,16 +280,16 @@ YoriWinRadioSelect(
  */
 BOOLEAN
 YoriWinRadioReposition(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle,
     __in PSMALL_RECT CtrlRect
     )
 {
-    PYORI_WIN_CTRL Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
+    PYORIWIN_CTRL Ctrl = (PYORIWIN_CTRL)CtrlHandle;
     SMALL_RECT LabelRect;
-    PYORI_WIN_CTRL_RADIO Radio;
+    PYORIWIN_CTRL_RADIO Radio;
 
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    Radio = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_RADIO, Ctrl);
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    Radio = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_RADIO, Ctrl);
 
     if (!YoriWinControlReposition(Ctrl, CtrlRect)) {
         return FALSE;
@@ -326,32 +326,32 @@ YoriWinRadioReposition(
 
  @return Pointer to the newly created control or NULL on failure.
  */
-PYORI_WIN_CTRL_HANDLE
+PYORIWIN_CTRL_HANDLE
 YoriWinRadioCreate(
-    __in PYORI_WIN_WINDOW_HANDLE ParentHandle,
+    __in PYORIWIN_WINDOW_HANDLE ParentHandle,
     __in PSMALL_RECT Size,
     __in PYORI_STRING Caption,
-    __in_opt PYORI_WIN_CTRL_HANDLE FirstRadioControl,
-    __in DWORD Style,
-    __in_opt PYORI_WIN_NOTIFY ToggleCallback
+    __in_opt PYORIWIN_CTRL_HANDLE FirstRadioControl,
+    __in WORD Style,
+    __in_opt PYORIWIN_NOTIFY ToggleCallback
     )
 {
-    PYORI_WIN_CTRL_RADIO Radio;
-    PYORI_WIN_WINDOW Parent;
+    PYORIWIN_CTRL_RADIO Radio;
+    PYORIWIN_WINDOW Parent;
     SMALL_RECT LabelRect;
-    PYORI_WIN_WINDOW TopLevelWindow;
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+    PYORIWIN_WINDOW TopLevelWindow;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle;
 
     UNREFERENCED_PARAMETER(Style);
 
-    Parent = (PYORI_WIN_WINDOW)ParentHandle;
+    Parent = (PYORIWIN_WINDOW)ParentHandle;
 
-    Radio = YoriLibReferencedMalloc(sizeof(YORI_WIN_CTRL_RADIO));
+    Radio = YoriLibReferencedMalloc(sizeof(YORIWIN_CTRL_RADIO));
     if (Radio == NULL) {
         return NULL;
     }
 
-    ZeroMemory(Radio, sizeof(YORI_WIN_CTRL_RADIO));
+    ZeroMemory(Radio, (DWORD)sizeof(YORIWIN_CTRL_RADIO));
 
     Radio->Ctrl.NotifyEventFn = YoriWinRadioEventHandler;
     if (!YoriWinCreateControl(Parent, Size, TRUE, FALSE, &Radio->Ctrl)) {
@@ -361,8 +361,8 @@ YoriWinRadioCreate(
 
     YoriLibInitializeListHead(&Radio->RelatedRadioControls);
     if (FirstRadioControl != NULL) {
-        PYORI_WIN_CTRL_RADIO FirstCtrl;
-        FirstCtrl = CONTAINING_RECORD(FirstRadioControl, YORI_WIN_CTRL_RADIO, Ctrl);
+        PYORIWIN_CTRL_RADIO FirstCtrl;
+        FirstCtrl = CONTAINING_RECORD(FirstRadioControl, YORIWIN_CTRL_RADIO, Ctrl);
         YoriLibAppendList(&FirstCtrl->RelatedRadioControls, &Radio->RelatedRadioControls);
     }
     Radio->ToggleCallback = ToggleCallback;
@@ -380,7 +380,7 @@ YoriWinRadioCreate(
     }
 
     TopLevelWindow = YoriWinGetTopLevelWindow(Parent);
-    WinMgrHandle = YoriWinGetWindowManagerHandle(TopLevelWindow);
+    WinMgrHandle = YoriWinGetWinMgrHandle(TopLevelWindow);
 
     Radio->SelectedTextAttributes = YoriWinMgrDefaultColorLookup(WinMgrHandle, YoriWinColorControlSelected);
 

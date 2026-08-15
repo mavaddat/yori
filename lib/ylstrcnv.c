@@ -43,7 +43,7 @@ CONST TCHAR YoriLibSizeSuffixes[] = {'b', 'k', 'm', 'g', 't', '?'};
  @param FileSize On successful completion, the parsed, 64 bit unsigned integer
         value from the string.
  */
-VOID
+VOID FAR
 YoriLibStringToFileSize(
     __in PCYORI_STRING String,
     __out PLARGE_INTEGER FileSize
@@ -99,7 +99,7 @@ YoriLibStringToFileSize(
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 __success(return)
-BOOL
+BOOL FAR
 YoriLibFileSizeToString(
     __inout PYORI_STRING String,
     __in PLARGE_INTEGER FileSize
@@ -169,7 +169,7 @@ YoriLibFileSizeToString(
  @return TRUE to indicate success, FALSE to indicate parse failure.
  */
 __success(return)
-BOOL
+BOOL FAR
 YoriLibStringToDate(
     __in PCYORI_STRING String,
     __out LPSYSTEMTIME Date,
@@ -240,7 +240,7 @@ YoriLibStringToDate(
  @return TRUE to indicate success, FALSE to indicate parse failure.
  */
 __success(return)
-BOOL
+BOOL FAR
 YoriLibStringToTime(
     __in PCYORI_STRING String,
     __out LPSYSTEMTIME Date
@@ -296,7 +296,7 @@ YoriLibStringToTime(
  @return TRUE to indicate success, FALSE to indicate parse failure.
  */
 __success(return)
-BOOL
+BOOL FAR
 YoriLibStringToDateTime(
     __in PCYORI_STRING String,
     __out LPSYSTEMTIME Date

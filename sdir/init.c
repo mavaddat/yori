@@ -38,7 +38,7 @@
  @return TRUE to terminate processing of further handlers, FALSE to call the
          next handler in the chain.
  */
-BOOL WINAPI
+BOOL FAR WINAPI
 SdirCancelHandler (
     __in DWORD dwHandlerType
     )
@@ -59,9 +59,11 @@ SdirAppInitialize(VOID)
     CONSOLE_SCREEN_BUFFER_INFO ScreenInfo;
     HANDLE hConsoleOutput = GetStdHandle(STD_OUTPUT_HANDLE);
     DWORD CurrentMode;
+#if _WIN32
     DWORD MajorVersion;
     DWORD MinorVersion;
     DWORD BuildNumber;
+#endif
     BOOL SupportsAutoLineWrap;
     BOOL SupportsExtendedChars;
 
@@ -69,7 +71,7 @@ SdirAppInitialize(VOID)
     if (Opts == NULL) {
         return FALSE;
     }
-    ZeroMemory(Opts, sizeof(SDIR_OPTS));
+    ZeroMemory(Opts, (DWORD)sizeof(SDIR_OPTS));
 
     Summary = YoriLibMalloc(sizeof(SDIR_SUMMARY));
     if (Summary == NULL) {
@@ -77,7 +79,7 @@ SdirAppInitialize(VOID)
         Opts = NULL;
         return FALSE;
     }
-    ZeroMemory(Summary, sizeof(SDIR_SUMMARY));
+    ZeroMemory(Summary, (DWORD)sizeof(SDIR_SUMMARY));
 
     //
     //  For simplicity, initialize this now.  On failure we restore to
@@ -150,10 +152,10 @@ SdirAppInitialize(VOID)
             Opts->ConsoleHeight = 2;
         }
 
-        YoriLibSetColorToWin32(&Opts->PreviousAttributes, (UCHAR)(ScreenInfo.wAttributes & YORILIB_ATTRIBUTE_FULLCOLOR_MASK));
+        YoriLibSetColorToWin32(&Opts->PreviousAttributes, (UCHAR)(ScreenInfo.wAttributes & YORILIB_ATTR_FULLCOLOR_MASK));
     }
 
-    YoriLibResolveWindowColorComponents(SdirDefaultColor, Opts->PreviousAttributes, TRUE, &SdirDefaultColor);
+    YoriLibResolveWindowColors(SdirDefaultColor, Opts->PreviousAttributes, TRUE, &SdirDefaultColor);
 
     if (Opts->ConsoleWidth > SDIR_MAX_WIDTH) {
         Opts->ConsoleWidth = SDIR_MAX_WIDTH;
@@ -171,6 +173,7 @@ SdirAppInitialize(VOID)
     //  because we want people to be able to enumerate those paths
     //
 
+#if _WIN32
     if (DllKernel32.pWow64DisableWow64FsRedirection) {
         PVOID DontCare;
         DllKernel32.pWow64DisableWow64FsRedirection(&DontCare);
@@ -183,6 +186,7 @@ SdirAppInitialize(VOID)
 
     YoriLibGetOsVersion(&MajorVersion, &MinorVersion, &BuildNumber);
     Opts->OsVersion = ((BuildNumber & 0xFFFF) << 16) | ((MinorVersion & 0xFF) << 8) | (MajorVersion & 0xFF);
+#endif
 
     //
     //  Look for Ctrl+C to indicate execution should terminate.
@@ -423,7 +427,7 @@ SdirParseOpt (
             OptParsed = TRUE;
         }
     } else if (Opt[0] == 'u') {
-#ifdef UNICODE
+#if defined(UNICODE) || defined(MSDOS)
         if (Opt[1] == 'n') {
             Opts->OutputExtendedCharacters = FALSE;
             OptParsed = TRUE;
@@ -480,7 +484,7 @@ SdirParseArgs (
 
         Feature = SdirFeatureByOptionNumber(i);
         Feature->Flags = SdirOptions[i].Default.Flags;
-        YoriLibResolveWindowColorComponents(SdirOptions[i].Default.HighlightColor, Opts->PreviousAttributes, TRUE, &Feature->HighlightColor);
+        YoriLibResolveWindowColors(SdirOptions[i].Default.HighlightColor, Opts->PreviousAttributes, TRUE, &Feature->HighlightColor);
     }
 
     if (GetEnvironmentVariable(_T("SDIR_OPTS"), EnvOpts, sizeof(EnvOpts)/sizeof(EnvOpts[0]))) {
@@ -579,7 +583,7 @@ SdirInit(
         return FALSE;
     }
 
-    if (!SdirParseMetadataAttributeString()) {
+    if (!SdirParseMetadataAttrString()) {
         return FALSE;
     }
 
@@ -607,8 +611,8 @@ SdirAppCleanup(VOID)
         Summary = NULL;
     }
 
-    YoriLibFileFiltFreeFilter(&SdirGlobal.FileColorCriteria);
-    YoriLibFileFiltFreeFilter(&SdirGlobal.FileHideCriteria);
+    YoriLibFilFltFreeFilter(&SdirGlobal.FileColorCriteria);
+    YoriLibFilFltFreeFilter(&SdirGlobal.FileHideCriteria);
 
     if (SdirDirCollection != NULL) {
         YoriLibFree(SdirDirCollection);

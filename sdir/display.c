@@ -47,7 +47,7 @@
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 BOOL
-SdirWriteRawStringToOutputDevice(
+SdirWriteRawStringToOutputDev(
     __in HANDLE hConsole,
     __in LPCTSTR OutputString,
     __in YORI_ALLOC_SIZE_T Length
@@ -137,7 +137,7 @@ SdirWrite (
         if (( i + 1 < count && !YoriLibAreColorsIdentical(str[i + 1].Attr, CacheAttr)) || (j >= sizeof(CharCache)/sizeof(CharCache[0]))) {
 
             SdirSetConsoleTextAttribute(hConsole, CacheAttr);
-            SdirWriteRawStringToOutputDevice(hConsole, CharCache, j);
+            SdirWriteRawStringToOutputDev(hConsole, CharCache, j);
             j = 0;
         }
     }
@@ -149,7 +149,7 @@ SdirWrite (
     if (j > 0) {
 
         SdirSetConsoleTextAttribute(hConsole, CacheAttr);
-        SdirWriteRawStringToOutputDevice(hConsole, CharCache, j);
+        SdirWriteRawStringToOutputDev(hConsole, CharCache, j);
     }
 
     return TRUE;
@@ -210,7 +210,7 @@ SdirWriteStringWithAttribute (
 
             SdirWriteStringLinesDisplayed = (WORD)(SdirWriteStringLinesDisplayed + LinesInBuffer);
 
-            SdirWriteRawStringToOutputDevice(hConsole, str, TCharsInBuffer);
+            SdirWriteRawStringToOutputDev(hConsole, str, TCharsInBuffer);
 
             LinesInBuffer = 0;
             str += TCharsInBuffer;
@@ -236,7 +236,7 @@ SdirWriteStringWithAttribute (
     } else {
 
         SdirSetConsoleTextAttribute(hConsole, DefaultAttribute);
-        SdirWriteRawStringToOutputDevice(hConsole, str, (YORI_ALLOC_SIZE_T)_tcslen(str));
+        SdirWriteRawStringToOutputDev(hConsole, str, (YORI_ALLOC_SIZE_T)_tcslen(str));
     }
 
     return TRUE;
@@ -331,7 +331,7 @@ SdirPasteStrAndPad (
  */
 BOOL
 SdirDisplayError (
-    __in LONG ErrorCode,
+    __in SYSERR ErrorCode,
     __in_opt LPCTSTR Prefix
     )
 {
@@ -371,7 +371,7 @@ SdirDisplayError (
  */
 BOOL
 SdirDisplayYsError (
-    __in LONG ErrorCode,
+    __in SYSERR ErrorCode,
     __in PYORI_STRING YsPrefix
     )
 {

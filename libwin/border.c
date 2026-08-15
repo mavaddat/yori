@@ -91,8 +91,8 @@ YoriWinBorderGetLightAttributes(
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 BOOLEAN
-YoriWinTranslateAttributesAndBorderStyle(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+YoriWinTransAttrAndBorderStyle(
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in WORD Attributes,
     __in WORD BorderType,
     __out PWORD TopAttributes,
@@ -102,32 +102,32 @@ YoriWinTranslateAttributesAndBorderStyle(
 { 
     WORD ThreeDMask;
     WORD BorderStyleMask;
-    YORI_WIN_CHARACTERS CharSet;
+    YORIWIN_CHARACTERS CharSet;
 
-    ThreeDMask = (WORD)(BorderType & YORI_WIN_BORDER_THREED_MASK);
+    ThreeDMask = (WORD)(BorderType & YORIWIN_BORDER_THREED_MASK);
     *TopAttributes = *BottomAttributes = Attributes;
     switch(ThreeDMask) {
-        case YORI_WIN_BORDER_TYPE_RAISED:
+        case YORIWIN_BORDER_TYPE_RAISED:
             *TopAttributes = YoriWinBorderGetLightAttributes(Attributes);
             *BottomAttributes = YoriWinBorderGetDarkAttributes(Attributes);
             break;
-        case YORI_WIN_BORDER_TYPE_SUNKEN:
+        case YORIWIN_BORDER_TYPE_SUNKEN:
             *TopAttributes = YoriWinBorderGetDarkAttributes(Attributes);
             *BottomAttributes = YoriWinBorderGetLightAttributes(Attributes);
             break;
     }
 
-    CharSet = YoriWinCharsSingleLineBorder;
-    BorderStyleMask = (WORD)(BorderType & YORI_WIN_BORDER_STYLE_MASK);
+    CharSet = YoriWinChrSingleLineBorder;
+    BorderStyleMask = (WORD)(BorderType & YORIWIN_BORDER_STYLE_MASK);
     switch(BorderStyleMask) {
-        case YORI_WIN_BORDER_TYPE_DOUBLE:
-            CharSet = YoriWinCharsDoubleLineBorder;
+        case YORIWIN_BORDER_TYPE_DOUBLE:
+            CharSet = YoriWinChrDoubleLineBorder;
             break;
-        case YORI_WIN_BORDER_TYPE_SOLID_FULL:
-            CharSet = YoriWinCharsFullSolidBorder;
+        case YORIWIN_BORDER_TYPE_SOLID_FULL:
+            CharSet = YoriWinChrFullSolidBorder;
             break;
-        case YORI_WIN_BORDER_TYPE_SOLID_HALF:
-            CharSet = YoriWinCharsHalfSolidBorder;
+        case YORIWIN_BORDER_TYPE_SOLID_HALF:
+            CharSet = YoriWinChrHalfSolidBorder;
             break;
     }
 
@@ -151,8 +151,8 @@ YoriWinTranslateAttributesAndBorderStyle(
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 BOOLEAN
-YoriWinDrawBorderOnControl(
-    __inout PYORI_WIN_CTRL Ctrl,
+YoriWinDrawBorderCtrl(
+    __inout PYORIWIN_CTRL Ctrl,
     __in PSMALL_RECT Dimensions,
     __in WORD Attributes,
     __in WORD BorderType
@@ -163,27 +163,27 @@ YoriWinDrawBorderOnControl(
     WORD TopAttributes;
     WORD BottomAttributes;
     CONST TCHAR* BorderChars;
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle;
 
-    WinMgrHandle = YoriWinGetWindowManagerHandle(YoriWinGetTopLevelWindow(Ctrl));
+    WinMgrHandle = YoriWinGetWinMgrHandle(YoriWinGetTopLevelWindow(Ctrl));
 
-    YoriWinTranslateAttributesAndBorderStyle(WinMgrHandle, Attributes, BorderType, &TopAttributes, &BottomAttributes, &BorderChars);
+    YoriWinTransAttrAndBorderStyle(WinMgrHandle, Attributes, BorderType, &TopAttributes, &BottomAttributes, &BorderChars);
 
-    YoriWinSetControlNonClientCell(Ctrl, Dimensions->Left, Dimensions->Top, BorderChars[YORIWIN_DRAW_TOP_LEFT], TopAttributes);
-    for (CellIndex = (WORD)(Dimensions->Left + 1); CellIndex < Dimensions->Right; CellIndex++) {
-        YoriWinSetControlNonClientCell(Ctrl, CellIndex, Dimensions->Top, BorderChars[YORIWIN_DRAW_TOP_LINE], TopAttributes);
+    YoriWinSetCtrlNonClientCell(Ctrl, Dimensions->Left, Dimensions->Top, BorderChars[YORIWIN_DRAW_TOP_LEFT], TopAttributes);
+    for (CellIndex = (WORD)(Dimensions->Left + 1); CellIndex < (WORD)Dimensions->Right; CellIndex++) {
+        YoriWinSetCtrlNonClientCell(Ctrl, CellIndex, Dimensions->Top, BorderChars[YORIWIN_DRAW_TOP_LINE], TopAttributes);
     }
-    YoriWinSetControlNonClientCell(Ctrl, Dimensions->Right, Dimensions->Top, BorderChars[YORIWIN_DRAW_TOP_RIGHT], BottomAttributes);
+    YoriWinSetCtrlNonClientCell(Ctrl, Dimensions->Right, Dimensions->Top, BorderChars[YORIWIN_DRAW_TOP_RIGHT], BottomAttributes);
 
-    for (RowIndex = (WORD)(Dimensions->Top + 1); RowIndex <= Dimensions->Bottom - 1; RowIndex++) {
-        YoriWinSetControlNonClientCell(Ctrl, Dimensions->Left, RowIndex, BorderChars[YORIWIN_DRAW_LEFT_LINE], TopAttributes);
-        YoriWinSetControlNonClientCell(Ctrl, Dimensions->Right, RowIndex, BorderChars[YORIWIN_DRAW_RIGHT_LINE], BottomAttributes);
+    for (RowIndex = (WORD)(Dimensions->Top + 1); RowIndex <= (WORD)(Dimensions->Bottom - 1); RowIndex++) {
+        YoriWinSetCtrlNonClientCell(Ctrl, Dimensions->Left, RowIndex, BorderChars[YORIWIN_DRAW_LEFT_LINE], TopAttributes);
+        YoriWinSetCtrlNonClientCell(Ctrl, Dimensions->Right, RowIndex, BorderChars[YORIWIN_DRAW_RIGHT_LINE], BottomAttributes);
     }
-    YoriWinSetControlNonClientCell(Ctrl, Dimensions->Left, Dimensions->Bottom, BorderChars[YORIWIN_DRAW_BOTTOM_LEFT], TopAttributes);
-    for (CellIndex = (WORD)(Dimensions->Left + 1); CellIndex < Dimensions->Right; CellIndex++) {
-        YoriWinSetControlNonClientCell(Ctrl, CellIndex, Dimensions->Bottom, BorderChars[YORIWIN_DRAW_BOTTOM_LINE], BottomAttributes);
+    YoriWinSetCtrlNonClientCell(Ctrl, Dimensions->Left, Dimensions->Bottom, BorderChars[YORIWIN_DRAW_BOTTOM_LEFT], TopAttributes);
+    for (CellIndex = (WORD)(Dimensions->Left + 1); CellIndex < (WORD)Dimensions->Right; CellIndex++) {
+        YoriWinSetCtrlNonClientCell(Ctrl, CellIndex, Dimensions->Bottom, BorderChars[YORIWIN_DRAW_BOTTOM_LINE], BottomAttributes);
     }
-    YoriWinSetControlNonClientCell(Ctrl, Dimensions->Right, Dimensions->Bottom, BorderChars[YORIWIN_DRAW_BOTTOM_RIGHT], BottomAttributes);
+    YoriWinSetCtrlNonClientCell(Ctrl, Dimensions->Right, Dimensions->Bottom, BorderChars[YORIWIN_DRAW_BOTTOM_RIGHT], BottomAttributes);
 
     return TRUE;
 }
@@ -215,8 +215,8 @@ YoriWinDrawBorderOnControl(
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 BOOLEAN
-YoriWinDrawVerticalSplitOnControl(
-    __inout PYORI_WIN_CTRL Ctrl,
+YoriWinDrawVerticalSplitCtrl(
+    __inout PYORIWIN_CTRL Ctrl,
     __in PSMALL_RECT Dimensions,
     __in WORD SplitOffset,
     __in WORD Attributes,
@@ -228,13 +228,13 @@ YoriWinDrawVerticalSplitOnControl(
     WORD TopAttributes;
     WORD BottomAttributes;
     CONST TCHAR* BorderChars;
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle;
 
-    WinMgrHandle = YoriWinGetWindowManagerHandle(YoriWinGetTopLevelWindow(Ctrl));
+    WinMgrHandle = YoriWinGetWinMgrHandle(YoriWinGetTopLevelWindow(Ctrl));
 
-    YoriWinTranslateAttributesAndBorderStyle(WinMgrHandle, Attributes, BorderType, &TopAttributes, &BottomAttributes, &BorderChars);
-    YoriWinSetControlNonClientCell(Ctrl, SplitOffset, Dimensions->Top, BorderChars[YORIWIN_DRAW_TOP_T], TopAttributes);
-    YoriWinSetControlNonClientCell(Ctrl, SplitOffset, Dimensions->Bottom, BorderChars[YORIWIN_DRAW_BOTTOM_T], BottomAttributes);
+    YoriWinTransAttrAndBorderStyle(WinMgrHandle, Attributes, BorderType, &TopAttributes, &BottomAttributes, &BorderChars);
+    YoriWinSetCtrlNonClientCell(Ctrl, SplitOffset, Dimensions->Top, BorderChars[YORIWIN_DRAW_TOP_T], TopAttributes);
+    YoriWinSetCtrlNonClientCell(Ctrl, SplitOffset, Dimensions->Bottom, BorderChars[YORIWIN_DRAW_BOTTOM_T], BottomAttributes);
     *MiddleAttributes = TopAttributes;
     *MiddleChar = BorderChars[YORIWIN_DRAW_MIDDLE_VERT_LINE];
     return TRUE;
@@ -257,14 +257,14 @@ YoriWinDrawVerticalSplitOnControl(
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 BOOLEAN
-YoriWinDrawSingleLineBorderOnControl(
-    __inout PYORI_WIN_CTRL Ctrl,
+YoriWinDrawSingleLineBorderCtrl(
+    __inout PYORIWIN_CTRL Ctrl,
     __in PSMALL_RECT Dimensions,
     __in WORD Attributes,
     __in WORD BorderType
     )
 {
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle;
     WORD AttributesToUse;
     WORD BorderStyleMask;
     CONST TCHAR* BorderChars;
@@ -273,21 +273,21 @@ YoriWinDrawSingleLineBorderOnControl(
         return FALSE;
     }
 
-    WinMgrHandle = YoriWinGetWindowManagerHandle(YoriWinGetTopLevelWindow(Ctrl));
+    WinMgrHandle = YoriWinGetWinMgrHandle(YoriWinGetTopLevelWindow(Ctrl));
 
     AttributesToUse = Attributes;
-    BorderChars = YoriWinGetDrawingCharacters(WinMgrHandle, YoriWinCharsOneLineSingleBorder);
-    BorderStyleMask = (WORD)(BorderType & YORI_WIN_BORDER_STYLE_MASK);
-    if (BorderStyleMask == YORI_WIN_BORDER_TYPE_DOUBLE) {
-        BorderChars = YoriWinGetDrawingCharacters(WinMgrHandle, YoriWinCharsOneLineDoubleBorder);
+    BorderChars = YoriWinGetDrawingCharacters(WinMgrHandle, YoriWinChrOneLineSingleBorder);
+    BorderStyleMask = (WORD)(BorderType & YORIWIN_BORDER_STYLE_MASK);
+    if (BorderStyleMask == YORIWIN_BORDER_TYPE_DOUBLE) {
+        BorderChars = YoriWinGetDrawingCharacters(WinMgrHandle, YoriWinChrOneLineDoubleBorder);
     }
 
-    if (BorderType & YORI_WIN_BORDER_BRIGHT) {
+    if (BorderType & YORIWIN_BORDER_BRIGHT) {
         AttributesToUse = YoriWinBorderGetLightAttributes(AttributesToUse);
     }
 
-    YoriWinSetControlNonClientCell(Ctrl, Dimensions->Left, Dimensions->Top, BorderChars[0], AttributesToUse);
-    YoriWinSetControlNonClientCell(Ctrl, Dimensions->Right, Dimensions->Top, BorderChars[1], AttributesToUse);
+    YoriWinSetCtrlNonClientCell(Ctrl, Dimensions->Left, Dimensions->Top, BorderChars[0], AttributesToUse);
+    YoriWinSetCtrlNonClientCell(Ctrl, Dimensions->Right, Dimensions->Top, BorderChars[1], AttributesToUse);
 
     return TRUE;
 }

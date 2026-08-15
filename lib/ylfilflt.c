@@ -1,5 +1,5 @@
 /**
- * @file lib/filefilt.c
+ * @file lib/ylfilflt.c
  *
  * Yori shell filter enumerated files according to criteria
  *
@@ -33,8 +33,8 @@
 /**
  Help text to display to the user.
  */
-const
-CHAR strFileFiltHelpText[] =
+CONST
+CHAR strFilFltHelpText[] =
         "\n"
         " Valid operators are:\n"
         "   =   File attribute matches criteria\n"
@@ -51,7 +51,7 @@ CHAR strFileFiltHelpText[] =
 /**
  A single option that files can be filtered against.
  */
-typedef struct _YORI_LIB_FILE_FILT_FILTER_OPT {
+typedef struct _YORILIB_FILFLT_FILTER_OPT {
 
     /**
      The two character switch name for the option and a NULL terminator.
@@ -62,55 +62,59 @@ typedef struct _YORI_LIB_FILE_FILT_FILTER_OPT {
      Pointer to a function to collect the data from a specific file for the
      option.
      */
-    YORI_LIB_FILE_FILT_COLLECT_FN CollectFn;
+    YORILIB_FILFLT_COLLECT_FN CollectFn;
 
     /**
      Pointer to a function to compare the user supplied value against the
      value from a given file.
      */
-    YORI_LIB_FILE_FILT_COMPARE_FN CompareFn;
+    YORILIB_FILFLT_COMPARE_FN CompareFn;
 
     /**
      Pointer to a function to compare the user supplied value against the
      value from a given file in a bitwise fashion.
      */
-    YORI_LIB_FILE_FILT_COMPARE_FN BitwiseCompareFn;
+    YORILIB_FILFLT_COMPARE_FN BitwiseCompareFn;
 
     /**
      Pointer to a function to convert the user supplied string into a value
      for the option.
      */
-    YORI_LIB_FILE_FILT_GENERATE_FROM_STRING_FN GenerateFromStringFn;
+    YORILIB_FILFLT_GEN_FROM_STR_FN GenerateFromStringFn;
 
     /**
      A string containing a description for the option.
      */
     CHAR Help[24];
-} YORI_LIB_FILE_FILT_FILTER_OPT, *PYORI_LIB_FILE_FILT_FILTER_OPT;
+} YORILIB_FILFLT_FILTER_OPT, *PYORILIB_FILFLT_FILTER_OPT;
 
 /**
  A pointer to a filter option that cannot change.  Because options are
  compiled into the binary in read only form, all pointers should really
  be const pointers.
  */
-typedef YORI_LIB_FILE_FILT_FILTER_OPT CONST * PCYORI_LIB_FILE_FILT_FILTER_OPT;
+typedef YORILIB_FILFLT_FILTER_OPT CONST * PCYORILIB_FILFLT_FILTER_OPT;
 
 /**
  An array of options that are supported by this program.
  */
-CONST YORI_LIB_FILE_FILT_FILTER_OPT
-YoriLibFileFiltFilterOptions[] = {
+CONST YORILIB_FILFLT_FILTER_OPT
+YoriLibFilFltFilterOptions[] = {
+#if _WIN32
     {_T("ac"),                               YoriLibCollectAllocatedRangeCount,
      YoriLibCompareAllocatedRangeCount,      NULL,
      YoriLibGenerateAllocatedRangeCount,     "allocated range count"},
+#endif
 
     {_T("ad"),                               YoriLibCollectAccessTime,
      YoriLibCompareAccessDate,               NULL,
      YoriLibGenerateAccessDate,              "access date"},
 
+#if _WIN32
     {_T("ar"),                               YoriLibCollectArch,
      YoriLibCompareArch,                     NULL,
      YoriLibGenerateArch,                    "CPU architecture"},
+#endif
 
     {_T("as"),                               YoriLibCollectAllocationSize,
      YoriLibCompareAllocationSize,           NULL,
@@ -120,14 +124,17 @@ YoriLibFileFiltFilterOptions[] = {
      YoriLibCompareAccessTime,               NULL,
      YoriLibGenerateAccessTime,              "access time"},
 
+#if _WIN32
     {_T("ca"),                               YoriLibCollectCompressionAlgorithm,
      YoriLibCompareCompressionAlgorithm,     NULL,
      YoriLibGenerateCompressionAlgorithm,    "compression algorithm"},
+#endif
 
     {_T("cd"),                               YoriLibCollectCreateTime,
      YoriLibCompareCreateDate,               NULL,
      YoriLibGenerateCreateDate,              "create date"},
 
+#if _WIN32
     {_T("ci"),                               YoriLibCollectCaseSensitivity,
      YoriLibCompareCaseSensitivity,          NULL,
      YoriLibGenerateCaseSensitivity,         "case insensitivity"},
@@ -135,30 +142,37 @@ YoriLibFileFiltFilterOptions[] = {
     {_T("cs"),                               YoriLibCollectCompressedFileSize,
      YoriLibCompareCompressedFileSize,       NULL,
      YoriLibGenerateCompressedFileSize,      "compressed size"},
+#endif
 
     {_T("ct"),                               YoriLibCollectCreateTime,
      YoriLibCompareCreateTime,               NULL,
      YoriLibGenerateCreateTime,              "create time"},
 
+#if _WIN32
     {_T("de"),                               YoriLibCollectDescription,
      YoriLibCompareDescription,              NULL,
      YoriLibGenerateDescription,             "description"},
+#endif
 
     {_T("dr"),                               YoriLibCollectFileAttributes,
      YoriLibCompareDirectory,                NULL,
      YoriLibGenerateDirectory,               "directory"},
 
+#if _WIN32
     {_T("ep"),                               YoriLibCollectEffectivePermissions,
      YoriLibCompareEffectivePermissions,     YoriLibBitwiseEffectivePermissions,
      YoriLibGenerateEffectivePermissions,    "effective permissions"},
+#endif
 
     {_T("fa"),                               YoriLibCollectFileAttributes,
      YoriLibCompareFileAttributes,           YoriLibBitwiseFileAttributes,
      YoriLibGenerateFileAttributes,          "file attributes"},
 
+#if _WIN32
     {_T("fc"),                               YoriLibCollectFragmentCount,
      YoriLibCompareFragmentCount,            NULL,
      YoriLibGenerateFragmentCount,           "fragment count"},
+#endif
 
     {_T("fe"),                               YoriLibCollectFileName,
      YoriLibCompareFileExtension,            NULL,
@@ -176,14 +190,17 @@ YoriLibFileFiltFilterOptions[] = {
      YoriLibCompareFileSize,                 NULL,
      YoriLibGenerateFileSize,                "file size"},
 
+#if _WIN32
     {_T("fv"),                               YoriLibCollectFileVersionString,
      YoriLibCompareFileVersionString,        NULL,
      YoriLibGenerateFileVersionString,       "file version string"},
+#endif
 
     {_T("lc"),                               YoriLibCollectLinkCount,
      YoriLibCompareLinkCount,                NULL,
      YoriLibGenerateLinkCount,               "link count"},
 
+#if _WIN32
     {_T("oi"),                               YoriLibCollectObjectId,
      YoriLibCompareObjectId,                 NULL,
      YoriLibGenerateObjectId,                "object id"},
@@ -203,11 +220,13 @@ YoriLibFileFiltFilterOptions[] = {
     {_T("sc"),                               YoriLibCollectStreamCount,
      YoriLibCompareStreamCount,              NULL,
      YoriLibGenerateStreamCount,             "stream count"},
+#endif
 
     {_T("sn"),                               YoriLibCollectShortName,
      YoriLibCompareShortName,                NULL,
      YoriLibGenerateShortName,               "short name"},
 
+#if _WIN32
     {_T("ss"),                               YoriLibCollectSubsystem,
      YoriLibCompareSubsystem,                NULL,
      YoriLibGenerateSubsystem,               "subsystem"},
@@ -219,6 +238,7 @@ YoriLibFileFiltFilterOptions[] = {
     {_T("vr"),                               YoriLibCollectVersion,
      YoriLibCompareVersion,                  NULL,
      YoriLibGenerateVersion,                 "version"},
+#endif
 
     {_T("wd"),                               YoriLibCollectWriteTime,
      YoriLibCompareWriteDate,                NULL,
@@ -233,25 +253,25 @@ YoriLibFileFiltFilterOptions[] = {
  Display usage text to the user.
  */
 BOOL
-YoriLibFileFiltHelp(VOID)
+YoriLibFilFltHelp(VOID)
 {
-    DWORD Index;
+    WORD Index;
 
-    YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("%hs"), strFileFiltHelpText);
+    YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("%hs"), strFilFltHelpText);
 
     //
     //  Display supported options and operators
     //
 
-    for (Index = 0; Index < sizeof(YoriLibFileFiltFilterOptions)/sizeof(YoriLibFileFiltFilterOptions[0]); Index++) {
+    for (Index = 0; Index < sizeof(YoriLibFilFltFilterOptions)/sizeof(YoriLibFilFltFilterOptions[0]); Index++) {
 
         YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, 
                       _T("   %s (%hs), %hs%hs%hs\n"),
-                      YoriLibFileFiltFilterOptions[Index].Switch,
-                      YoriLibFileFiltFilterOptions[Index].Help,
-                      YoriLibFileFiltFilterOptions[Index].CompareFn?"=, !=, >, >=, <, <=":"",
-                      (YoriLibFileFiltFilterOptions[Index].CompareFn && YoriLibFileFiltFilterOptions[Index].BitwiseCompareFn)?", ":"",
-                      YoriLibFileFiltFilterOptions[Index].BitwiseCompareFn?"&, !&":"");
+                      YoriLibFilFltFilterOptions[Index].Switch,
+                      YoriLibFilFltFilterOptions[Index].Help,
+                      YoriLibFilFltFilterOptions[Index].CompareFn?"=, !=, >, >=, <, <=":"",
+                      (YoriLibFilFltFilterOptions[Index].CompareFn && YoriLibFilFltFilterOptions[Index].BitwiseCompareFn)?", ":"",
+                      YoriLibFilFltFilterOptions[Index].BitwiseCompareFn?"&, !&":"");
 
     }
     return TRUE;
@@ -286,11 +306,11 @@ YoriLibFileFiltHelp(VOID)
  */
 __success(return)
 BOOL
-YoriLibFileFiltParseFilterOperator(
-    __out PYORI_LIB_FILE_FILT_MATCH_CRITERIA Criteria,
+YoriLibFilFltParseOperator(
+    __out PYORILIB_FILFLT_MATCH_CRITERIA Criteria,
     __in PYORI_STRING Operator,
     __in PYORI_STRING Value,
-    __in PCYORI_LIB_FILE_FILT_FILTER_OPT MatchedOption,
+    __in PCYORILIB_FILFLT_FILTER_OPT MatchedOption,
     __out _On_failure_(_Post_valid_) PYORI_STRING ErrorSubstring
     )
 {
@@ -397,16 +417,16 @@ YoriLibFileFiltParseFilterOperator(
  */
 __success(return)
 BOOL
-YoriLibFileFiltParseFilterOptAndOperator(
+YoriLibFilFltParseOptAndOp(
     __in PYORI_STRING FilterElement,
-    __out PCYORI_LIB_FILE_FILT_FILTER_OPT * Opt,
+    __out PCYORILIB_FILFLT_FILTER_OPT * Opt,
     __out PYORI_STRING Operator,
     __out _On_failure_(_Post_valid_) PYORI_STRING ErrorSubstring
     )
 {
     YORI_STRING SwitchName;
     DWORD Count;
-    PCYORI_LIB_FILE_FILT_FILTER_OPT FoundOpt;
+    PCYORILIB_FILFLT_FILTER_OPT FoundOpt;
 
     YoriLibInitEmptyString(&SwitchName);
     YoriLibInitEmptyString(ErrorSubstring);
@@ -419,9 +439,9 @@ YoriLibFileFiltParseFilterOptAndOperator(
     SwitchName.LengthInChars = YoriLibCntStringNotWithChars(&SwitchName, _T("&<>=!"));
     FoundOpt = NULL;
 
-    for (Count = 0; Count < sizeof(YoriLibFileFiltFilterOptions)/sizeof(YoriLibFileFiltFilterOptions[0]); Count++) {
-        if (YoriLibCompareStringLitIns(&SwitchName, YoriLibFileFiltFilterOptions[Count].Switch) == 0) {
-            FoundOpt = &YoriLibFileFiltFilterOptions[Count];
+    for (Count = 0; Count < sizeof(YoriLibFilFltFilterOptions)/sizeof(YoriLibFilFltFilterOptions[0]); Count++) {
+        if (YoriLibCompareStringLitIns(&SwitchName, YoriLibFilFltFilterOptions[Count].Switch) == 0) {
+            FoundOpt = &YoriLibFilFltFilterOptions[Count];
             break;
         }
     }
@@ -463,17 +483,17 @@ YoriLibFileFiltParseFilterOptAndOperator(
  */
 __success(return)
 BOOL
-YoriLibFileFiltParseFilterElement(
-    __out PYORI_LIB_FILE_FILT_MATCH_CRITERIA Criteria,
+YoriLibFilFltParseElement(
+    __out PYORILIB_FILFLT_MATCH_CRITERIA Criteria,
     __in PYORI_STRING FilterElement,
     __out _On_failure_(_Post_valid_) PYORI_STRING ErrorSubstring
     )
 {
     YORI_STRING Operator;
     YORI_STRING Value;
-    PCYORI_LIB_FILE_FILT_FILTER_OPT FoundOpt;
+    PCYORILIB_FILFLT_FILTER_OPT FoundOpt;
 
-    if (!YoriLibFileFiltParseFilterOptAndOperator(FilterElement, &FoundOpt, &Operator, ErrorSubstring)) {
+    if (!YoriLibFilFltParseOptAndOp(FilterElement, &FoundOpt, &Operator, ErrorSubstring)) {
         return FALSE;
     }
 
@@ -482,7 +502,7 @@ YoriLibFileFiltParseFilterElement(
     Value.StartOfString = Operator.StartOfString + Operator.LengthInChars;
     Value.LengthInChars = FilterElement->LengthInChars - Operator.LengthInChars - (YORI_ALLOC_SIZE_T)(Operator.StartOfString - FilterElement->StartOfString);
 
-    return YoriLibFileFiltParseFilterOperator(Criteria, &Operator, &Value, FoundOpt, ErrorSubstring);
+    return YoriLibFilFltParseOperator(Criteria, &Operator, &Value, FoundOpt, ErrorSubstring);
 }
 
 /**
@@ -508,20 +528,20 @@ YoriLibFileFiltParseFilterElement(
  */
 __success(return)
 BOOL
-YoriLibFileFiltParseColorElement(
-    __out PYORI_LIB_FILE_FILT_MATCH_CRITERIA Criteria,
+YoriLibFilFltParseColorElement(
+    __out PYORILIB_FILFLT_MATCH_CRITERIA Criteria,
     __in PYORI_STRING FilterElement,
     __out _On_failure_(_Post_valid_) PYORI_STRING ErrorSubstring
     )
 {
     YORI_STRING Operator;
     YORI_STRING Value;
-    PYORI_LIB_FILE_FILT_COLOR_CRITERIA ColorCriteria = (PYORI_LIB_FILE_FILT_COLOR_CRITERIA)Criteria;
-    PCYORI_LIB_FILE_FILT_FILTER_OPT FoundOpt;
+    PYORILIB_FILFLT_COLOR_CRITERIA ColorCriteria = (PYORILIB_FILFLT_COLOR_CRITERIA)Criteria;
+    PCYORILIB_FILFLT_FILTER_OPT FoundOpt;
     YORI_ALLOC_SIZE_T CharsToCompare;
     YORI_ALLOC_SIZE_T CharsRemaining;
 
-    if (!YoriLibFileFiltParseFilterOptAndOperator(FilterElement, &FoundOpt, &Operator, ErrorSubstring)) {
+    if (!YoriLibFilFltParseOptAndOp(FilterElement, &FoundOpt, &Operator, ErrorSubstring)) {
         return FALSE;
     }
 
@@ -541,14 +561,14 @@ YoriLibFileFiltParseColorElement(
 
     Value.LengthInChars = CharsToCompare;
 
-    if (!YoriLibFileFiltParseFilterOperator(Criteria, &Operator, &Value, FoundOpt, ErrorSubstring)) {
+    if (!YoriLibFilFltParseOperator(Criteria, &Operator, &Value, FoundOpt, ErrorSubstring)) {
         return FALSE;
     }
 
     Value.StartOfString += CharsToCompare + 1;
     Value.LengthInChars = CharsRemaining - CharsToCompare - 1;
 
-    YoriLibAttributeFromString(&Value, &ColorCriteria->Color);
+    YoriLibAttrFromString(&Value, &ColorCriteria->Color);
     return TRUE;
 }
 
@@ -559,13 +579,13 @@ YoriLibFileFiltParseColorElement(
  */
 typedef 
 BOOL
-YORI_LIB_FILE_FILT_PARSE_FN(PYORI_LIB_FILE_FILT_MATCH_CRITERIA, PYORI_STRING, PYORI_STRING);
+YORILIB_FILFLT_PARSE_FN(PYORILIB_FILFLT_MATCH_CRITERIA, PYORI_STRING, PYORI_STRING);
 
 /**
  A pointer to a callback function which can be invoked to parse each element
  in a semicolon delimited list of filter rules to apply.
  */
-typedef YORI_LIB_FILE_FILT_PARSE_FN *PYORI_LIB_FILE_FILT_PARSE_FN;
+typedef YORILIB_FILFLT_PARSE_FN *PYORILIB_FILFLT_PARSE_FN;
 
 /**
  Parse a complete user supplied filter string into a series of options and
@@ -589,24 +609,24 @@ typedef YORI_LIB_FILE_FILT_PARSE_FN *PYORI_LIB_FILE_FILT_PARSE_FN;
  */
 __success(return)
 BOOL
-YoriLibFileFiltParseFilterStringInternal(
-    __out PYORI_LIB_FILE_FILTER Filter,
+YoriLibFilFltParseStrInt(
+    __out PYORILIB_FILE_FILTER Filter,
     __in PYORI_STRING FilterString,
-    __in PYORI_LIB_FILE_FILT_PARSE_FN Fn,
+    __in PYORILIB_FILFLT_PARSE_FN Fn,
     __in YORI_ALLOC_SIZE_T AllocationSize,
     __out _On_failure_(_Post_valid_) PYORI_STRING ErrorSubstring
     )
 {
     YORI_STRING Remaining;
     YORI_STRING Element;
-    PYORI_LIB_FILE_FILT_MATCH_CRITERIA Criteria = NULL;
-    PYORI_LIB_FILE_FILT_MATCH_CRITERIA ThisElement;
+    PYORILIB_FILFLT_MATCH_CRITERIA Criteria = NULL;
+    PYORILIB_FILFLT_MATCH_CRITERIA ThisElement;
     LPTSTR NextStart;
     YORI_ALLOC_SIZE_T ElementCount;
     DWORD Index;
     DWORD Phase;
 
-    ASSERT(AllocationSize >= sizeof(YORI_LIB_FILE_FILT_MATCH_CRITERIA));
+    ASSERT(AllocationSize >= sizeof(YORILIB_FILFLT_MATCH_CRITERIA));
 
     YoriLibInitEmptyString(&Remaining);
     YoriLibInitEmptyString(&Element);
@@ -630,7 +650,7 @@ YoriLibFileFiltParseFilterStringInternal(
             if (Element.LengthInChars > 0) {
                 if (Criteria != NULL) {
                     ASSERT(Phase == 1);
-                    ThisElement = (PYORI_LIB_FILE_FILT_MATCH_CRITERIA)YoriLibAddToPointer(Criteria, ElementCount * AllocationSize);
+                    ThisElement = (PYORILIB_FILFLT_MATCH_CRITERIA)YoriLibAddToPointer(Criteria, ElementCount * AllocationSize);
                     if (!Fn(ThisElement, &Element, ErrorSubstring)) {
                         YoriLibFree(Criteria);
                         return FALSE;
@@ -646,9 +666,9 @@ YoriLibFileFiltParseFilterStringInternal(
                     //
 
                     if (ThisElement->CollectFn != NULL) {
-                        PYORI_LIB_FILE_FILT_MATCH_CRITERIA PreviousElement;
+                        PYORILIB_FILFLT_MATCH_CRITERIA PreviousElement;
                         for (Index = 0; Index < ElementCount; Index++) {
-                            PreviousElement = (PYORI_LIB_FILE_FILT_MATCH_CRITERIA)YoriLibAddToPointer(Criteria, Index * AllocationSize);
+                            PreviousElement = (PYORILIB_FILFLT_MATCH_CRITERIA)YoriLibAddToPointer(Criteria, Index * AllocationSize);
                             if (ThisElement->CollectFn == PreviousElement->CollectFn) {
                                 ThisElement->CollectFn = NULL;
                                 break;
@@ -682,7 +702,7 @@ YoriLibFileFiltParseFilterStringInternal(
                 YoriLibInitEmptyString(ErrorSubstring);
                 return FALSE;
             }
-            ZeroMemory(Criteria, ElementCount * AllocationSize);
+            ZeroMemory(Criteria, (DWORD)(ElementCount * AllocationSize));
             ElementCount = 0;
         }
     }
@@ -710,13 +730,13 @@ YoriLibFileFiltParseFilterStringInternal(
  */
 __success(return)
 BOOL
-YoriLibFileFiltParseFilterString(
-    __out PYORI_LIB_FILE_FILTER Filter,
+YoriLibFilFltParseString(
+    __out PYORILIB_FILE_FILTER Filter,
     __in PYORI_STRING FilterString,
     __out _On_failure_(_Post_valid_) PYORI_STRING ErrorSubstring
     )
 {
-    return YoriLibFileFiltParseFilterStringInternal(Filter, FilterString, YoriLibFileFiltParseFilterElement, sizeof(YORI_LIB_FILE_FILT_MATCH_CRITERIA), ErrorSubstring);
+    return YoriLibFilFltParseStrInt(Filter, FilterString, YoriLibFilFltParseElement, sizeof(YORILIB_FILFLT_MATCH_CRITERIA), ErrorSubstring);
 }
 
 /**
@@ -737,13 +757,13 @@ YoriLibFileFiltParseFilterString(
  */
 __success(return)
 BOOL
-YoriLibFileFiltParseColorString(
-    __out PYORI_LIB_FILE_FILTER Filter,
+YoriLibFilFltParseColorStr(
+    __out PYORILIB_FILE_FILTER Filter,
     __in PYORI_STRING ColorString,
     __out _On_failure_(_Post_valid_) PYORI_STRING ErrorSubstring
     )
 {
-    return YoriLibFileFiltParseFilterStringInternal(Filter, ColorString, YoriLibFileFiltParseColorElement, sizeof(YORI_LIB_FILE_FILT_COLOR_CRITERIA), ErrorSubstring);
+    return YoriLibFilFltParseStrInt(Filter, ColorString, YoriLibFilFltParseColorElement, sizeof(YORILIB_FILFLT_COLOR_CRITERIA), ErrorSubstring);
 }
 
 /**
@@ -764,24 +784,24 @@ YoriLibFileFiltParseColorString(
  */
 __success(return)
 BOOL
-YoriLibFileFiltCheckFilterMatch(
-    __in PYORI_LIB_FILE_FILTER Filter,
+YoriLibFilFltCheckFilterMatch(
+    __in PYORILIB_FILE_FILTER Filter,
     __in PYORI_STRING FilePath,
     __in PWIN32_FIND_DATA FileInfo
     )
 {
-    DWORD Count;
+    YORI_ALLOC_SIZE_T Count;
     YORI_FILE_INFO CompareEntry;
-    PYORI_LIB_FILE_FILT_MATCH_CRITERIA CriteriaArray;
-    PYORI_LIB_FILE_FILT_MATCH_CRITERIA Criteria;
+    PYORILIB_FILFLT_MATCH_CRITERIA CriteriaArray;
+    PYORILIB_FILFLT_MATCH_CRITERIA Criteria;
 
     if (Filter->NumberCriteria == 0) {
         return TRUE;
     }
 
-    ZeroMemory(&CompareEntry, sizeof(CompareEntry));
+    ZeroMemory(&CompareEntry, (DWORD)sizeof(CompareEntry));
 
-    CriteriaArray = (PYORI_LIB_FILE_FILT_MATCH_CRITERIA)Filter->Criteria;
+    CriteriaArray = (PYORILIB_FILFLT_MATCH_CRITERIA)Filter->Criteria;
     for (Count = 0; Count < Filter->NumberCriteria; Count++) {
         Criteria = &CriteriaArray[Count];
         if (Criteria->CollectFn != NULL &&
@@ -818,8 +838,8 @@ YoriLibFileFiltCheckFilterMatch(
  */
 __success(return)
 BOOL
-YoriLibFileFiltCheckColorMatch(
-    __in PYORI_LIB_FILE_FILTER Filter,
+YoriLibFilFltCheckColorMatch(
+    __in PYORILIB_FILE_FILTER Filter,
     __in PYORI_STRING FilePath,
     __in PWIN32_FIND_DATA FileInfo,
     __out PYORILIB_COLOR_ATTRIBUTES Attribute
@@ -828,11 +848,11 @@ YoriLibFileFiltCheckColorMatch(
     DWORD Index;
     YORILIB_COLOR_ATTRIBUTES ThisAttribute;
     YORILIB_COLOR_ATTRIBUTES PreviousAttributes;
-    PYORI_LIB_FILE_FILT_COLOR_CRITERIA ThisApply;
-    PYORI_LIB_FILE_FILT_COLOR_CRITERIA ColorsToApply;
+    PYORILIB_FILFLT_COLOR_CRITERIA ThisApply;
+    PYORILIB_FILFLT_COLOR_CRITERIA ColorsToApply;
     YORI_FILE_INFO CompareEntry;
 
-    ZeroMemory(&CompareEntry, sizeof(CompareEntry));
+    ZeroMemory(&CompareEntry, (DWORD)sizeof(CompareEntry));
 
     ThisAttribute.Ctrl = YORILIB_ATTRCTRL_WINDOW_BG | YORILIB_ATTRCTRL_WINDOW_FG;
     ThisAttribute.Win32Attr = 0;
@@ -847,9 +867,9 @@ YoriLibFileFiltCheckColorMatch(
 
     ASSERT((Filter->ElementSize == 0 &&
             Filter->NumberCriteria == 0) ||
-           Filter->ElementSize == sizeof(YORI_LIB_FILE_FILT_COLOR_CRITERIA));
+           Filter->ElementSize == sizeof(YORILIB_FILFLT_COLOR_CRITERIA));
 
-    ColorsToApply = (PYORI_LIB_FILE_FILT_COLOR_CRITERIA)Filter->Criteria;
+    ColorsToApply = (PYORILIB_FILFLT_COLOR_CRITERIA)Filter->Criteria;
     for (Index = 0; Index < Filter->NumberCriteria; Index++) {
         ThisApply = &ColorsToApply[Index];
 
@@ -863,7 +883,7 @@ YoriLibFileFiltCheckColorMatch(
             YoriLibCombineColors(ThisAttribute, ThisApply->Color, &ThisAttribute);
             if ((ThisAttribute.Ctrl & YORILIB_ATTRCTRL_CONTINUE) == 0) {
 
-                YoriLibResolveWindowColorComponents(ThisAttribute, PreviousAttributes, TRUE, &ThisAttribute);
+                YoriLibResolveWindowColors(ThisAttribute, PreviousAttributes, TRUE, &ThisAttribute);
 
                 if (ThisAttribute.Ctrl & YORILIB_ATTRCTRL_INVERT) {
                     ThisAttribute.Win32Attr = (UCHAR)(((ThisAttribute.Win32Attr & 0x0F) << 4) + ((ThisAttribute.Win32Attr & 0xF0) >> 4));
@@ -905,8 +925,8 @@ YoriLibFileFiltCheckColorMatch(
  @param Filter Pointer to the filter object to deallocate.
  */
 VOID
-YoriLibFileFiltFreeFilter(
-    __in PYORI_LIB_FILE_FILTER Filter
+YoriLibFilFltFreeFilter(
+    __in PYORILIB_FILE_FILTER Filter
     )
 {
     if (Filter->Criteria != NULL) {

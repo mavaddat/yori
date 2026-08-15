@@ -65,7 +65,7 @@ YORI_ALLOC_SIZE_T SdirDirCollectionLongest;
  enumeration of a single directory.  This is used to truncate file names
  if they start to look too long.
  */
-ULONG SdirDirCollectionTotalNameLength;
+DWORD SdirDirCollectionTotalNameLen;
 
 /**
  Pointer to a dynamically allocated options structure which contains run
@@ -181,7 +181,7 @@ SdirRenderAttributesFromPath (
 
         memset(&FindData, 0, sizeof(FindData));
         DummyString.LengthInChars = YoriLibSPrintfS(DummyString.StartOfString, DummyString.LengthAllocated, _T("%s\\"), FullPath);
-        YoriLibUpdateFindDataFromFileInformation(&FindData, DummyString.StartOfString, FALSE);
+        YoriLibUpdateFindDataFromFile(&FindData, DummyString.StartOfString, FALSE);
         SdirCaptureFoundItemIntoDirent(&CurrentEntry, &FindData, &DummyString, TRUE);
         YoriLibFreeStringContents(&DummyString);
         OutAttributes->Ctrl = CurrentEntry.RenderAttributes.Ctrl;
@@ -208,7 +208,7 @@ SdirAddToCollection (
 {
     PYORI_FILE_INFO CurrentEntry;
     YORI_ALLOC_SIZE_T i, j;
-    DWORD CompareResult = 0;
+    WORD CompareResult = 0;
 
     if (SdirDirCollectionCurrent >= SdirAllocatedDirents) {
         if (SdirDirCollectionCurrent < ((YORI_ALLOC_SIZE_T)-1)) {
@@ -233,7 +233,7 @@ SdirAddToCollection (
         SdirDirCollectionLongest = CurrentEntry->FileNameLengthInChars;
     }
 
-    SdirDirCollectionTotalNameLength += CurrentEntry->FileNameLengthInChars;
+    SdirDirCollectionTotalNameLen += CurrentEntry->FileNameLengthInChars;
 
     if (Opts->FtSummary.Flags & SDIR_FEATURE_COLLECT) {
         SdirCollectSummary(CurrentEntry);
@@ -302,7 +302,7 @@ typedef struct _SDIR_ITEM_FOUND_CONTEXT {
      error back to the calling function without promising not to make
      Win32 calls in the meantime.
      */
-    DWORD Error;
+    SYSERR Error;
 
     /**
      An allocation for enumerating streams within files.  This is generally
@@ -310,7 +310,6 @@ typedef struct _SDIR_ITEM_FOUND_CONTEXT {
      always be prepared to free it.
      */
     YORI_STRING StreamFullPath;
-
 
 } SDIR_ITEM_FOUND_CONTEXT, *PSDIR_ITEM_FOUND_CONTEXT;
 
@@ -331,7 +330,7 @@ typedef struct _SDIR_ITEM_FOUND_CONTEXT {
  @return TRUE to indicate enumeration should continue, FALSE to indicate it
          should terminate.
  */
-BOOL
+BOOL FAR
 SdirEnumerateErrorCallback(
     __in PYORI_STRING FullPath,
     __in SYSERR ErrorCode,
@@ -367,7 +366,7 @@ SdirEnumerateErrorCallback(
  
  @return TRUE to indicate success, FALSE to indicate failure.
  */
-BOOL
+BOOL FAR
 SdirItemFoundCallback(
     __in PYORI_STRING FullPath,
     __in PWIN32_FIND_DATA FindData,
@@ -458,7 +457,7 @@ SdirItemFoundCallback(
                     //  Populate stream information
                     //
 
-                    if (!YoriLibUpdateFindDataFromFileInformation(&BogusFindData, ItemContext->StreamFullPath.StartOfString, FALSE)) {
+                    if (!YoriLibUpdateFindDataFromFile(&BogusFindData, ItemContext->StreamFullPath.StartOfString, FALSE)) {
                         memcpy(&BogusFindData, &FindData, sizeof(FindData));
                     }
                     SdirAddToCollection(&BogusFindData, &ItemContext->StreamFullPath);
@@ -554,7 +553,7 @@ SdirMoveSortedEntries(
 BOOL
 SdirEnumeratePathWithDepth (
     __in PYORI_STRING FindStr,
-    __in DWORD Depth
+    __in WORD Depth
     )
 {
     LPTSTR FinalPart;
@@ -586,18 +585,24 @@ SdirEnumeratePathWithDepth (
 
     if (Opts->FtSummary.Flags & SDIR_FEATURE_COLLECT) {
 
+#if _WIN32
         LARGE_INTEGER Junk;
+#endif
 
         //
         //  If GetDiskFreeSpaceEx fails, fall back to GetDiskFreeSpace.  According
         //  to MSDN, this can sometimes be present and fail with not supported.
         //
 
-        if (Summary->VolumeSize.QuadPart == 0 &&
+        if (SdirFileSizeFromLargeInt(&Summary->VolumeSize) == 0L
+#if _WIN32
+            &&
             (DllKernel32.pGetDiskFreeSpaceExW == NULL ||
-             !DllKernel32.pGetDiskFreeSpaceExW(Opts->ParentName.StartOfString, &Junk, &Summary->VolumeSize, &Summary->FreeSize))) {
+             !DllKernel32.pGetDiskFreeSpaceExW(Opts->ParentName.StartOfString, &Junk, &Summary->VolumeSize, &Summary->FreeSize))
+#endif
+             ) {
 
-            if (!SdirPopulateSummaryWithGetDiskFreeSpace(Opts->ParentName.StartOfString, Summary)) {
+            if (!SdirPopulateSummaryFreeSpace(Opts->ParentName.StartOfString, Summary)) {
 
                 //
                 //  On very old platforms, this API requires a volume root.
@@ -632,7 +637,7 @@ SdirEnumeratePathWithDepth (
                     BackupChar = Opts->ParentName.StartOfString[VolumeRootLength];
                     Opts->ParentName.StartOfString[VolumeRootLength] = '\0';
 
-                    SdirPopulateSummaryWithGetDiskFreeSpace(Opts->ParentName.StartOfString, Summary);
+                    SdirPopulateSummaryFreeSpace(Opts->ParentName.StartOfString, Summary);
 
                     Opts->ParentName.StartOfString[VolumeRootLength] = BackupChar;
                 }
@@ -663,13 +668,17 @@ SdirEnumeratePathWithDepth (
 
         if (SdirDirCollectionCurrent >= SdirAllocatedDirents || SdirDirCollection == NULL) {
             YORI_ALLOC_SIZE_T PreviousAllocatedDirents = SdirAllocatedDirents;
+            YORI_MAX_UNSIGNED_T NewAllocatedDirents;
             DWORD BytesRequired;
 
             if (SdirDirCollectionCurrent >= SdirAllocatedDirents) {
                 SdirAllocatedDirents = SdirDirCollectionCurrent + 1;
             }
-            if (SdirAllocatedDirents < UINT_MAX - 64) {
-                SdirAllocatedDirents += 64;
+
+            NewAllocatedDirents = SdirAllocatedDirents;
+            NewAllocatedDirents = NewAllocatedDirents + 64;
+            if (YoriLibIsSizeAllocatable(NewAllocatedDirents)) {
+                SdirAllocatedDirents = (YORI_ALLOC_SIZE_T)NewAllocatedDirents;
             }
 
             BytesRequired = SdirAllocatedDirents;
@@ -680,7 +689,7 @@ SdirEnumeratePathWithDepth (
                 return FALSE;
             }
 
-            NewSdirDirCollection = YoriLibMalloc(SdirAllocatedDirents * sizeof(YORI_FILE_INFO));
+            NewSdirDirCollection = YoriLibMalloc((YORI_ALLOC_SIZE_T)BytesRequired);
             if (NewSdirDirCollection == NULL) {
                 SdirAllocatedDirents = SdirDirCollectionCurrent;
                 SdirDisplayError(GetLastError(), _T("YoriLibMalloc"));
@@ -745,7 +754,7 @@ SdirEnumeratePathWithDepth (
 
         if (!YoriLibForEachFile(FindStr,
                                 MatchFlags,
-                                0,
+                                0L,
                                 SdirItemFoundCallback,
                                 SdirEnumerateErrorCallback,
                                 &ItemFoundContext)) {
@@ -850,6 +859,11 @@ SdirEnumeratePath (
  A character array for grid characters using Unicode characters.
  */
 TCHAR SdirLineElementsRich[] = {0x2500, 0x252c, 0x2534, 0x2502};
+#elif defined(MSDOS)
+/**
+ A character array for grid characters using Unicode characters.
+ */
+TCHAR SdirLineElementsRich[] = {196, 194, 193, 179};
 #endif
 /**
  A character array for grid characters using only 7 bit characters.
@@ -920,7 +934,7 @@ SdirDisplayCollection(VOID)
     LPTSTR LineElements = SdirLineElementsText;
     PSDIR_FEATURE Feature;
 
-#ifdef UNICODE
+#if defined(UNICODE) || defined(MSDOS)
     if (Opts->OutputExtendedCharacters) {
         LineElements = SdirLineElementsRich;
     }
@@ -937,7 +951,7 @@ SdirDisplayCollection(VOID)
     if (Opts->EnableNameTruncation) {
         YORI_ALLOC_SIZE_T AverageNameLength;
 
-        AverageNameLength = (YORI_ALLOC_SIZE_T)(SdirDirCollectionTotalNameLength / SdirDirCollectionCurrent);
+        AverageNameLength = (YORI_ALLOC_SIZE_T)(SdirDirCollectionTotalNameLen / SdirDirCollectionCurrent);
         if (LongestDisplayedFileName > 2 * AverageNameLength) {
             LongestDisplayedFileName = 2 * AverageNameLength;
             if (LongestDisplayedFileName < 10) {
@@ -1311,7 +1325,7 @@ SdirForEachPathSpec (
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 BOOL
-SdirEnumerateAndDisplay (
+SdirEnumAndDisplay (
     __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
@@ -1356,8 +1370,8 @@ SdirEnumerateAndDisplay (
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 BOOL
-SdirEnumerateAndDisplaySubtree (
-    __in DWORD Depth,
+SdirEnumAndDisplaySubtree (
+    __in WORD Depth,
     __in PYORI_STRING FileSpec
     )
 {
@@ -1417,7 +1431,7 @@ SdirEnumerateAndDisplaySubtree (
     }
 
     if (!SdirEnumeratePathWithDepth(&NextSubDir, Depth)) {
-        DWORD Err = GetLastError();
+        SYSERR Err = GetLastError();
         if (SdirIsReportableError(Err)) {
 
             Opts->ErrorsFound = TRUE;
@@ -1465,7 +1479,7 @@ SdirEnumerateAndDisplaySubtree (
 
     SdirDirCollectionCurrent = 0;
     SdirDirCollectionLongest = 0;
-    SdirDirCollectionTotalNameLength = 0;
+    SdirDirCollectionTotalNameLen = 0;
 
     if (ParentDirectory.LengthInChars == 0 ||
         ParentDirectory.StartOfString[ParentDirectory.LengthInChars - 1] == '\\') {
@@ -1486,7 +1500,7 @@ SdirEnumerateAndDisplaySubtree (
     hFind = FindFirstFile(NextSubDir.StartOfString, &FindData);
 
     if (hFind == NULL || hFind == INVALID_HANDLE_VALUE) {
-        DWORD Err = GetLastError();
+        SYSERR Err = GetLastError();
         Opts->ErrorsFound = TRUE;
         if (SdirIsReportableError(Err)) {
             if (!SdirDisplayYsError(Err, &NextSubDir)) {
@@ -1528,7 +1542,7 @@ SdirEnumerateAndDisplaySubtree (
                     return FALSE;
                 }
 
-                if (!SdirEnumerateAndDisplaySubtree(Depth + 1, &NextSubDir)) {
+                if (!SdirEnumAndDisplaySubtree((WORD)(Depth + 1), &NextSubDir)) {
                     FindClose(hFind);
                     YoriLibFreeStringContents(&NextSubDir);
                     return FALSE;
@@ -1555,7 +1569,7 @@ SdirEnumerateAndDisplaySubtree (
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 BOOL
-SdirEnumerateAndDisplayRecursive (
+SdirEnumAndDisplayRecursive (
     __in YORI_ALLOC_SIZE_T ArgC,
     __in YORI_STRING ArgV[]
     )
@@ -1573,7 +1587,7 @@ SdirEnumerateAndDisplayRecursive (
                 return FALSE;
             }
 
-            if (!SdirEnumerateAndDisplaySubtree(0, &FindStr)) {
+            if (!SdirEnumAndDisplaySubtree(0, &FindStr)) {
                 YoriLibFreeStringContents(&FindStr);
                 return FALSE;
             }
@@ -1588,7 +1602,7 @@ SdirEnumerateAndDisplayRecursive (
         if (!YoriLibUserToSingleFilePath(&Arg, TRUE, &FindStr)) {
             return FALSE;
         }
-        if (!SdirEnumerateAndDisplaySubtree(0, &FindStr)) {
+        if (!SdirEnumAndDisplaySubtree(0, &FindStr)) {
             YoriLibFreeStringContents(&FindStr);
             return FALSE;
         }
@@ -1625,12 +1639,16 @@ ENTRYPOINT(
     __in YORI_STRING ArgV[]
     )
 {
+#if _WIN32
     SdirAllocatedDirents = 1000;
+#else
+    SdirAllocatedDirents = 0;
+#endif
     SdirDirCollection = NULL;
     SdirDirSorted = NULL;
     SdirDirCollectionCurrent = 0;
     SdirDirCollectionLongest = 0;
-    SdirDirCollectionTotalNameLength = 0;
+    SdirDirCollectionTotalNameLen = 0;
     SdirWriteStringLinesDisplayed = 0;
 
     if (!SdirInit(ArgC, ArgV)) {
@@ -1638,7 +1656,7 @@ ENTRYPOINT(
     }
 
     if (Opts->Recursive) {
-        if (!SdirEnumerateAndDisplayRecursive(ArgC, ArgV)) {
+        if (!SdirEnumAndDisplayRecursive(ArgC, ArgV)) {
             goto restore_and_exit;
         }
 
@@ -1646,7 +1664,7 @@ ENTRYPOINT(
             SdirWriteStringWithAttribute(_T("Errors found during enumerate; results are incomplete\n"), Opts->FtError.HighlightColor);
         }
     } else {
-        if (!SdirEnumerateAndDisplay(ArgC, ArgV)) {
+        if (!SdirEnumAndDisplay(ArgC, ArgV)) {
             goto restore_and_exit;
         }
     }

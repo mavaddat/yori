@@ -38,11 +38,11 @@
  */
 VOID
 RegeditStrEditOkButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, TRUE);
 }
 
@@ -54,11 +54,11 @@ RegeditStrEditOkButtonClicked(
  */
 VOID
 RegeditStrEditCancelButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, FALSE);
 }
 
@@ -93,20 +93,20 @@ __success(return)
 BOOLEAN
 RegeditEditStringValue(
     __in PREGEDIT_CONTEXT RegeditContext,
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr,
+    __in PYORIWIN_WINMGR_HANDLE WinMgr,
     __inout PYORI_STRING ValueName,
     __in BOOLEAN ValueNameReadOnly,
     __inout PYORI_STRING Value,
     __in BOOLEAN ValueReadOnly
     )
 {
-    PYORI_WIN_WINDOW_HANDLE Parent;
+    PYORIWIN_WINDOW_HANDLE Parent;
     COORD WindowSize;
     SMALL_RECT Area;
     YORI_STRING Caption;
-    PYORI_WIN_CTRL_HANDLE Ctrl;
-    PYORI_WIN_CTRL_HANDLE ValueNameEdit;
-    PYORI_WIN_CTRL_HANDLE ValueEdit;
+    PYORIWIN_CTRL_HANDLE Ctrl;
+    PYORIWIN_CTRL_HANDLE ValueNameEdit;
+    PYORIWIN_CTRL_HANDLE ValueEdit;
     DWORD_PTR Result;
     COORD WinMgrSize;
     DWORD ButtonWidth;
@@ -132,7 +132,7 @@ RegeditEditStringValue(
         YoriLibConstantString(&Caption, _T("Edit String Value"));
     }
 
-    if (!YoriWinCreateWindow(WinMgr, WindowSize.X, WindowSize.Y, WindowSize.X, WindowSize.Y, YORI_WIN_WINDOW_STYLE_BORDER_SINGLE | YORI_WIN_WINDOW_STYLE_SHADOW_TRANSPARENT, &Caption, &Parent)) {
+    if (!YoriWinCreateWindow(WinMgr, WindowSize.X, WindowSize.Y, WindowSize.X, WindowSize.Y, YORIWIN_WIN_STY_BORDER_SINGLE | YORIWIN_WIN_STY_SHADOW_TRANS, &Caption, &Parent)) {
         return FALSE;
     }
 
@@ -181,7 +181,7 @@ RegeditEditStringValue(
     Area.Top = (WORD)(Area.Top - 1);
     Area.Bottom = (WORD)(Area.Top + 2);
 
-    ValueNameEdit = YoriWinEditCreate(Parent, &Area, ValueName, ValueNameReadOnly?YORI_WIN_EDIT_STYLE_READ_ONLY:0);
+    ValueNameEdit = YoriWinEditCreate(Parent, &Area, ValueName, (WORD)(ValueNameReadOnly?YORIWIN_EDIT_STY_READ_ONLY:0));
     if (ValueNameEdit == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;
@@ -207,7 +207,7 @@ RegeditEditStringValue(
     Area.Top = (WORD)(Area.Bottom - 1);
     Area.Bottom = (WORD)(Area.Top + 2);
 
-    ValueEdit = YoriWinEditCreate(Parent, &Area, Value, ValueReadOnly?YORI_WIN_EDIT_STYLE_READ_ONLY:0);
+    ValueEdit = YoriWinEditCreate(Parent, &Area, Value, (WORD)(ValueReadOnly?YORIWIN_EDIT_STY_READ_ONLY:0));
     if (ValueEdit == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;
@@ -226,7 +226,7 @@ RegeditEditStringValue(
     Area.Bottom = (WORD)(Area.Top + 2);
     Area.Right = (WORD)(Area.Left + 1 + ButtonWidth);
 
-    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORI_WIN_BUTTON_STYLE_DEFAULT | YORI_WIN_BUTTON_STYLE_CANCEL, RegeditStrEditOkButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORIWIN_BUTTON_STY_DEFAULT | YORIWIN_BUTTON_STY_CANCEL, RegeditStrEditOkButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;
@@ -237,7 +237,7 @@ RegeditEditStringValue(
     Area.Left = (WORD)(Area.Right + 2);
     Area.Right = (WORD)(Area.Left + 1 + ButtonWidth);
 
-    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORI_WIN_BUTTON_STYLE_CANCEL, RegeditStrEditCancelButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORIWIN_BUTTON_STY_CANCEL, RegeditStrEditCancelButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;

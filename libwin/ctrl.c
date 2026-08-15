@@ -55,14 +55,14 @@
 __success(return)
 BOOLEAN
 YoriWinCreateControl(
-    __in_opt PYORI_WIN_CTRL Parent,
+    __in_opt PYORIWIN_CTRL Parent,
     __in PSMALL_RECT Rect,
     __in BOOLEAN CanReceiveFocus,
     __in BOOLEAN ReceiveFocusOnMouseClick,
-    __out PYORI_WIN_CTRL Ctrl
+    __out PYORIWIN_CTRL Ctrl
     )
 {
-    PYORI_WIN_WINDOW Window;
+    PYORIWIN_WINDOW Window;
 
     if (Rect->Right < Rect->Left || Rect->Bottom < Rect->Top) {
         return FALSE;
@@ -103,9 +103,9 @@ YoriWinCreateControl(
             YoriWinAddControlToWindow(Parent, Ctrl);
         }
     } else {
-        PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+        PYORIWIN_WINMGR_HANDLE WinMgrHandle;
         Window = YoriWinGetWindowFromWindowCtrl(Ctrl);
-        WinMgrHandle = YoriWinGetWindowManagerHandle(Window);
+        WinMgrHandle = YoriWinGetWinMgrHandle(Window);
         Ctrl->DefaultAttributes = YoriWinMgrDefaultColorLookup(WinMgrHandle, YoriWinColorWindowDefault);
     }
 
@@ -120,11 +120,11 @@ YoriWinCreateControl(
  */
 VOID
 YoriWinCloseControl(
-    __in PYORI_WIN_CTRL Ctrl
+    __in PYORIWIN_CTRL Ctrl
     )
 {
-    YORI_WIN_EVENT Event;
-    ZeroMemory(&Event, sizeof(Event));
+    YORIWIN_EVENT Event;
+    ZeroMemory(&Event, (DWORD)sizeof(Event));
     Event.EventType = YoriWinEventParentDestroyed;
 
     //
@@ -147,11 +147,11 @@ YoriWinCloseControl(
  */
 VOID
 YoriWinDestroyControl(
-    __in PYORI_WIN_CTRL Ctrl
+    __in PYORIWIN_CTRL Ctrl
     )
 {
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle = NULL;
-    PYORI_WIN_EVENT PostedEvent;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle = NULL;
+    PYORIWIN_EVENT PostedEvent;
 
     //
     //  Notify all controls that the parent is going away in case they
@@ -159,17 +159,17 @@ YoriWinDestroyControl(
     //
 
     if (!YoriLibIsListEmpty(&Ctrl->ChildControlList)) {
-        YORI_WIN_EVENT Event;
-        ZeroMemory(&Event, sizeof(Event));
+        YORIWIN_EVENT Event;
+        ZeroMemory(&Event, (DWORD)sizeof(Event));
         Event.EventType = YoriWinEventParentDestroyed;
         YoriWinNotifyAllControls(Ctrl, &Event);
     }
 
     if (Ctrl->Parent != NULL) {
         if (Ctrl->Parent->Parent == NULL) {
-            PYORI_WIN_WINDOW Window;
+            PYORIWIN_WINDOW Window;
             Window = YoriWinGetWindowFromWindowCtrl(Ctrl->Parent);
-            WinMgrHandle = YoriWinGetWindowManagerHandle(Window);
+            WinMgrHandle = YoriWinGetWinMgrHandle(Window);
             YoriWinRemoveControlFromWindow(Window, Ctrl);
         }
         YoriLibRemoveListItem(&Ctrl->ParentControlList);
@@ -180,7 +180,7 @@ YoriWinDestroyControl(
     }
 
     if (WinMgrHandle != NULL) {
-        YoriWinMgrRemoveTimersForControl(WinMgrHandle, Ctrl);
+        YoriWinMgrRemoveTimersForCtrl(WinMgrHandle, Ctrl);
     }
 }
 
@@ -198,7 +198,7 @@ YoriWinDestroyControl(
 __success(return)
 BOOLEAN
 YoriWinControlReposition(
-    __in PYORI_WIN_CTRL Ctrl,
+    __in PYORIWIN_CTRL Ctrl,
     __in PSMALL_RECT NewRect
     )
 {
@@ -254,13 +254,13 @@ YoriWinControlReposition(
 
  @return Pointer to the top level window.
  */
-PYORI_WIN_WINDOW
+PYORIWIN_WINDOW
 YoriWinGetTopLevelWindow(
-    __in PYORI_WIN_CTRL Ctrl
+    __in PYORIWIN_CTRL Ctrl
     )
 {
-    PYORI_WIN_CTRL Parent;
-    PYORI_WIN_WINDOW Window;
+    PYORIWIN_CTRL Parent;
+    PYORIWIN_WINDOW Window;
 
     Parent = Ctrl;
     while (Parent->Parent != NULL) {
@@ -281,12 +281,12 @@ YoriWinGetTopLevelWindow(
  */
 VOID
 YoriWinNotifyAllControls(
-    __in PYORI_WIN_CTRL Parent,
-    __in PYORI_WIN_EVENT Event
+    __in PYORIWIN_CTRL Parent,
+    __in PYORIWIN_EVENT Event
     )
 {
     PYORI_LIST_ENTRY ListEntry;
-    PYORI_WIN_CTRL ChildCtrl;
+    PYORIWIN_CTRL ChildCtrl;
 
     ListEntry = YoriLibGetNextListEntry(&Parent->ChildControlList, NULL);
     while (ListEntry != NULL) {
@@ -297,7 +297,7 @@ YoriWinNotifyAllControls(
         //  during notification
         //
 
-        ChildCtrl = CONTAINING_RECORD(ListEntry, YORI_WIN_CTRL, ParentControlList);
+        ChildCtrl = CONTAINING_RECORD(ListEntry, YORIWIN_CTRL, ParentControlList);
         ListEntry = YoriLibGetNextListEntry(&Parent->ChildControlList, ListEntry);
 
         if (ChildCtrl->NotifyEventFn != NULL) {
@@ -316,14 +316,14 @@ YoriWinNotifyAllControls(
         control's client area.
  */
 VOID
-YoriWinGetControlClientSize(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+YoriWinGetCtrlClientSize(
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle,
     __out PCOORD Size
     )
 {
-    PYORI_WIN_CTRL Ctrl;
+    PYORIWIN_CTRL Ctrl;
 
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
 
     Size->X = (SHORT)(Ctrl->ClientRect.Right - Ctrl->ClientRect.Left + 1);
     Size->Y = (SHORT)(Ctrl->ClientRect.Bottom - Ctrl->ClientRect.Top + 1);
@@ -342,14 +342,14 @@ YoriWinGetControlClientSize(
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 BOOLEAN
-YoriWinSetControlCursorState(
-    __in PYORI_WIN_CTRL Ctrl,
+YoriWinSetCtrlCursorState(
+    __in PYORIWIN_CTRL Ctrl,
     __in BOOLEAN Visible,
     __in UCHAR SizePercentage
     )
 {
     if (Ctrl->Parent != NULL) {
-        return YoriWinSetControlCursorState(Ctrl->Parent, Visible, SizePercentage);
+        return YoriWinSetCtrlCursorState(Ctrl->Parent, Visible, SizePercentage);
     } else {
         return YoriWinSetCursorState(Ctrl, Visible, SizePercentage);
     }
@@ -401,9 +401,9 @@ YoriWinCoordInSmallRect(
  */
 VOID
 YoriWinBoundCoordInSubRegion(
-    __in PYORI_WIN_BOUNDED_COORD Pos,
+    __in PYORIWIN_BOUNDED_COORD Pos,
     __in PSMALL_RECT SubRegion,
-    __out PYORI_WIN_BOUNDED_COORD SubPos
+    __out PYORIWIN_BOUNDED_COORD SubPos
     )
 {
     if (Pos->Left ||
@@ -449,8 +449,8 @@ YoriWinBoundCoordInSubRegion(
         control relative to the nonclient area of its parent.
  */
 VOID
-YoriWinGetControlNonClientRegion(
-    __in PYORI_WIN_CTRL Ctrl,
+YoriWinGetCtrlNonClientRegion(
+    __in PYORIWIN_CTRL Ctrl,
     __out PSMALL_RECT CtrlRect
     )
 {
@@ -460,7 +460,7 @@ YoriWinGetControlNonClientRegion(
     CtrlRect->Bottom = Ctrl->FullRect.Bottom;
 
     if (Ctrl->RelativeToParentClient) {
-        PYORI_WIN_CTRL Parent;
+        PYORIWIN_CTRL Parent;
         Parent = Ctrl->Parent;
 
         CtrlRect->Left = (SHORT)(CtrlRect->Left + Parent->ClientRect.Left);
@@ -498,9 +498,9 @@ YoriWinGetControlNonClientRegion(
          control.  NULL if no child control exists at the specified location.
  */
 __success(return != NULL)
-PYORI_WIN_CTRL
+PYORIWIN_CTRL
 YoriWinFindControlAtCoordinates(
-    __in PYORI_WIN_CTRL Parent,
+    __in PYORIWIN_CTRL Parent,
     __in COORD Location,
     __in BOOLEAN ParentLocationRelativeToClient,
     __out PCOORD LocationInChild,
@@ -511,7 +511,7 @@ YoriWinFindControlAtCoordinates(
     COORD WindowRelativeLocation;
     BOOLEAN LocationInClient;
     PYORI_LIST_ENTRY ListEntry;
-    PYORI_WIN_CTRL Child;
+    PYORIWIN_CTRL Child;
     SMALL_RECT ChildClientArea;
 
     LocationInClient = FALSE;
@@ -554,7 +554,7 @@ YoriWinFindControlAtCoordinates(
         //  during notification
         //
 
-        Child = CONTAINING_RECORD(ListEntry, YORI_WIN_CTRL, ParentControlList);
+        Child = CONTAINING_RECORD(ListEntry, YORIWIN_CTRL, ParentControlList);
         ListEntry = YoriLibGetNextListEntry(&Parent->ChildControlList, ListEntry);
 
         if (Child->RelativeToParentClient) {
@@ -632,83 +632,83 @@ YoriWinFindControlAtCoordinates(
          FALSE does not imply no processing occurred.
  */
 BOOLEAN
-YoriWinTranslateMouseEventForChild(
-    __in PYORI_WIN_EVENT Event,
-    __in PYORI_WIN_CTRL Ctrl,
+YoriWinTransMouseEventForChild(
+    __in PYORIWIN_EVENT Event,
+    __in PYORIWIN_CTRL Ctrl,
     __in COORD ChildLocation,
     __in BOOLEAN InChildClientArea
     )
 {
     if (Ctrl->NotifyEventFn != NULL) {
 
-        YORI_WIN_EVENT CtrlEvent;
+        YORIWIN_EVENT CtrlEvent;
         BOOLEAN Terminate;
 
-        ZeroMemory(&CtrlEvent, sizeof(CtrlEvent));
+        ZeroMemory(&CtrlEvent, (DWORD)sizeof(CtrlEvent));
         CtrlEvent.EventType = Event->EventType;
         if (InChildClientArea) {
-            if (Event->EventType == YoriWinEventMouseDownInNonClient) {
-                CtrlEvent.EventType = YoriWinEventMouseDownInClient;
-            } else if (Event->EventType == YoriWinEventMouseUpInNonClient) {
-                CtrlEvent.EventType = YoriWinEventMouseUpInClient;
-            } else if (Event->EventType == YoriWinEventMouseDoubleClickInNonClient) {
-                CtrlEvent.EventType = YoriWinEventMouseDoubleClickInClient;
-            } else if (Event->EventType == YoriWinEventMouseMoveInNonClient) {
-                CtrlEvent.EventType = YoriWinEventMouseMoveInClient;
-            } else if (Event->EventType == YoriWinEventMouseWheelUpInNonClient) {
-                CtrlEvent.EventType = YoriWinEventMouseWheelUpInClient;
-            } else if (Event->EventType == YoriWinEventMouseWheelDownInNonClient) {
-                CtrlEvent.EventType = YoriWinEventMouseWheelDownInClient;
+            if (Event->EventType == YoriWinEventMouseDownNonCli) {
+                CtrlEvent.EventType = YoriWinEventMouseDownClient;
+            } else if (Event->EventType == YoriWinEventMouseUpNonCli) {
+                CtrlEvent.EventType = YoriWinEventMouseUpClient;
+            } else if (Event->EventType == YoriWinEventMouseDblClickNonCli) {
+                CtrlEvent.EventType = YoriWinEventMouseDblClickClient;
+            } else if (Event->EventType == YoriWinEventMouseMoveNonCli) {
+                CtrlEvent.EventType = YoriWinEventMouseMoveClient;
+            } else if (Event->EventType == YoriWinEventMouseWhlUpNonCli) {
+                CtrlEvent.EventType = YoriWinEventMouseWhlUpClient;
+            } else if (Event->EventType == YoriWinEventMouseWhlDownNonCli) {
+                CtrlEvent.EventType = YoriWinEventMouseWhlDownClient;
             }
         } else {
-            if (Event->EventType == YoriWinEventMouseDownInClient) {
-                CtrlEvent.EventType = YoriWinEventMouseDownInNonClient;
-            } else if (Event->EventType == YoriWinEventMouseUpInClient) {
-                CtrlEvent.EventType = YoriWinEventMouseUpInNonClient;
-            } else if (Event->EventType == YoriWinEventMouseDoubleClickInClient) {
-                CtrlEvent.EventType = YoriWinEventMouseDoubleClickInNonClient;
-            } else if (Event->EventType == YoriWinEventMouseMoveInClient) {
-                CtrlEvent.EventType = YoriWinEventMouseMoveInNonClient;
-            } else if (Event->EventType == YoriWinEventMouseWheelUpInClient) {
-                CtrlEvent.EventType = YoriWinEventMouseWheelUpInNonClient;
-            } else if (Event->EventType == YoriWinEventMouseWheelDownInClient) {
-                CtrlEvent.EventType = YoriWinEventMouseWheelDownInNonClient;
+            if (Event->EventType == YoriWinEventMouseDownClient) {
+                CtrlEvent.EventType = YoriWinEventMouseDownNonCli;
+            } else if (Event->EventType == YoriWinEventMouseUpClient) {
+                CtrlEvent.EventType = YoriWinEventMouseUpNonCli;
+            } else if (Event->EventType == YoriWinEventMouseDblClickClient) {
+                CtrlEvent.EventType = YoriWinEventMouseDblClickNonCli;
+            } else if (Event->EventType == YoriWinEventMouseMoveClient) {
+                CtrlEvent.EventType = YoriWinEventMouseMoveNonCli;
+            } else if (Event->EventType == YoriWinEventMouseWhlUpClient) {
+                CtrlEvent.EventType = YoriWinEventMouseWhlUpNonCli;
+            } else if (Event->EventType == YoriWinEventMouseWhlDownClient) {
+                CtrlEvent.EventType = YoriWinEventMouseWhlDownNonCli;
             }
         }
 
-        if (Event->EventType == YoriWinEventMouseDownInClient ||
-            Event->EventType == YoriWinEventMouseDownInNonClient) {
-            Ctrl->MouseButtonsPressed |= (UCHAR)Event->MouseDown.ButtonsPressed;
-            CtrlEvent.MouseDown.ButtonsPressed = Event->MouseDown.ButtonsPressed;
-            CtrlEvent.MouseDown.ControlKeyState = Event->MouseDown.ControlKeyState;
-            CtrlEvent.MouseDown.Location.X = ChildLocation.X;
-            CtrlEvent.MouseDown.Location.Y = ChildLocation.Y;
-        } else if (Event->EventType == YoriWinEventMouseDoubleClickInClient ||
-                   Event->EventType == YoriWinEventMouseDoubleClickInNonClient) {
-            CtrlEvent.MouseDown.ButtonsPressed = Event->MouseDown.ButtonsPressed;
-            CtrlEvent.MouseDown.ControlKeyState = Event->MouseDown.ControlKeyState;
-            CtrlEvent.MouseDown.Location.X = ChildLocation.X;
-            CtrlEvent.MouseDown.Location.Y = ChildLocation.Y;
-        } else if (Event->EventType == YoriWinEventMouseUpInClient ||
-                   Event->EventType == YoriWinEventMouseUpInNonClient) {
-            Ctrl->MouseButtonsPressed = (UCHAR)(Ctrl->MouseButtonsPressed & ~(Event->MouseUp.ButtonsReleased));
-            CtrlEvent.MouseUp.ButtonsReleased = Event->MouseUp.ButtonsReleased;
-            CtrlEvent.MouseUp.ControlKeyState = Event->MouseUp.ControlKeyState;
-            CtrlEvent.MouseUp.Location.X = ChildLocation.X;
-            CtrlEvent.MouseUp.Location.Y = ChildLocation.Y;
-        } else if (Event->EventType == YoriWinEventMouseMoveInClient ||
-                   Event->EventType == YoriWinEventMouseMoveInNonClient) {
-            CtrlEvent.MouseMove.ControlKeyState = Event->MouseMove.ControlKeyState;
-            CtrlEvent.MouseMove.Location.X = ChildLocation.X;
-            CtrlEvent.MouseMove.Location.Y = ChildLocation.Y;
-        } else if (Event->EventType == YoriWinEventMouseWheelUpInClient ||
-                   Event->EventType == YoriWinEventMouseWheelUpInNonClient ||
-                   Event->EventType == YoriWinEventMouseWheelDownInClient ||
-                   Event->EventType == YoriWinEventMouseWheelDownInNonClient) {
-            CtrlEvent.MouseWheel.LinesToMove = Event->MouseWheel.LinesToMove;
-            CtrlEvent.MouseWheel.ControlKeyState = Event->MouseWheel.ControlKeyState;
-            CtrlEvent.MouseWheel.Location.X = ChildLocation.X;
-            CtrlEvent.MouseWheel.Location.Y = ChildLocation.Y;
+        if (Event->EventType == YoriWinEventMouseDownClient ||
+            Event->EventType == YoriWinEventMouseDownNonCli) {
+            Ctrl->MouseButtonsPressed |= (UCHAR)Event->u.MouseDown.ButtonsPressed;
+            CtrlEvent.u.MouseDown.ButtonsPressed = Event->u.MouseDown.ButtonsPressed;
+            CtrlEvent.u.MouseDown.ControlKeyState = Event->u.MouseDown.ControlKeyState;
+            CtrlEvent.u.MouseDown.Location.X = ChildLocation.X;
+            CtrlEvent.u.MouseDown.Location.Y = ChildLocation.Y;
+        } else if (Event->EventType == YoriWinEventMouseDblClickClient ||
+                   Event->EventType == YoriWinEventMouseDblClickNonCli) {
+            CtrlEvent.u.MouseDown.ButtonsPressed = Event->u.MouseDown.ButtonsPressed;
+            CtrlEvent.u.MouseDown.ControlKeyState = Event->u.MouseDown.ControlKeyState;
+            CtrlEvent.u.MouseDown.Location.X = ChildLocation.X;
+            CtrlEvent.u.MouseDown.Location.Y = ChildLocation.Y;
+        } else if (Event->EventType == YoriWinEventMouseUpClient ||
+                   Event->EventType == YoriWinEventMouseUpNonCli) {
+            Ctrl->MouseButtonsPressed = (UCHAR)(Ctrl->MouseButtonsPressed & ~(Event->u.MouseUp.ButtonsReleased));
+            CtrlEvent.u.MouseUp.ButtonsReleased = Event->u.MouseUp.ButtonsReleased;
+            CtrlEvent.u.MouseUp.ControlKeyState = Event->u.MouseUp.ControlKeyState;
+            CtrlEvent.u.MouseUp.Location.X = ChildLocation.X;
+            CtrlEvent.u.MouseUp.Location.Y = ChildLocation.Y;
+        } else if (Event->EventType == YoriWinEventMouseMoveClient ||
+                   Event->EventType == YoriWinEventMouseMoveNonCli) {
+            CtrlEvent.u.MouseMove.ControlKeyState = Event->u.MouseMove.ControlKeyState;
+            CtrlEvent.u.MouseMove.Location.X = ChildLocation.X;
+            CtrlEvent.u.MouseMove.Location.Y = ChildLocation.Y;
+        } else if (Event->EventType == YoriWinEventMouseWhlUpClient ||
+                   Event->EventType == YoriWinEventMouseWhlUpNonCli ||
+                   Event->EventType == YoriWinEventMouseWhlDownClient ||
+                   Event->EventType == YoriWinEventMouseWhlDownNonCli) {
+            CtrlEvent.u.MouseWheel.LinesToMove = Event->u.MouseWheel.LinesToMove;
+            CtrlEvent.u.MouseWheel.ControlKeyState = Event->u.MouseWheel.ControlKeyState;
+            CtrlEvent.u.MouseWheel.Location.X = ChildLocation.X;
+            CtrlEvent.u.MouseWheel.Location.Y = ChildLocation.Y;
         }
 
         Terminate = Ctrl->NotifyEventFn(Ctrl, &CtrlEvent);
@@ -740,19 +740,19 @@ YoriWinTranslateMouseEventForChild(
         coordinates.
  */
 VOID
-YoriWinTranslateCtrlCoordinatesToWindowCoordinates(
-    __in PYORI_WIN_CTRL Ctrl,
+YoriWinTransCtrlCoordToWindow(
+    __in PYORIWIN_CTRL Ctrl,
     __in BOOLEAN CtrlCoordInClient,
     __in COORD CtrlCoord,
     __in BOOLEAN WinCoordInClient,
-    __out PYORI_WIN_WINDOW* Window,
+    __out PYORIWIN_WINDOW* Window,
     __out PCOORD WinCoord
     )
 {
     WORD NewX;
     WORD NewY;
     BOOLEAN AddClientOffset;
-    PYORI_WIN_CTRL ThisCtrl;
+    PYORIWIN_CTRL ThisCtrl;
 
     ThisCtrl = Ctrl;
 
@@ -811,23 +811,23 @@ YoriWinTranslateCtrlCoordinatesToWindowCoordinates(
         coordinates.
  */
 VOID
-YoriWinTranslateCtrlCoordinatesToScreenCoordinates(
-    __in PYORI_WIN_CTRL Ctrl,
+YoriWinTransCtrlCoordToScreen(
+    __in PYORIWIN_CTRL Ctrl,
     __in BOOLEAN CtrlCoordInClient,
     __in COORD CtrlCoord,
     __out PCOORD ScreenCoord
     )
 {
-    PYORI_WIN_WINDOW ParentWindow;
-    PYORI_WIN_CTRL WindowCtrl;
+    PYORIWIN_WINDOW ParentWindow;
+    PYORIWIN_CTRL WindowCtrl;
     COORD WinCoord;
 
-    YoriWinTranslateCtrlCoordinatesToWindowCoordinates(Ctrl,
-                                                       CtrlCoordInClient,
-                                                       CtrlCoord,
-                                                       FALSE,
-                                                       &ParentWindow,
-                                                       &WinCoord);
+    YoriWinTransCtrlCoordToWindow(Ctrl,
+                                  CtrlCoordInClient,
+                                  CtrlCoord,
+                                  FALSE,
+                                  &ParentWindow,
+                                  &WinCoord);
 
     WindowCtrl = YoriWinGetCtrlFromWindow(ParentWindow);
 
@@ -861,31 +861,31 @@ YoriWinTranslateCtrlCoordinatesToScreenCoordinates(
         coordinates are outside the window range.
  */
 VOID
-YoriWinTranslateScreenCoordinatesToWindow(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
-    __in PYORI_WIN_CTRL Ctrl,
+YoriWinTransScreenCoordToWindow(
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
+    __in PYORIWIN_CTRL Ctrl,
     __in COORD ScreenCoord,
     __out PBOOLEAN InWindowRange,
     __out PBOOLEAN InWindowClientRange,
     __out PCOORD CtrlCoord
     )
 {
-    SMALL_RECT WinMgrLocation;
+    SMALL_RECT WinMgrPoint;
     COORD WinMgrCoord;
 
-    YoriWinGetWinMgrLocation(WinMgrHandle, &WinMgrLocation);
+    YoriWinGetWinMgrPoint(WinMgrHandle, &WinMgrPoint);
 
     *InWindowRange = FALSE;
     *InWindowClientRange = FALSE;
 
-    if (!YoriWinCoordInSmallRect(&ScreenCoord, &WinMgrLocation)) {
+    if (!YoriWinCoordInSmallRect(&ScreenCoord, &WinMgrPoint)) {
         CtrlCoord->X = 0;
         CtrlCoord->Y = 0;
         return;
     }
 
-    WinMgrCoord.X = (SHORT)(ScreenCoord.X - WinMgrLocation.Left);
-    WinMgrCoord.Y = (SHORT)(ScreenCoord.Y - WinMgrLocation.Top);
+    WinMgrCoord.X = (SHORT)(ScreenCoord.X - WinMgrPoint.Left);
+    WinMgrCoord.Y = (SHORT)(ScreenCoord.Y - WinMgrPoint.Top);
 
     if (YoriWinCoordInSmallRect(&WinMgrCoord, &Ctrl->FullRect)) {
         SMALL_RECT ClientArea;
@@ -924,8 +924,8 @@ YoriWinTranslateScreenCoordinatesToWindow(
  @param Attr The color attributes to place in the cell.
  */
 VOID
-YoriWinSetControlClientCell(
-    __in PYORI_WIN_CTRL Ctrl,
+YoriWinSetCtrlClientCell(
+    __in PYORIWIN_CTRL Ctrl,
     __in WORD X,
     __in WORD Y,
     __in TCHAR Char,
@@ -934,10 +934,10 @@ YoriWinSetControlClientCell(
 {
     COORD CtrlCoord;
     COORD WinCoord;
-    PYORI_WIN_WINDOW Window;
+    PYORIWIN_WINDOW Window;
 
-    if (X > (Ctrl->ClientRect.Right - Ctrl->ClientRect.Left) ||
-        Y > (Ctrl->ClientRect.Bottom - Ctrl->ClientRect.Top)) {
+    if (X > (WORD)(Ctrl->ClientRect.Right - Ctrl->ClientRect.Left) ||
+        Y > (WORD)(Ctrl->ClientRect.Bottom - Ctrl->ClientRect.Top)) {
 
         return;
     }
@@ -945,12 +945,12 @@ YoriWinSetControlClientCell(
     CtrlCoord.X = X;
     CtrlCoord.Y = Y;
 
-    YoriWinTranslateCtrlCoordinatesToWindowCoordinates(Ctrl,
-                                                       TRUE,
-                                                       CtrlCoord,
-                                                       FALSE,
-                                                       &Window,
-                                                       &WinCoord);
+    YoriWinTransCtrlCoordToWindow(Ctrl,
+                                  TRUE,
+                                  CtrlCoord,
+                                  FALSE,
+                                  &Window,
+                                  &WinCoord);
 
     YoriWinSetWindowCell(Window,
                          WinCoord.X,
@@ -976,8 +976,8 @@ YoriWinSetControlClientCell(
  @param Attr The color attributes to place in the cell.
  */
 VOID
-YoriWinSetControlNonClientCell(
-    __in PYORI_WIN_CTRL Ctrl,
+YoriWinSetCtrlNonClientCell(
+    __in PYORIWIN_CTRL Ctrl,
     __in WORD X,
     __in WORD Y,
     __in TCHAR Char,
@@ -986,10 +986,10 @@ YoriWinSetControlNonClientCell(
 {
     COORD CtrlCoord;
     COORD WinCoord;
-    PYORI_WIN_WINDOW Window;
+    PYORIWIN_WINDOW Window;
 
-    if (X > (Ctrl->FullRect.Right - Ctrl->FullRect.Left) ||
-        Y > (Ctrl->FullRect.Bottom - Ctrl->FullRect.Top)) {
+    if (X > (WORD)(Ctrl->FullRect.Right - Ctrl->FullRect.Left) ||
+        Y > (WORD)(Ctrl->FullRect.Bottom - Ctrl->FullRect.Top)) {
 
         return;
     }
@@ -997,12 +997,12 @@ YoriWinSetControlNonClientCell(
     CtrlCoord.X = X;
     CtrlCoord.Y = Y;
 
-    YoriWinTranslateCtrlCoordinatesToWindowCoordinates(Ctrl,
-                                                       FALSE,
-                                                       CtrlCoord,
-                                                       FALSE,
-                                                       &Window,
-                                                       &WinCoord);
+    YoriWinTransCtrlCoordToWindow(Ctrl,
+                                  FALSE,
+                                  CtrlCoord,
+                                  FALSE,
+                                  &Window,
+                                  &WinCoord);
 
     YoriWinSetWindowCell(Window,
                          WinCoord.X,
@@ -1023,25 +1023,25 @@ YoriWinSetControlNonClientCell(
           control.
  */
 VOID
-YoriWinSetControlClientCursorLocation(
-    __in PYORI_WIN_CTRL Ctrl,
+YoriWinSetCtrlClientCursorPoint(
+    __in PYORIWIN_CTRL Ctrl,
     __in WORD X,
     __in WORD Y
     )
 {
     COORD CtrlCoord;
     COORD WinCoord;
-    PYORI_WIN_WINDOW Window;
+    PYORIWIN_WINDOW Window;
 
     CtrlCoord.X = X;
     CtrlCoord.Y = Y;
 
-    YoriWinTranslateCtrlCoordinatesToWindowCoordinates(Ctrl,
-                                                       TRUE,
-                                                       CtrlCoord,
-                                                       FALSE,
-                                                       &Window,
-                                                       &WinCoord);
+    YoriWinTransCtrlCoordToWindow(Ctrl,
+                                  TRUE,
+                                  CtrlCoord,
+                                  FALSE,
+                                  &Window,
+                                  &WinCoord);
 
     YoriWinSetCursorPosition(Window, WinCoord.X, WinCoord.Y);
 }
@@ -1054,12 +1054,12 @@ YoriWinSetControlClientCursorLocation(
  @return Pointer to the parent of the control, or NULL if no parent exists,
          implying the control is a top level window.
  */
-PYORI_WIN_CTRL_HANDLE
-YoriWinGetControlParent(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle
+PYORIWIN_CTRL_HANDLE
+YoriWinGetCtrlParent(
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle
     )
 {
-    PYORI_WIN_CTRL Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
+    PYORIWIN_CTRL Ctrl = (PYORIWIN_CTRL)CtrlHandle;
     return Ctrl->Parent;
 }
 
@@ -1069,14 +1069,14 @@ YoriWinGetControlParent(
  @param CtrlHandle Pointer to the control.
 
  @return A control ID previously associated with the control from an earlier
-         call to @ref YoriWinSetControlId .
+         call to @ref YoriWinSetCtrlId .
  */
 DWORD_PTR
-YoriWinGetControlId(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle
+YoriWinGetCtrlId(
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle
     )
 {
-    PYORI_WIN_CTRL Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
+    PYORIWIN_CTRL Ctrl = (PYORIWIN_CTRL)CtrlHandle;
     return Ctrl->CtrlId;
 }
 
@@ -1088,12 +1088,12 @@ YoriWinGetControlId(
  @param CtrlId The control ID to associate with the control.
  */
 VOID
-YoriWinSetControlId(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+YoriWinSetCtrlId(
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle,
     __in DWORD_PTR CtrlId
     )
 {
-    PYORI_WIN_CTRL Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
+    PYORIWIN_CTRL Ctrl = (PYORIWIN_CTRL)CtrlHandle;
     Ctrl->CtrlId = CtrlId;
 }
 
@@ -1109,14 +1109,14 @@ YoriWinSetControlId(
  @return Pointer to the child control, or NULL if no matching control is
          found.
  */
-PYORI_WIN_CTRL_HANDLE
+PYORIWIN_CTRL_HANDLE
 YoriWinFindControlById(
-    __in PYORI_WIN_CTRL_HANDLE ParentCtrl,
+    __in PYORIWIN_CTRL_HANDLE ParentCtrl,
     __in DWORD_PTR CtrlId
     )
 {
-    PYORI_WIN_CTRL Parent = (PYORI_WIN_CTRL)ParentCtrl;
-    PYORI_WIN_CTRL ChildCtrl;
+    PYORIWIN_CTRL Parent = (PYORIWIN_CTRL)ParentCtrl;
+    PYORIWIN_CTRL ChildCtrl;
     PYORI_LIST_ENTRY ListEntry;
 
     ListEntry = YoriLibGetNextListEntry(&Parent->ChildControlList, NULL);
@@ -1128,7 +1128,7 @@ YoriWinFindControlById(
         //  during notification
         //
 
-        ChildCtrl = CONTAINING_RECORD(ListEntry, YORI_WIN_CTRL, ParentControlList);
+        ChildCtrl = CONTAINING_RECORD(ListEntry, YORIWIN_CTRL, ParentControlList);
         if (ChildCtrl->CtrlId == CtrlId) {
             return ChildCtrl;
         }
@@ -1140,16 +1140,16 @@ YoriWinFindControlById(
 
 /**
  Get an opaque pointer on a control that was previously set with
- @ref YoriWinSetControlContext .
+ @ref YoriWinSetCtrlContext .
 
  @param CtrlHandle Pointer to the control.
  */
 PVOID
-YoriWinGetControlContext(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle
+YoriWinGetCtrlContext(
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle
     )
 {
-    PYORI_WIN_CTRL Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
+    PYORIWIN_CTRL Ctrl = (PYORIWIN_CTRL)CtrlHandle;
     return Ctrl->UserContext;
 }
 
@@ -1163,12 +1163,12 @@ YoriWinGetControlContext(
  @param Context A pointer-sized blob of data to associate with the control.
  */
 VOID
-YoriWinSetControlContext(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+YoriWinSetCtrlContext(
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle,
     __in PVOID Context
     )
 {
-    PYORI_WIN_CTRL Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
+    PYORIWIN_CTRL Ctrl = (PYORIWIN_CTRL)CtrlHandle;
     Ctrl->UserContext = Context;
 }
 
@@ -1185,12 +1185,12 @@ YoriWinSetControlContext(
  @return TRUE if the state was successfully changed, FALSE if it was not.
  */
 BOOLEAN
-YoriWinControlSetFocusOnMouseClick(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+YoriWinCtrlSetFocusOnMouseClick(
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle,
     __in BOOLEAN ReceiveFocusOnMouseClick
     )
 {
-    PYORI_WIN_CTRL Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
+    PYORIWIN_CTRL Ctrl = (PYORIWIN_CTRL)CtrlHandle;
     if (Ctrl->CanReceiveFocus) {
         Ctrl->ReceiveFocusOnMouseClick = ReceiveFocusOnMouseClick;
         return TRUE;
@@ -1212,18 +1212,18 @@ YoriWinControlSetFocusOnMouseClick(
  */
 BOOLEAN
 YoriWinPostEvent(
-    __in PYORI_WIN_CTRL Ctrl,
-    __in PYORI_WIN_EVENT Event
+    __in PYORIWIN_CTRL Ctrl,
+    __in PYORIWIN_EVENT Event
     )
 {
-    PYORI_WIN_EVENT EventCopy;
+    PYORIWIN_EVENT EventCopy;
 
-    EventCopy = YoriLibReferencedMalloc(sizeof(YORI_WIN_EVENT));
+    EventCopy = YoriLibReferencedMalloc(sizeof(YORIWIN_EVENT));
     if (EventCopy == NULL) {
         return FALSE;
     }
 
-    memcpy(EventCopy, Event, sizeof(YORI_WIN_EVENT));
+    memcpy(EventCopy, Event, sizeof(YORIWIN_EVENT));
     YoriLibAppendList(&Ctrl->PostEventList, &EventCopy->PostEventListEntry);
     return TRUE;
 }
@@ -1239,13 +1239,13 @@ YoriWinPostEvent(
  @return Pointer to the first event outstanding, or NULL if no more events
          are outstanding.
  */
-PYORI_WIN_EVENT
+PYORIWIN_EVENT
 YoriWinGetNextPostedEvent(
-    __in PYORI_WIN_CTRL Ctrl
+    __in PYORIWIN_CTRL Ctrl
     )
 {
     PYORI_LIST_ENTRY ListEntry;
-    PYORI_WIN_EVENT Event;
+    PYORIWIN_EVENT Event;
 
     ListEntry = YoriLibGetNextListEntry(&Ctrl->PostEventList, NULL);
     if (ListEntry == NULL) {
@@ -1253,7 +1253,7 @@ YoriWinGetNextPostedEvent(
     }
 
     YoriLibRemoveListItem(ListEntry);
-    Event = CONTAINING_RECORD(ListEntry, YORI_WIN_EVENT, PostEventListEntry);
+    Event = CONTAINING_RECORD(ListEntry, YORIWIN_EVENT, PostEventListEntry);
     return Event;
 }
 
@@ -1265,7 +1265,7 @@ YoriWinGetNextPostedEvent(
  */
 VOID
 YoriWinFreePostedEvent(
-    __in PYORI_WIN_EVENT Event
+    __in PYORIWIN_EVENT Event
     )
 {
     YoriLibDereference(Event);

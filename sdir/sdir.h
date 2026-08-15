@@ -57,18 +57,27 @@
 /**
  If the compiler has unsigned 64 bit values, use them for file size.
  */
-typedef DWORDLONG SDIR_FILESIZE;
+typedef YORI_MAX_UNSIGNED_T SDIR_FILESIZE;
 
+#if _INTEGRAL_MAX_BITS >= 64
 /**
  Macro to return the file size from a large integer.
  */
 #define SdirFileSizeFromLargeInt(Li) ((Li)->QuadPart)
+#else
+/**
+ Macro to return the file size from a large integer.
+ */
+#define SdirFileSizeFromLargeInt(Li) ((Li)->LowPart)
+#endif
 
 //
 //  File size lengths
 //
 
+#if defined(_MSC_VER) && _MSC_VER >= 700
 #pragma pack(push, 1)
+#endif
 
 /**
  Specifies a character that contains color information.  Typically used in
@@ -86,7 +95,10 @@ typedef struct _SDIR_FMTCHAR {
      */
     YORILIB_COLOR_ATTRIBUTES Attr;
 } SDIR_FMTCHAR, *PSDIR_FMTCHAR;
+
+#if defined(_MSC_VER) && _MSC_VER >= 700
 #pragma pack(pop)
+#endif
 
 /**
  If any bits here are set, the requested color will be rejected.
@@ -109,19 +121,19 @@ typedef YORI_ALLOC_SIZE_T (* SDIR_METADATA_WIDTH_FN)(PSDIR_FMTCHAR, YORILIB_COLO
  Specifies a pointer to a function which can compare two directory entries
  in some fashion.
  */
-typedef DWORD (* SDIR_COMPARE_FN)(PYORI_FILE_INFO, PYORI_FILE_INFO);
+typedef WORD (FAR * SDIR_COMPARE_FN)(PYORI_FILE_INFO, PYORI_FILE_INFO);
 
 /**
  Specifies a pointer to a function which can collect file information from
  the disk or file system for some particular piece of data.
  */
-typedef BOOL (* SDIR_COLLECT_FN)(PYORI_FILE_INFO, PWIN32_FIND_DATA, PYORI_STRING);
+typedef BOOL (FAR * SDIR_COLLECT_FN)(PYORI_FILE_INFO, PWIN32_FIND_DATA, PYORI_STRING);
 
 /**
  Specifies a pointer to a function which can generate in memory file
  information from a user provided string.
  */
-typedef BOOL (* SDIR_GENERATE_FROM_STRING_FN)(PYORI_FILE_INFO, PYORI_STRING);
+typedef BOOL (FAR * SDIR_GENERATE_FROM_STRING_FN)(PYORI_FILE_INFO, PYORI_STRING);
 
 
 /**
@@ -141,13 +153,13 @@ typedef struct _SDIR_COMPARE {
      until this condition is met, at which point the item can be inserted
      into its sorted position.
      */
-    DWORD           CompareBreakCondition;
+    WORD           CompareBreakCondition;
 
     /**
      The inverse condition of BreakCondition above.  Used to check if things
      are already in correct order.
      */
-    DWORD           CompareInverseCondition;
+    WORD           CompareInverseCondition;
 } SDIR_COMPARE, *PSDIR_COMPARE;
 
 
@@ -209,7 +221,9 @@ typedef struct _SDIR_FEATURE {
  */
 typedef SDIR_FEATURE CONST *PCSDIR_FEATURE;
 
+#if defined(_MSC_VER) && _MSC_VER >= 700
 #pragma pack(push, 4)
+#endif
 
 /**
  A structure describing volatile, run time state describing program execution.
@@ -263,10 +277,12 @@ typedef struct _SDIR_OPTS {
      */
     WORD            MetadataWidth;
 
+#if _WIN32
     /**
      Specifies the version of the hosting OS, in GetVersion format.
      */
     DWORD           OsVersion;
+#endif
 
     /**
      The volatile configuration for a file's last access date.
@@ -278,16 +294,19 @@ typedef struct _SDIR_OPTS {
      */
     SDIR_FEATURE    FtAccessTime;
 
+#if _WIN32
     /**
      The volatile configuration for a file's allocated range count.
      */
     SDIR_FEATURE    FtAllocatedRangeCount;
+#endif
 
     /**
      The volatile configuration for a file's allocation size.
      */
     SDIR_FEATURE    FtAllocationSize;
 
+#if _WIN32
     /**
      The volatile configuration for an executable's architecture.
      */
@@ -307,6 +326,7 @@ typedef struct _SDIR_OPTS {
      The volatile configuration for the file's compressed file size.
      */
     SDIR_FEATURE    FtCompressedFileSize;
+#endif
 
     /**
      The volatile configuration for the file's creation date.
@@ -318,10 +338,12 @@ typedef struct _SDIR_OPTS {
      */
     SDIR_FEATURE    FtCreateTime;
 
+#if _WIN32
     /**
      The volatile configuration for the executable's description.
      */
     SDIR_FEATURE    FtDescription;
+#endif
 
     /**
      The volatile configuration for file's directory attribute.
@@ -333,11 +355,13 @@ typedef struct _SDIR_OPTS {
      */
     SDIR_FEATURE    FtError;
 
+#if _WIN32
     /**
      The volatile configuration for the access allowed to the file by the
      current user.
      */
     SDIR_FEATURE    FtEffectivePermissions;
+#endif
 
     /**
      The volatile configuration for the file's attributes.
@@ -364,6 +388,7 @@ typedef struct _SDIR_OPTS {
      */
     SDIR_FEATURE    FtFileSize;
 
+#if _WIN32
     /**
      The volatile configuration for the file's version string.
      */
@@ -373,6 +398,7 @@ typedef struct _SDIR_OPTS {
      The volatile configuration for the file's fragmentation.
      */
     SDIR_FEATURE    FtFragmentCount;
+#endif
 
     /**
      The volatile configuration for the display grid.
@@ -384,16 +410,19 @@ typedef struct _SDIR_OPTS {
      */
     SDIR_FEATURE    FtLinkCount;
 
+#if _WIN32
     /**
      The volatile configuration for the named streams attached to files.
      */
     SDIR_FEATURE    FtNamedStreams;
+#endif
 
     /**
      The volatile configuration for the number of files in a directory.
      */
     SDIR_FEATURE    FtNumberFiles;
 
+#if _WIN32
     /**
      The volatile configuration for the file's object ID.
      */
@@ -413,12 +442,14 @@ typedef struct _SDIR_OPTS {
      The volatile configuration for the file's reparse tag.
      */
     SDIR_FEATURE    FtReparseTag;
+#endif
 
     /**
      The volatile configuration for the file's short name.
      */
     SDIR_FEATURE    FtShortName;
 
+#if _WIN32
     /**
      The volatile configuration for the file's stream count.
      */
@@ -428,12 +459,14 @@ typedef struct _SDIR_OPTS {
      The volatile configuration for the executable's subsystem.
      */
     SDIR_FEATURE    FtSubsystem;
+#endif
 
     /**
      The volatile configuration for the directory's summary.
      */
     SDIR_FEATURE    FtSummary;
 
+#if _WIN32
     /**
      The volatile configuration for the file's USN.
      */
@@ -443,6 +476,7 @@ typedef struct _SDIR_OPTS {
      The volatile configuration for the executable version.
      */
     SDIR_FEATURE    FtVersion;
+#endif
 
     /**
      The volatile configuration for the last write date.
@@ -523,7 +557,7 @@ typedef struct _SDIR_OPTS {
      Specifies the number of populated compare functions in the sort array,
      below.
      */
-    DWORD           CurrentSort;
+    YORI_ALLOC_SIZE_T CurrentSort;
 
     /**
      Supplies pointers to up to 8 functions to use to compare two dirents
@@ -532,7 +566,10 @@ typedef struct _SDIR_OPTS {
     SDIR_COMPARE    Sort[8];
 
 } SDIR_OPTS, *PSDIR_OPTS;
+
+#if defined(_MSC_VER) && _MSC_VER >= 700
 #pragma pack(pop)
+#endif
 
 /**
  Summary information.  This is used to display the final line after
@@ -555,11 +592,13 @@ typedef struct _SDIR_SUMMARY {
      */
     SDIR_FILESIZE   TotalSize;
 
+#if _WIN32
     /**
      The total amount of bytes used by files enumerated, counting size
      after any compression has been applied.
      */
     SDIR_FILESIZE   CompressedSize;
+#endif
 
     /**
      The amount of free space on the volume, in bytes.
@@ -572,7 +611,9 @@ typedef struct _SDIR_SUMMARY {
     LARGE_INTEGER   VolumeSize;
 } SDIR_SUMMARY, *PSDIR_SUMMARY;
 
+#if defined(_MSC_VER) && _MSC_VER >= 700
 #pragma pack(push, 1)
+#endif
 
 /**
  A single (read only) metadata configuration.
@@ -634,9 +675,11 @@ typedef struct _SDIR_OPT {
      */
     CHAR                         Help[24];
 } SDIR_OPT, *PSDIR_OPT;
+#if defined(_MSC_VER) && _MSC_VER >= 700
 #pragma pack(pop)
 
 #pragma pack(push, 4)
+#endif
 
 /**
  A single metadata attribute that should be processed.
@@ -654,7 +697,9 @@ typedef struct _SDIR_EXEC {
      */
     SDIR_METADATA_WIDTH_FN Function;
 } SDIR_EXEC, *PSDIR_EXEC;
+#if defined(_MSC_VER) && _MSC_VER >= 700
 #pragma pack(pop)
+#endif
 
 /**
  A structure containing state that is global for each instance of sdir.
@@ -665,21 +710,21 @@ typedef struct _SDIR_GLOBAL {
      An array of structures describing the criteria to use when applying
      colors to files.
      */
-    YORI_LIB_FILE_FILTER FileColorCriteria;
+    YORILIB_FILE_FILTER FileColorCriteria;
 
     /**
      An array of structures describing the criteria to use to determine
      which files to hide.
      */
-    YORI_LIB_FILE_FILTER FileHideCriteria;
+    YORILIB_FILE_FILTER FileHideCriteria;
 } SDIR_GLOBAL, *PSDIR_GLOBAL;
 
 extern SDIR_GLOBAL SdirGlobal;
 
 extern PSDIR_OPTS Opts;
 extern PSDIR_SUMMARY Summary;
-extern const SDIR_OPT SdirOptions[];
-extern const SDIR_EXEC SdirExec[];
+extern CONST SDIR_OPT SdirOptions[];
+extern CONST SDIR_EXEC SdirExec[];
 extern PYORI_FILE_INFO SdirDirCollection;
 extern PYORI_FILE_INFO * SdirDirSorted;
 extern WORD SdirWriteStringLinesDisplayed;
@@ -689,7 +734,7 @@ extern WORD SdirWriteStringLinesDisplayed;
 //
 
 BOOL
-SdirWriteRawStringToOutputDevice(
+SdirWriteRawStringToOutputDev(
     __in HANDLE hConsole,
     __in LPCTSTR OutputString,
     __in YORI_ALLOC_SIZE_T Length
@@ -730,13 +775,13 @@ SdirWriteStringWithAttribute (
 
 BOOL
 SdirDisplayError (
-    __in LONG ErrorCode,
+    __in SYSERR ErrorCode,
     __in_opt LPCTSTR Prefix
     );
 
 BOOL
 SdirDisplayYsError (
-    __in LONG ErrorCode,
+    __in SYSERR ErrorCode,
     __in PYORI_STRING YsPrefix
     );
 
@@ -803,7 +848,7 @@ BOOL
 SdirParseAttributeApplyString(VOID);
 
 BOOL
-SdirParseMetadataAttributeString(VOID);
+SdirParseMetadataAttrString(VOID);
 
 BOOL
 SdirApplyAttribute(
@@ -900,7 +945,7 @@ SdirMultiplyViaShift(
     );
 
 BOOL
-SdirPopulateSummaryWithGetDiskFreeSpace(
+SdirPopulateSummaryFreeSpace(
     __in LPTSTR Path,
     __inout PSDIR_SUMMARY Summary
     );

@@ -74,22 +74,22 @@ typedef struct _EDIT_CONTEXT {
     /**
      Pointer to the multiline edit control.
      */
-    PYORI_WIN_CTRL_HANDLE MultilineEdit;
+    PYORIWIN_CTRL_HANDLE MultilineEdit;
 
     /**
      Pointer to the menu bar control.
      */
-    PYORI_WIN_CTRL_HANDLE MenuBar;
+    PYORIWIN_CTRL_HANDLE MenuBar;
 
     /**
      Pointer to the status bar control.
      */
-    PYORI_WIN_CTRL_HANDLE StatusBar;
+    PYORIWIN_CTRL_HANDLE StatusBar;
 
     /**
      Pointer to the window manager.
      */
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr;
+    PYORIWIN_WINMGR_HANDLE WinMgr;
 
     /**
      The string for the file to open, and the name to use when saving.
@@ -345,7 +345,7 @@ EditUpdateOpenedFileCaption(
         NewCaption.LengthInChars = EditContext->OpenFileName.LengthInChars;
     }
 
-    YoriWinMultilineEditSetCaption(EditContext->MultilineEdit, &NewCaption);
+    YoriWinMlEditSetCaption(EditContext->MultilineEdit, &NewCaption);
 }
 
 /**
@@ -526,7 +526,7 @@ EditPopulateFromStream(
     }
 
     if (LinesPopulated > 0) {
-        YoriWinMultilineEditAppendLinesNoDataCopy(EditContext->MultilineEdit, LineArray, LinesPopulated);
+        YoriWinMlEditAddLinesNoDataCopy(EditContext->MultilineEdit, LineArray, LinesPopulated);
 
         YoriLibConstantString(&EditContext->Newline, _T("\r\n"));
         if (FirstLineEnding == YoriLibLineEndingLF) {
@@ -558,7 +558,7 @@ EditPopulateFromStream(
  */
 BOOLEAN
 EditIsFileWriteProtected(
-    __in PYORI_WIN_CTRL_HANDLE Parent,
+    __in PYORIWIN_CTRL_HANDLE Parent,
     __in PYORI_STRING FileName
     )
 {
@@ -593,7 +593,7 @@ EditIsFileWriteProtected(
         YoriLibFreeStringContents(&UnescapedPath);
         YoriLibConstantString(&ButtonText[0], _T("&Overwrite"));
         YoriLibConstantString(&ButtonText[1], _T("Do&n't save"));
-        ButtonPressed = YoriDlgMessageBox(YoriWinGetWindowManagerHandle(Parent),
+        ButtonPressed = YoriDlgMessageBox(YoriWinGetWinMgrHandle(Parent),
                                           &Title,
                                           &Text,
                                           2,
@@ -609,7 +609,7 @@ EditIsFileWriteProtected(
             } else {
                 YoriLibConstantString(&Text, _T("Could not remove read only attribute."));
                 YoriLibConstantString(&ButtonText[0], _T("&Ok"));
-                YoriDlgMessageBox(YoriWinGetWindowManagerHandle(Parent),
+                YoriDlgMessageBox(YoriWinGetWinMgrHandle(Parent),
                                   &Title,
                                   &Text,
                                   1,
@@ -682,7 +682,7 @@ EditLoadFile(
         EditContext->Encoding = NewEncoding;
     }
 
-    YoriWinMultilineEditClear(EditContext->MultilineEdit);
+    YoriWinMlEditClear(EditContext->MultilineEdit);
     SavedEncoding = YoriLibGetMultibyteInputEncoding();
     YoriLibSetMultibyteInputEncoding(EditContext->Encoding);
     EditPopulateFromStream(EditContext, hFile);
@@ -757,13 +757,13 @@ EditSaveFile(
         return FALSE;
     }
 
-    YoriWinMultilineEditGetAutoIndent(EditContext->MultilineEdit, NULL, &AutoIndentActive, &AutoIndentLine, NULL);
+    YoriWinMlEditGetAutoIndent(EditContext->MultilineEdit, NULL, &AutoIndentActive, &AutoIndentLine, NULL);
 
     //
     //  Write all of the lines to the temporary file and abort on failure.
     //
 
-    LineCount = YoriWinMultilineEditGetLineCount(EditContext->MultilineEdit);
+    LineCount = YoriWinMlEditGetLineCount(EditContext->MultilineEdit);
 
     if (EditContext->Encoding == CP_UTF8_OR_16) {
         EditContext->Encoding = CP_UTF8;
@@ -800,7 +800,7 @@ EditSaveFile(
     SavedEncoding = YoriLibGetMultibyteOutputEncoding();
     YoriLibSetMultibyteOutputEncoding(EditContext->Encoding);
     for (LineIndex = 0; LineIndex < LineCount; LineIndex++) {
-        Line = YoriWinMultilineEditGetLineByIndex(EditContext->MultilineEdit, LineIndex);
+        Line = YoriWinMlEditGetLineByIndex(EditContext->MultilineEdit, LineIndex);
         //
         //  We only need to write lines with contents.  If the line is only
         //  auto indent, then pretend it's empty since the user hasn't
@@ -874,12 +874,12 @@ EditSaveFile(
 
 VOID
 EditSaveButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     );
 
 VOID
 EditSaveAsButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     );
 
 /**
@@ -896,18 +896,18 @@ EditSaveAsButtonClicked(
  */
 BOOLEAN
 EditPromptForSaveIfModified(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl,
+    __in PYORIWIN_CTRL_HANDLE Ctrl,
     __in PEDIT_CONTEXT EditContext
     )
 {
-    if (YoriWinMultilineEditGetModifyState(EditContext->MultilineEdit)) {
-        PYORI_WIN_CTRL_HANDLE Parent;
+    if (YoriWinMlEditGetModifyState(EditContext->MultilineEdit)) {
+        PYORIWIN_CTRL_HANDLE Parent;
         YORI_STRING Title;
         YORI_STRING Text;
         YORI_STRING ButtonText[3];
         DWORD ButtonId;
 
-        Parent = YoriWinGetControlParent(EditContext->MultilineEdit);
+        Parent = YoriWinGetCtrlParent(EditContext->MultilineEdit);
 
         YoriLibConstantString(&Title, _T("Save changes"));
         YoriLibConstantString(&Text, _T("The file has been modified.  Save changes?"));
@@ -915,7 +915,7 @@ EditPromptForSaveIfModified(
         YoriLibConstantString(&ButtonText[1], _T("&No"));
         YoriLibConstantString(&ButtonText[2], _T("&Cancel"));
 
-        ButtonId = YoriDlgMessageBox(YoriWinGetWindowManagerHandle(Parent),
+        ButtonId = YoriDlgMessageBox(YoriWinGetWinMgrHandle(Parent),
                                      &Title,
                                      &Text,
                                      3,
@@ -949,7 +949,7 @@ EditPromptForSaveIfModified(
             //  happen, so cancel.
             //
 
-            if (YoriWinMultilineEditGetModifyState(EditContext->MultilineEdit)) {
+            if (YoriWinMlEditGetModifyState(EditContext->MultilineEdit)) {
                 return FALSE;
             }
         }
@@ -965,24 +965,24 @@ EditPromptForSaveIfModified(
  */
 VOID
 EditNewButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
     PEDIT_CONTEXT EditContext;
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    EditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    EditContext = YoriWinGetCtrlContext(Parent);
 
     if (!EditPromptForSaveIfModified(Ctrl, EditContext)) {
         return;
     }
 
     EditContext->WriteBom = FALSE;
-    YoriWinMultilineEditClear(EditContext->MultilineEdit);
+    YoriWinMlEditClear(EditContext->MultilineEdit);
     YoriLibFreeStringContents(&EditContext->OpenFileName);
     EditUpdateOpenedFileCaption(EditContext);
-    YoriWinMultilineEditSetModifyState(EditContext->MultilineEdit, FALSE);
+    YoriWinMlEditSetModifyState(EditContext->MultilineEdit, FALSE);
 }
 
 /**
@@ -1186,7 +1186,7 @@ EditArrayIndexFromEncoding(
  */
 VOID
 EditOpenButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
     YORI_STRING Title;
@@ -1200,9 +1200,9 @@ EditOpenButtonClicked(
     YORI_ALLOC_SIZE_T EncodingCount;
     BOOLEAN HasBom;
 
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
-    EditContext = YoriWinGetControlContext(Parent);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    EditContext = YoriWinGetCtrlContext(Parent);
 
     EncodingCount = EditPopulateEncodingArray(EncodingValues, TRUE);
 
@@ -1226,7 +1226,7 @@ EditOpenButtonClicked(
     YoriLibConstantString(&Title, _T("Open"));
     YoriLibInitEmptyString(&Text);
 
-    YoriDlgFile(YoriWinGetWindowManagerHandle(Parent),
+    YoriDlgFile(YoriWinGetWinMgrHandle(Parent),
                 &Title,
                 sizeof(CustomOptionArray)/sizeof(CustomOptionArray[0]),
                 CustomOptionArray,
@@ -1262,7 +1262,7 @@ EditOpenButtonClicked(
         YoriLibConstantString(&DialogText, _T("Could not open file"));
         YoriLibConstantString(&ButtonText, _T("Ok"));
 
-        YoriDlgMessageBox(YoriWinGetWindowManagerHandle(Parent),
+        YoriDlgMessageBox(YoriWinGetWinMgrHandle(Parent),
                           &Title,
                           &DialogText,
                           1,
@@ -1277,7 +1277,7 @@ EditOpenButtonClicked(
     YoriLibFreeStringContents(&EditContext->OpenFileName);
     memcpy(&EditContext->OpenFileName, &FullName, sizeof(YORI_STRING));
     EditUpdateOpenedFileCaption(EditContext);
-    YoriWinMultilineEditSetModifyState(EditContext->MultilineEdit, FALSE);
+    YoriWinMlEditSetModifyState(EditContext->MultilineEdit, FALSE);
 
     if (CustomOptionArray[0].SelectedValue != 0) {
         EditContext->ReadOnly = TRUE;
@@ -1285,12 +1285,12 @@ EditOpenButtonClicked(
         EditContext->ReadOnly = FALSE;
     }
 
-    YoriWinMultilineEditSetReadOnly(EditContext->MultilineEdit, EditContext->ReadOnly);
+    YoriWinMlEditSetReadOnly(EditContext->MultilineEdit, EditContext->ReadOnly);
 }
 
 VOID
 EditSaveAsButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     );
 
 /**
@@ -1300,7 +1300,7 @@ EditSaveAsButtonClicked(
  */
 VOID
 EditSaveButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
     YORI_STRING Title;
@@ -1308,9 +1308,9 @@ EditSaveButtonClicked(
     YORI_STRING ButtonText;
     PEDIT_CONTEXT EditContext;
 
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
-    EditContext = YoriWinGetControlContext(Parent);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    EditContext = YoriWinGetCtrlContext(Parent);
 
     if (EditContext->OpenFileName.StartOfString == NULL) {
         EditSaveAsButtonClicked(Ctrl);
@@ -1327,7 +1327,7 @@ EditSaveButtonClicked(
     if (!EditSaveFile(EditContext, &EditContext->OpenFileName)) {
         YoriLibConstantString(&Text, _T("Could not open file for writing"));
 
-        YoriDlgMessageBox(YoriWinGetWindowManagerHandle(Parent),
+        YoriDlgMessageBox(YoriWinGetWinMgrHandle(Parent),
                           &Title,
                           &Text,
                           1,
@@ -1337,7 +1337,7 @@ EditSaveButtonClicked(
 
         return;
     }
-    YoriWinMultilineEditSetModifyState(EditContext->MultilineEdit, FALSE);
+    YoriWinMlEditSetModifyState(EditContext->MultilineEdit, FALSE);
 }
 
 /**
@@ -1347,7 +1347,7 @@ EditSaveButtonClicked(
  */
 VOID
 EditSaveAsButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
     YORI_STRING Title;
@@ -1361,9 +1361,9 @@ EditSaveAsButtonClicked(
     YORI_ALLOC_SIZE_T EncodingCount;
     BOOLEAN HasBom;
 
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
-    EditContext = YoriWinGetControlContext(Parent);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    EditContext = YoriWinGetCtrlContext(Parent);
 
     EncodingCount = EditPopulateEncodingArray(EncodingValues, FALSE);
 
@@ -1391,7 +1391,7 @@ EditSaveAsButtonClicked(
     YoriLibConstantString(&Title, _T("Save As"));
     YoriLibInitEmptyString(&Text);
 
-    YoriDlgFile(YoriWinGetWindowManagerHandle(Parent),
+    YoriDlgFile(YoriWinGetWinMgrHandle(Parent),
                 &Title,
                 sizeof(CustomOptionArray)/sizeof(CustomOptionArray[0]),
                 CustomOptionArray,
@@ -1444,7 +1444,7 @@ EditSaveAsButtonClicked(
         YoriLibConstantString(&ButtonText, _T("Ok"));
         YoriLibConstantString(&Text, _T("Could not open file for writing"));
 
-        YoriDlgMessageBox(YoriWinGetWindowManagerHandle(Parent),
+        YoriDlgMessageBox(YoriWinGetWinMgrHandle(Parent),
                           &Title,
                           &Text,
                           1,
@@ -1457,7 +1457,7 @@ EditSaveAsButtonClicked(
     YoriLibFreeStringContents(&EditContext->OpenFileName);
     memcpy(&EditContext->OpenFileName, &FullName, sizeof(YORI_STRING));
     EditUpdateOpenedFileCaption(EditContext);
-    YoriWinMultilineEditSetModifyState(EditContext->MultilineEdit, FALSE);
+    YoriWinMlEditSetModifyState(EditContext->MultilineEdit, FALSE);
 }
 
 /**
@@ -1467,14 +1467,14 @@ EditSaveAsButtonClicked(
  */
 VOID
 EditExitButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PEDIT_CONTEXT EditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    EditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    EditContext = YoriWinGetCtrlContext(Parent);
 
     if (!EditPromptForSaveIfModified(Ctrl, EditContext)) {
         return;
@@ -1490,28 +1490,28 @@ EditExitButtonClicked(
  */
 VOID
 EditEditButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE EditMenu;
-    PYORI_WIN_CTRL_HANDLE UndoItem;
-    PYORI_WIN_CTRL_HANDLE RedoItem;
-    PYORI_WIN_CTRL_HANDLE CutItem;
-    PYORI_WIN_CTRL_HANDLE CopyItem;
-    PYORI_WIN_CTRL_HANDLE PasteItem;
-    PYORI_WIN_CTRL_HANDLE ClearItem;
+    PYORIWIN_CTRL_HANDLE EditMenu;
+    PYORIWIN_CTRL_HANDLE UndoItem;
+    PYORIWIN_CTRL_HANDLE RedoItem;
+    PYORIWIN_CTRL_HANDLE CutItem;
+    PYORIWIN_CTRL_HANDLE CopyItem;
+    PYORIWIN_CTRL_HANDLE PasteItem;
+    PYORIWIN_CTRL_HANDLE ClearItem;
     BOOLEAN TextSelected;
     YORI_STRING ClipboardText;
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PEDIT_CONTEXT EditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    EditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    EditContext = YoriWinGetCtrlContext(Parent);
 
     YoriLibInitEmptyString(&ClipboardText);
-    YoriLibPasteTextWithProcessFallback(&ClipboardText);
+    YoriLibPasteTextProcFallback(&ClipboardText);
 
-    TextSelected = YoriWinMultilineEditSelectionActive(EditContext->MultilineEdit);
+    TextSelected = YoriWinMlEditSelectionActive(EditContext->MultilineEdit);
     EditMenu = YoriWinMenuBarGetSubmenuHandle(Ctrl, NULL, EditContext->EditMenuIndex);
     UndoItem = YoriWinMenuBarGetSubmenuHandle(Ctrl, EditMenu, EditContext->EditUndoMenuIndex);
     RedoItem = YoriWinMenuBarGetSubmenuHandle(Ctrl, EditMenu, EditContext->EditRedoMenuIndex);
@@ -1520,13 +1520,13 @@ EditEditButtonClicked(
     PasteItem = YoriWinMenuBarGetSubmenuHandle(Ctrl, EditMenu, EditContext->EditPasteMenuIndex);
     ClearItem = YoriWinMenuBarGetSubmenuHandle(Ctrl, EditMenu, EditContext->EditClearMenuIndex);
 
-    if (YoriWinMultilineEditIsUndoAvailable(EditContext->MultilineEdit)) {
+    if (YoriWinMlEditIsUndoAvailable(EditContext->MultilineEdit)) {
         YoriWinMenuBarEnableMenuItem(UndoItem);
     } else {
         YoriWinMenuBarDisableMenuItem(UndoItem);
     }
 
-    if (YoriWinMultilineEditIsRedoAvailable(EditContext->MultilineEdit)) {
+    if (YoriWinMlEditIsRedoAvailable(EditContext->MultilineEdit)) {
         YoriWinMenuBarEnableMenuItem(RedoItem);
     } else {
         YoriWinMenuBarDisableMenuItem(RedoItem);
@@ -1562,15 +1562,15 @@ EditEditButtonClicked(
  */
 VOID
 EditUndoButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PEDIT_CONTEXT EditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    EditContext = YoriWinGetControlContext(Parent);
-    YoriWinMultilineEditUndo(EditContext->MultilineEdit);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    EditContext = YoriWinGetCtrlContext(Parent);
+    YoriWinMlEditUndo(EditContext->MultilineEdit);
 }
 
 /**
@@ -1580,15 +1580,15 @@ EditUndoButtonClicked(
  */
 VOID
 EditRedoButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PEDIT_CONTEXT EditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    EditContext = YoriWinGetControlContext(Parent);
-    YoriWinMultilineEditRedo(EditContext->MultilineEdit);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    EditContext = YoriWinGetCtrlContext(Parent);
+    YoriWinMlEditRedo(EditContext->MultilineEdit);
 }
 
 
@@ -1599,15 +1599,15 @@ EditRedoButtonClicked(
  */
 VOID
 EditCutButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PEDIT_CONTEXT EditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    EditContext = YoriWinGetControlContext(Parent);
-    YoriWinMultilineEditCutSelectedText(EditContext->MultilineEdit);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    EditContext = YoriWinGetCtrlContext(Parent);
+    YoriWinMlEditCutSelectedText(EditContext->MultilineEdit);
 }
 
 /**
@@ -1617,15 +1617,15 @@ EditCutButtonClicked(
  */
 VOID
 EditCopyButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PEDIT_CONTEXT EditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    EditContext = YoriWinGetControlContext(Parent);
-    YoriWinMultilineEditCopySelectedText(EditContext->MultilineEdit);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    EditContext = YoriWinGetCtrlContext(Parent);
+    YoriWinMlEditCopySelectedText(EditContext->MultilineEdit);
 }
 
 /**
@@ -1635,15 +1635,15 @@ EditCopyButtonClicked(
  */
 VOID
 EditPasteButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PEDIT_CONTEXT EditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    EditContext = YoriWinGetControlContext(Parent);
-    YoriWinMultilineEditPasteText(EditContext->MultilineEdit);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    EditContext = YoriWinGetCtrlContext(Parent);
+    YoriWinMlEditPasteText(EditContext->MultilineEdit);
 }
 
 /**
@@ -1653,15 +1653,15 @@ EditPasteButtonClicked(
  */
 VOID
 EditClearButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PEDIT_CONTEXT EditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    EditContext = YoriWinGetControlContext(Parent);
-    YoriWinMultilineEditDeleteSelection(EditContext->MultilineEdit);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    EditContext = YoriWinGetCtrlContext(Parent);
+    YoriWinMlEditDeleteSelection(EditContext->MultilineEdit);
 }
 
 /**
@@ -1705,7 +1705,7 @@ EditFindNextMatchingString(
         return FALSE;
     }
 
-    LineCount = YoriWinMultilineEditGetLineCount(EditContext->MultilineEdit);
+    LineCount = YoriWinMlEditGetLineCount(EditContext->MultilineEdit);
     if (LineCount == 0) {
         return FALSE;
     }
@@ -1717,7 +1717,7 @@ EditFindNextMatchingString(
     //  account for the substring offset.
     //
 
-    Line = YoriWinMultilineEditGetLineByIndex(EditContext->MultilineEdit, StartLine);
+    Line = YoriWinMlEditGetLineByIndex(EditContext->MultilineEdit, StartLine);
 
     if (StartOffset < Line->LengthInChars) {
         YoriLibInitEmptyString(&Substring);
@@ -1741,7 +1741,7 @@ EditFindNextMatchingString(
     //
 
     for (LineIndex = StartLine + 1; LineIndex < LineCount; LineIndex++) {
-        Line = YoriWinMultilineEditGetLineByIndex(EditContext->MultilineEdit, LineIndex);
+        Line = YoriWinMlEditGetLineByIndex(EditContext->MultilineEdit, LineIndex);
         if (EditContext->SearchMatchCase) {
             Match = YoriLibFindFirstMatchSubstr(Line, 1, &EditContext->SearchString, &Offset);
         } else {
@@ -1798,7 +1798,7 @@ EditFindPreviousMatchingString(
         return FALSE;
     }
 
-    LineCount = YoriWinMultilineEditGetLineCount(EditContext->MultilineEdit);
+    LineCount = YoriWinMlEditGetLineCount(EditContext->MultilineEdit);
     if (LineCount == 0) {
         return FALSE;
     }
@@ -1810,7 +1810,7 @@ EditFindPreviousMatchingString(
     //  it.
     //
 
-    Line = YoriWinMultilineEditGetLineByIndex(EditContext->MultilineEdit, StartLine);
+    Line = YoriWinMlEditGetLineByIndex(EditContext->MultilineEdit, StartLine);
     YoriLibInitEmptyString(&Substring);
     Substring.StartOfString = Line->StartOfString;
     Substring.LengthInChars = Line->LengthInChars;
@@ -1836,7 +1836,7 @@ EditFindPreviousMatchingString(
     //
 
     for (LineIndex = StartLine; LineIndex > 0; LineIndex--) {
-        Line = YoriWinMultilineEditGetLineByIndex(EditContext->MultilineEdit, LineIndex - 1);
+        Line = YoriWinMlEditGetLineByIndex(EditContext->MultilineEdit, LineIndex - 1);
         if (EditContext->SearchMatchCase) {
             Match = YoriLibFindLastMatchSubstr(Line, 1, &EditContext->SearchString, &Offset);
         } else {
@@ -1878,8 +1878,8 @@ EditFindNextFromCurrentPosition(
     //  selection.  If not, start from the cursor.
     //
 
-    if (!YoriWinMultilineEditGetSelectionRange(EditContext->MultilineEdit, &CursorLine, &CursorOffset, &SelectionEndLine, &SelectionEndOffset)) {
-        YoriWinMultilineEditGetCursorLocation(EditContext->MultilineEdit, &CursorOffset, &CursorLine);
+    if (!YoriWinMlEditGetSelectionRange(EditContext->MultilineEdit, &CursorLine, &CursorOffset, &SelectionEndLine, &SelectionEndOffset)) {
+        YoriWinMlEditGetCursorPoint(EditContext->MultilineEdit, &CursorOffset, &CursorLine);
     } else {
 
         //
@@ -1891,7 +1891,7 @@ EditFindNextFromCurrentPosition(
 
     if (EditFindNextMatchingString(EditContext, CursorLine, CursorOffset, &NextMatchLine, &NextMatchOffset)) {
 
-        YoriWinMultilineEditSetSelectionRange(EditContext->MultilineEdit, NextMatchLine, NextMatchOffset, NextMatchLine, NextMatchOffset + EditContext->SearchString.LengthInChars);
+        YoriWinMlEditSetSelectionRange(EditContext->MultilineEdit, NextMatchLine, NextMatchOffset, NextMatchLine, NextMatchOffset + EditContext->SearchString.LengthInChars);
         return TRUE;
     }
 
@@ -1905,18 +1905,18 @@ EditFindNextFromCurrentPosition(
  */
 VOID
 EditFindButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
     YORI_STRING Title;
     YORI_STRING Text;
     YORI_STRING InitialText;
     BOOLEAN MatchCase;
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PEDIT_CONTEXT EditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    EditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    EditContext = YoriWinGetCtrlContext(Parent);
 
     YoriLibConstantString(&Title, _T("Find"));
     YoriLibInitEmptyString(&Text);
@@ -1926,16 +1926,16 @@ EditFindButtonClicked(
     //
 
     YoriLibInitEmptyString(&InitialText);
-    if (YoriWinMultilineEditSelectionActive(EditContext->MultilineEdit)) {
+    if (YoriWinMlEditSelectionActive(EditContext->MultilineEdit)) {
         YORI_STRING Newline;
 
         YoriLibInitEmptyString(&Newline);
-        if (!YoriWinMultilineEditGetSelectedText(EditContext->MultilineEdit, &Newline, &InitialText)) {
+        if (!YoriWinMlEditGetSelectedText(EditContext->MultilineEdit, &Newline, &InitialText)) {
             YoriLibInitEmptyString(&InitialText);
         }
     }
 
-    if (!YoriDlgFindText(YoriWinGetWindowManagerHandle(Parent),
+    if (!YoriDlgFindText(YoriWinGetWinMgrHandle(Parent),
                          &Title,
                          &InitialText,
                          &MatchCase,
@@ -1962,7 +1962,7 @@ EditFindButtonClicked(
         YoriLibConstantString(&Text, _T("Text not found."));
         YoriLibConstantString(&ButtonText[0], _T("&Ok"));
 
-        YoriDlgMessageBox(YoriWinGetWindowManagerHandle(Parent),
+        YoriDlgMessageBox(YoriWinGetWinMgrHandle(Parent),
                           &Title,
                           &Text,
                           1,
@@ -1979,14 +1979,14 @@ EditFindButtonClicked(
  */
 VOID
 EditFindNextButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PEDIT_CONTEXT EditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    EditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    EditContext = YoriWinGetCtrlContext(Parent);
 
     if (EditContext->SearchString.LengthInChars == 0) {
         return;
@@ -2001,7 +2001,7 @@ EditFindNextButtonClicked(
         YoriLibConstantString(&Text, _T("No more matches found."));
         YoriLibConstantString(&ButtonText[0], _T("&Ok"));
 
-        YoriDlgMessageBox(YoriWinGetWindowManagerHandle(Parent),
+        YoriDlgMessageBox(YoriWinGetWinMgrHandle(Parent),
                           &Title,
                           &Text,
                           1,
@@ -2018,21 +2018,21 @@ EditFindNextButtonClicked(
  */
 VOID
 EditFindPreviousButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
     YORI_ALLOC_SIZE_T CursorOffset;
     YORI_ALLOC_SIZE_T CursorLine;
     YORI_ALLOC_SIZE_T NextMatchLine;
     YORI_ALLOC_SIZE_T NextMatchOffset;
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PEDIT_CONTEXT EditContext;
 
     YORI_ALLOC_SIZE_T SelectionEndLine;
     YORI_ALLOC_SIZE_T SelectionEndOffset;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    EditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    EditContext = YoriWinGetCtrlContext(Parent);
 
     if (EditContext->SearchString.LengthInChars == 0) {
         return;
@@ -2043,8 +2043,8 @@ EditFindPreviousButtonClicked(
     //  beginning of the selection.  If not, start from the cursor.
     //
 
-    if (!YoriWinMultilineEditGetSelectionRange(EditContext->MultilineEdit, &CursorLine, &CursorOffset, &SelectionEndLine, &SelectionEndOffset)) {
-        YoriWinMultilineEditGetCursorLocation(EditContext->MultilineEdit, &CursorOffset, &CursorLine);
+    if (!YoriWinMlEditGetSelectionRange(EditContext->MultilineEdit, &CursorLine, &CursorOffset, &SelectionEndLine, &SelectionEndOffset)) {
+        YoriWinMlEditGetCursorPoint(EditContext->MultilineEdit, &CursorOffset, &CursorLine);
     } else {
 
         //
@@ -2061,7 +2061,7 @@ EditFindPreviousButtonClicked(
 
     if (EditFindPreviousMatchingString(EditContext, CursorLine, CursorOffset, &NextMatchLine, &NextMatchOffset)) {
 
-        YoriWinMultilineEditSetSelectionRange(EditContext->MultilineEdit, NextMatchLine, NextMatchOffset, NextMatchLine, NextMatchOffset + EditContext->SearchString.LengthInChars);
+        YoriWinMlEditSetSelectionRange(EditContext->MultilineEdit, NextMatchLine, NextMatchOffset, NextMatchLine, NextMatchOffset + EditContext->SearchString.LengthInChars);
     } else {
         YORI_STRING Title;
         YORI_STRING Text;
@@ -2071,7 +2071,7 @@ EditFindPreviousButtonClicked(
         YoriLibConstantString(&Text, _T("No more matches found."));
         YoriLibConstantString(&ButtonText[0], _T("&Ok"));
 
-        YoriDlgMessageBox(YoriWinGetWindowManagerHandle(Parent),
+        YoriDlgMessageBox(YoriWinGetWinMgrHandle(Parent),
                           &Title,
                           &Text,
                           1,
@@ -2088,10 +2088,10 @@ EditFindPreviousButtonClicked(
  */
 VOID
 EditChangeButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr;
+    PYORIWIN_WINMGR_HANDLE WinMgr;
     YORI_STRING Title;
     YORI_STRING OldText;
     YORI_STRING NewText;
@@ -2099,7 +2099,7 @@ EditChangeButtonClicked(
     BOOLEAN MatchCase;
     BOOLEAN ReplaceAll;
     BOOLEAN MatchFound;
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PEDIT_CONTEXT EditContext;
     YORI_ALLOC_SIZE_T StartLine;
     YORI_ALLOC_SIZE_T StartOffset;
@@ -2107,16 +2107,16 @@ EditChangeButtonClicked(
     YORI_ALLOC_SIZE_T NextMatchOffset;
     WORD DialogTop;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    EditContext = YoriWinGetControlContext(Parent);
-    WinMgr = YoriWinGetWindowManagerHandle(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    EditContext = YoriWinGetCtrlContext(Parent);
+    WinMgr = YoriWinGetWinMgrHandle(Parent);
     YoriLibInitEmptyString(&OldText);
     YoriLibInitEmptyString(&NewText);
     ReplaceAll = FALSE;
     MatchCase = FALSE;
     MatchFound = FALSE;
 
-    YoriWinMultilineEditGetCursorLocation(EditContext->MultilineEdit, &StartOffset, &StartLine);
+    YoriWinMlEditGetCursorPoint(EditContext->MultilineEdit, &StartOffset, &StartLine);
 
     while(TRUE) {
 
@@ -2133,11 +2133,11 @@ EditChangeButtonClicked(
                 InitialBeforeText.StartOfString = OldText.StartOfString;
                 InitialBeforeText.LengthInChars = OldText.LengthInChars;
             } else {
-                if (YoriWinMultilineEditSelectionActive(EditContext->MultilineEdit)) {
+                if (YoriWinMlEditSelectionActive(EditContext->MultilineEdit)) {
                     YORI_STRING Newline;
 
                     YoriLibInitEmptyString(&Newline);
-                    if (!YoriWinMultilineEditGetSelectedText(EditContext->MultilineEdit, &Newline, &InitialBeforeText)) {
+                    if (!YoriWinMlEditGetSelectedText(EditContext->MultilineEdit, &Newline, &InitialBeforeText)) {
                         YoriLibInitEmptyString(&InitialBeforeText);
                         InitialBeforeText.StartOfString = OldText.StartOfString;
                         InitialBeforeText.LengthInChars = OldText.LengthInChars;
@@ -2169,9 +2169,9 @@ EditChangeButtonClicked(
                 DialogHeight = YoriDlgReplaceGetDialogHeight(WinMgr);
                 DialogTop = (SHORT)(WinMgrSize.Y - DialogHeight - 1);
 
-                YoriWinGetControlClientSize(EditContext->MultilineEdit, &ClientSize);
-                YoriWinMultilineEditGetCursorLocation(EditContext->MultilineEdit, &CursorOffset, &CursorLine);
-                YoriWinMultilineEditGetViewportLocation(EditContext->MultilineEdit, &ViewportLeft, &ViewportTop);
+                YoriWinGetCtrlClientSize(EditContext->MultilineEdit, &ClientSize);
+                YoriWinMlEditGetCursorPoint(EditContext->MultilineEdit, &CursorOffset, &CursorLine);
+                YoriWinMlEditGetViewportPoint(EditContext->MultilineEdit, &ViewportLeft, &ViewportTop);
 
                 RemainingEditHeight = (SHORT)(ClientSize.Y - DialogHeight);
 
@@ -2181,7 +2181,7 @@ EditChangeButtonClicked(
                         ViewportLeft = 0;
                     }
 
-                    YoriWinMultilineEditSetViewportLocation(EditContext->MultilineEdit, ViewportLeft, ViewportTop);
+                    YoriWinMlEditSetViewportPoint(EditContext->MultilineEdit, ViewportLeft, ViewportTop);
                 }
 
                 //
@@ -2236,8 +2236,8 @@ EditChangeButtonClicked(
         }
 
         if (MatchFound) {
-            YoriWinMultilineEditDeleteSelection(EditContext->MultilineEdit);
-            YoriWinMultilineEditInsertTextAtCursor(EditContext->MultilineEdit, &NewText);
+            YoriWinMlEditDeleteSelection(EditContext->MultilineEdit);
+            YoriWinMlEditInsertTextAtCursor(EditContext->MultilineEdit, &NewText);
             StartOffset = StartOffset + NewText.LengthInChars;
         }
 
@@ -2253,7 +2253,7 @@ EditChangeButtonClicked(
         //  it still needs to be updated once before returning to the user.
         //
 
-        YoriWinMultilineEditSetSelectionRange(EditContext->MultilineEdit, NextMatchLine, NextMatchOffset, NextMatchLine, NextMatchOffset + EditContext->SearchString.LengthInChars);
+        YoriWinMlEditSetSelectionRange(EditContext->MultilineEdit, NextMatchLine, NextMatchOffset, NextMatchLine, NextMatchOffset + EditContext->SearchString.LengthInChars);
         StartLine = NextMatchLine;
         StartOffset = NextMatchOffset;
     }
@@ -2269,23 +2269,23 @@ EditChangeButtonClicked(
  */
 VOID
 EditGoToLineButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
     YORI_STRING Title;
     YORI_STRING Text;
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PEDIT_CONTEXT EditContext;
     YORI_MAX_SIGNED_T llNewLine;
     YORI_ALLOC_SIZE_T CharsConsumed;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    EditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    EditContext = YoriWinGetCtrlContext(Parent);
 
     YoriLibConstantString(&Title, _T("Go to line"));
     YoriLibInitEmptyString(&Text);
 
-    YoriDlgInput(YoriWinGetWindowManagerHandle(Parent),
+    YoriDlgInput(YoriWinGetWinMgrHandle(Parent),
                  &Title,
                  TRUE,
                  &Text);
@@ -2304,7 +2304,7 @@ EditGoToLineButtonClicked(
             NewLine--;
         }
 
-        YoriWinMultilineEditSetCursorLocation(EditContext->MultilineEdit, 0, NewLine);
+        YoriWinMlEditSetCursorPoint(EditContext->MultilineEdit, 0, NewLine);
     }
 
     YoriLibFreeStringContents(&Text);
@@ -2317,22 +2317,22 @@ EditGoToLineButtonClicked(
  */
 VOID
 EditDisplayOptionsButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PEDIT_CONTEXT EditContext;
     YORI_ALLOC_SIZE_T NewTabWidth;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    EditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    EditContext = YoriWinGetCtrlContext(Parent);
 
-    if (!EditOpts(YoriWinGetWindowManagerHandle(Parent), EditContext->TabWidth, &NewTabWidth)) {
+    if (!EditOpts(YoriWinGetWinMgrHandle(Parent), EditContext->TabWidth, &NewTabWidth)) {
         return;
     }
 
     EditContext->TabWidth = NewTabWidth;
-    YoriWinMultilineEditSetTabWidth(EditContext->MultilineEdit, NewTabWidth);
+    YoriWinMlEditSetTabWidth(EditContext->MultilineEdit, NewTabWidth);
 }
 
 /**
@@ -2343,16 +2343,16 @@ EditDisplayOptionsButtonClicked(
  */
 VOID
 EditTraditionalNavigationOptionsButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    PYORI_WIN_CTRL_HANDLE OptionsMenu;
-    PYORI_WIN_CTRL_HANDLE TraditionalNavigationMenuItem;
+    PYORIWIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE OptionsMenu;
+    PYORIWIN_CTRL_HANDLE TraditionalNavigationMenuItem;
 
     PEDIT_CONTEXT EditContext;
-    Parent = YoriWinGetControlParent(Ctrl);
-    EditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    EditContext = YoriWinGetCtrlContext(Parent);
 
     OptionsMenu = YoriWinMenuBarGetSubmenuHandle(Ctrl, NULL, EditContext->OptionsMenuIndex);
     TraditionalNavigationMenuItem = YoriWinMenuBarGetSubmenuHandle(Ctrl, OptionsMenu, EditContext->OptionsTraditionalMenuIndex);
@@ -2365,7 +2365,7 @@ EditTraditionalNavigationOptionsButtonClicked(
         EditContext->TraditionalNavigation = TRUE;
         YoriWinMenuBarCheckMenuItem(TraditionalNavigationMenuItem);
     }
-    YoriWinMultilineEditSetTraditionalNavigation(EditContext->MultilineEdit, EditContext->TraditionalNavigation);
+    YoriWinMlEditSetTradNavigation(EditContext->MultilineEdit, EditContext->TraditionalNavigation);
 }
 
 /**
@@ -2375,16 +2375,16 @@ EditTraditionalNavigationOptionsButtonClicked(
  */
 VOID
 EditAutoIndentOptionsButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    PYORI_WIN_CTRL_HANDLE OptionsMenu;
-    PYORI_WIN_CTRL_HANDLE AutoIndentMenuItem;
+    PYORIWIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE OptionsMenu;
+    PYORIWIN_CTRL_HANDLE AutoIndentMenuItem;
 
     PEDIT_CONTEXT EditContext;
-    Parent = YoriWinGetControlParent(Ctrl);
-    EditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    EditContext = YoriWinGetCtrlContext(Parent);
 
     OptionsMenu = YoriWinMenuBarGetSubmenuHandle(Ctrl, NULL, EditContext->OptionsMenuIndex);
     AutoIndentMenuItem = YoriWinMenuBarGetSubmenuHandle(Ctrl, OptionsMenu, EditContext->OptionsAutoIndentMenuIndex);
@@ -2397,7 +2397,7 @@ EditAutoIndentOptionsButtonClicked(
         EditContext->AutoIndent = TRUE;
         YoriWinMenuBarCheckMenuItem(AutoIndentMenuItem);
     }
-    YoriWinMultilineEditSetAutoIndent(EditContext->MultilineEdit, EditContext->AutoIndent);
+    YoriWinMlEditSetAutoIndent(EditContext->MultilineEdit, EditContext->AutoIndent);
 }
 
 /**
@@ -2407,16 +2407,16 @@ EditAutoIndentOptionsButtonClicked(
  */
 VOID
 EditExpandTabOptionsButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    PYORI_WIN_CTRL_HANDLE OptionsMenu;
-    PYORI_WIN_CTRL_HANDLE ExpandTabMenuItem;
+    PYORIWIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE OptionsMenu;
+    PYORIWIN_CTRL_HANDLE ExpandTabMenuItem;
 
     PEDIT_CONTEXT EditContext;
-    Parent = YoriWinGetControlParent(Ctrl);
-    EditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    EditContext = YoriWinGetCtrlContext(Parent);
 
     OptionsMenu = YoriWinMenuBarGetSubmenuHandle(Ctrl, NULL, EditContext->OptionsMenuIndex);
     ExpandTabMenuItem = YoriWinMenuBarGetSubmenuHandle(Ctrl, OptionsMenu, EditContext->OptionsExpandTabMenuIndex);
@@ -2429,7 +2429,7 @@ EditExpandTabOptionsButtonClicked(
         EditContext->ExpandTab = TRUE;
         YoriWinMenuBarCheckMenuItem(ExpandTabMenuItem);
     }
-    YoriWinMultilineEditSetExpandTab(EditContext->MultilineEdit, EditContext->ExpandTab);
+    YoriWinMlEditSetExpandTab(EditContext->MultilineEdit, EditContext->ExpandTab);
 }
 
 /**
@@ -2440,10 +2440,10 @@ EditExpandTabOptionsButtonClicked(
  */
 VOID
 EditSaveDefaultSettingsOptionsButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     HKEY hKey;
     DWORD Err;
     DWORD Disposition;
@@ -2453,8 +2453,8 @@ EditSaveDefaultSettingsOptionsButtonClicked(
     YORI_STRING Text;
     YORI_STRING ButtonText[1];
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    EditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    EditContext = YoriWinGetCtrlContext(Parent);
 
     YoriLibLoadAdvApi32Functions();
 
@@ -2466,7 +2466,7 @@ EditSaveDefaultSettingsOptionsButtonClicked(
         YoriLibConstantString(&Text, _T("The operating system does not support registry updates."));
         YoriLibConstantString(&ButtonText[0], _T("&Ok"));
 
-        YoriDlgMessageBox(YoriWinGetWindowManagerHandle(Parent),
+        YoriDlgMessageBox(YoriWinGetWinMgrHandle(Parent),
                           &Title,
                           &Text,
                           1,
@@ -2490,7 +2490,7 @@ EditSaveDefaultSettingsOptionsButtonClicked(
         YoriLibConstantString(&Text, _T("Could not open registry key."));
         YoriLibConstantString(&ButtonText[0], _T("&Ok"));
 
-        YoriDlgMessageBox(YoriWinGetWindowManagerHandle(Parent),
+        YoriDlgMessageBox(YoriWinGetWinMgrHandle(Parent),
                           &Title,
                           &Text,
                           1,
@@ -2548,14 +2548,14 @@ Exit:
  */
 VOID
 EditSaveDefaultsOptionsButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PEDIT_CONTEXT EditContext;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    EditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    EditContext = YoriWinGetCtrlContext(Parent);
 }
 
 /**
@@ -2565,7 +2565,7 @@ EditSaveDefaultsOptionsButtonClicked(
  */
 VOID
 EditAboutButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
     YORI_STRING Title;
@@ -2576,8 +2576,8 @@ EditAboutButtonClicked(
     YORI_ALLOC_SIZE_T Index;
     DWORD ButtonClicked;
 
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
 
     YoriLibConstantString(&Title, _T("About"));
     YoriLibInitEmptyString(&Text);
@@ -2631,7 +2631,7 @@ EditAboutButtonClicked(
     YoriLibConstantString(&ButtonTexts[0], _T("&Ok"));
     YoriLibConstantString(&ButtonTexts[1], _T("&View License..."));
 
-    ButtonClicked = YoriDlgAbout(YoriWinGetWindowManagerHandle(Parent),
+    ButtonClicked = YoriDlgAbout(YoriWinGetWinMgrHandle(Parent),
                                  &Title,
                                  &CenteredText,
                                  &LeftText,
@@ -2663,7 +2663,7 @@ EditAboutButtonClicked(
                 }
             }
 
-            YoriDlgAbout(YoriWinGetWindowManagerHandle(Parent),
+            YoriDlgAbout(YoriWinGetWinMgrHandle(Parent),
                          &Title,
                          &CenteredText,
                          &Text,
@@ -2689,17 +2689,17 @@ EditAboutButtonClicked(
  */
 VOID
 EditNotifyCursorMove(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl,
+    __in PYORIWIN_CTRL_HANDLE Ctrl,
     __in DWORD CursorOffset,
     __in DWORD CursorLine
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE Parent;
     PEDIT_CONTEXT EditContext;
     YORI_STRING NewStatus;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    EditContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    EditContext = YoriWinGetCtrlContext(Parent);
 
     YoriLibInitEmptyString(&NewStatus);
     YoriLibYPrintf(&NewStatus, _T("%06i:%04i "), CursorLine + 1, CursorOffset + 1);
@@ -2727,49 +2727,49 @@ EditNotifyCursorMove(
  @return Pointer to the menu bar control if it was successfully created
          and populated, or NULL on failure.
  */
-PYORI_WIN_CTRL_HANDLE
+PYORIWIN_CTRL_HANDLE
 EditPopulateMenuBar(
     __in PEDIT_CONTEXT EditContext,
-    __in PYORI_WIN_WINDOW_HANDLE Parent
+    __in PYORIWIN_WINDOW_HANDLE Parent
     )
 {
-    YORI_WIN_MENU_ENTRY FileMenuEntries[6];
-    YORI_WIN_MENU_ENTRY EditMenuEntries[7];
-    YORI_WIN_MENU_ENTRY SearchMenuEntries[6];
-    YORI_WIN_MENU_ENTRY OptionsMenuEntries[6];
-    YORI_WIN_MENU_ENTRY HelpMenuEntries[1];
-    YORI_WIN_MENU_ENTRY MenuEntries[5];
-    YORI_WIN_MENU MenuBarItems;
-    PYORI_WIN_CTRL_HANDLE Ctrl;
+    YORIWIN_MENU_ENTRY FileMenuEntries[6];
+    YORIWIN_MENU_ENTRY EditMenuEntries[7];
+    YORIWIN_MENU_ENTRY SearchMenuEntries[6];
+    YORIWIN_MENU_ENTRY OptionsMenuEntries[6];
+    YORIWIN_MENU_ENTRY HelpMenuEntries[1];
+    YORIWIN_MENU_ENTRY MenuEntries[5];
+    YORIWIN_MENU MenuBarItems;
+    PYORIWIN_CTRL_HANDLE Ctrl;
     DWORD MenuIndex;
 
     ZeroMemory(&FileMenuEntries, sizeof(FileMenuEntries));
     MenuIndex = 0;
     YoriLibConstantString(&FileMenuEntries[MenuIndex].Caption, _T("&New"));
     YoriLibConstantString(&FileMenuEntries[MenuIndex].Hotkey, _T("Ctrl+N"));
-    FileMenuEntries[MenuIndex].NotifyCallback = EditNewButtonClicked;
+    FileMenuEntries[MenuIndex].NotifyCbk = EditNewButtonClicked;
 
     MenuIndex++;
     YoriLibConstantString(&FileMenuEntries[MenuIndex].Caption, _T("&Open..."));
     YoriLibConstantString(&FileMenuEntries[MenuIndex].Hotkey, _T("Ctrl+O"));
-    FileMenuEntries[MenuIndex].NotifyCallback = EditOpenButtonClicked;
+    FileMenuEntries[MenuIndex].NotifyCbk = EditOpenButtonClicked;
 
     MenuIndex++;
     YoriLibConstantString(&FileMenuEntries[MenuIndex].Caption, _T("&Save"));
-    FileMenuEntries[MenuIndex].NotifyCallback = EditSaveButtonClicked;
+    FileMenuEntries[MenuIndex].NotifyCbk = EditSaveButtonClicked;
     YoriLibConstantString(&FileMenuEntries[MenuIndex].Hotkey, _T("Ctrl+S"));
 
     MenuIndex++;
     YoriLibConstantString(&FileMenuEntries[MenuIndex].Caption, _T("Save &As..."));
-    FileMenuEntries[MenuIndex].NotifyCallback = EditSaveAsButtonClicked;
+    FileMenuEntries[MenuIndex].NotifyCbk = EditSaveAsButtonClicked;
 
     MenuIndex++;
-    FileMenuEntries[MenuIndex].Flags = YORI_WIN_MENU_ENTRY_SEPERATOR;
+    FileMenuEntries[MenuIndex].Flags = YORIWIN_MENU_ENTRY_SEPERATOR;
 
     MenuIndex++;
     YoriLibConstantString(&FileMenuEntries[MenuIndex].Caption, _T("E&xit"));
     YoriLibConstantString(&FileMenuEntries[MenuIndex].Hotkey, _T("Ctrl+Q"));
-    FileMenuEntries[MenuIndex].NotifyCallback = EditExitButtonClicked;
+    FileMenuEntries[MenuIndex].NotifyCbk = EditExitButtonClicked;
 
     MenuIndex = 0;
     ZeroMemory(&EditMenuEntries, sizeof(EditMenuEntries));
@@ -2777,109 +2777,109 @@ EditPopulateMenuBar(
     EditContext->EditUndoMenuIndex = MenuIndex;
     YoriLibConstantString(&EditMenuEntries[MenuIndex].Caption, _T("&Undo"));
     YoriLibConstantString(&EditMenuEntries[MenuIndex].Hotkey, _T("Ctrl+Z"));
-    EditMenuEntries[MenuIndex].NotifyCallback = EditUndoButtonClicked;
+    EditMenuEntries[MenuIndex].NotifyCbk = EditUndoButtonClicked;
 
     MenuIndex++;
     EditContext->EditRedoMenuIndex = MenuIndex;
     YoriLibConstantString(&EditMenuEntries[MenuIndex].Caption, _T("&Redo"));
     YoriLibConstantString(&EditMenuEntries[MenuIndex].Hotkey, _T("Ctrl+R"));
-    EditMenuEntries[MenuIndex].NotifyCallback = EditRedoButtonClicked;
+    EditMenuEntries[MenuIndex].NotifyCbk = EditRedoButtonClicked;
 
     MenuIndex++;
-    EditMenuEntries[MenuIndex].Flags = YORI_WIN_MENU_ENTRY_SEPERATOR;
+    EditMenuEntries[MenuIndex].Flags = YORIWIN_MENU_ENTRY_SEPERATOR;
 
     MenuIndex++;
     EditContext->EditCutMenuIndex = MenuIndex;
     YoriLibConstantString(&EditMenuEntries[MenuIndex].Caption, _T("Cu&t"));
     YoriLibConstantString(&EditMenuEntries[MenuIndex].Hotkey, _T("Ctrl+X"));
-    EditMenuEntries[MenuIndex].NotifyCallback = EditCutButtonClicked;
+    EditMenuEntries[MenuIndex].NotifyCbk = EditCutButtonClicked;
 
     MenuIndex++;
     EditContext->EditCopyMenuIndex = MenuIndex;
     YoriLibConstantString(&EditMenuEntries[MenuIndex].Caption, _T("&Copy"));
     YoriLibConstantString(&EditMenuEntries[MenuIndex].Hotkey, _T("Ctrl+C"));
-    EditMenuEntries[MenuIndex].NotifyCallback = EditCopyButtonClicked;
+    EditMenuEntries[MenuIndex].NotifyCbk = EditCopyButtonClicked;
 
     MenuIndex++;
     EditContext->EditPasteMenuIndex = MenuIndex;
     YoriLibConstantString(&EditMenuEntries[MenuIndex].Caption, _T("&Paste"));
     YoriLibConstantString(&EditMenuEntries[MenuIndex].Hotkey, _T("Ctrl+V"));
-    EditMenuEntries[MenuIndex].NotifyCallback = EditPasteButtonClicked;
+    EditMenuEntries[MenuIndex].NotifyCbk = EditPasteButtonClicked;
 
     MenuIndex++;
     EditContext->EditClearMenuIndex = MenuIndex;
     YoriLibConstantString(&EditMenuEntries[MenuIndex].Caption, _T("Cl&ear"));
     YoriLibConstantString(&EditMenuEntries[MenuIndex].Hotkey, _T("Del"));
-    EditMenuEntries[MenuIndex].NotifyCallback = EditClearButtonClicked;
+    EditMenuEntries[MenuIndex].NotifyCbk = EditClearButtonClicked;
 
     ZeroMemory(&SearchMenuEntries, sizeof(SearchMenuEntries));
     MenuIndex = 0;
     YoriLibConstantString(&SearchMenuEntries[MenuIndex].Caption, _T("&Find..."));
     YoriLibConstantString(&SearchMenuEntries[MenuIndex].Hotkey, _T("Ctrl+F"));
-    SearchMenuEntries[MenuIndex].NotifyCallback = EditFindButtonClicked;
+    SearchMenuEntries[MenuIndex].NotifyCbk = EditFindButtonClicked;
 
     MenuIndex++;
     YoriLibConstantString(&SearchMenuEntries[MenuIndex].Caption, _T("&Repeat Last Find"));
     YoriLibConstantString(&SearchMenuEntries[MenuIndex].Hotkey, _T("F3"));
-    SearchMenuEntries[MenuIndex].NotifyCallback = EditFindNextButtonClicked;
+    SearchMenuEntries[MenuIndex].NotifyCbk = EditFindNextButtonClicked;
 
     MenuIndex++;
     YoriLibConstantString(&SearchMenuEntries[MenuIndex].Caption, _T("Find &Previous"));
     YoriLibConstantString(&SearchMenuEntries[MenuIndex].Hotkey, _T("Shift+F3"));
-    SearchMenuEntries[MenuIndex].NotifyCallback = EditFindPreviousButtonClicked;
+    SearchMenuEntries[MenuIndex].NotifyCbk = EditFindPreviousButtonClicked;
 
     MenuIndex++;
     YoriLibConstantString(&SearchMenuEntries[MenuIndex].Caption, _T("&Change..."));
-    SearchMenuEntries[MenuIndex].NotifyCallback = EditChangeButtonClicked;
+    SearchMenuEntries[MenuIndex].NotifyCbk = EditChangeButtonClicked;
 
     MenuIndex++;
-    SearchMenuEntries[MenuIndex].Flags = YORI_WIN_MENU_ENTRY_SEPERATOR;
+    SearchMenuEntries[MenuIndex].Flags = YORIWIN_MENU_ENTRY_SEPERATOR;
 
     MenuIndex++;
     YoriLibConstantString(&SearchMenuEntries[MenuIndex].Caption, _T("&Go to line..."));
     YoriLibConstantString(&SearchMenuEntries[MenuIndex].Hotkey, _T("Ctrl+G"));
-    SearchMenuEntries[MenuIndex].NotifyCallback = EditGoToLineButtonClicked;
+    SearchMenuEntries[MenuIndex].NotifyCbk = EditGoToLineButtonClicked;
 
     ZeroMemory(&OptionsMenuEntries, sizeof(OptionsMenuEntries));
     MenuIndex = 0;
     YoriLibConstantString(&OptionsMenuEntries[MenuIndex].Caption, _T("&Display..."));
-    OptionsMenuEntries[MenuIndex].NotifyCallback = EditDisplayOptionsButtonClicked;
+    OptionsMenuEntries[MenuIndex].NotifyCbk = EditDisplayOptionsButtonClicked;
 
     MenuIndex++;
     if (EditContext->TraditionalNavigation) {
-        OptionsMenuEntries[MenuIndex].Flags = YORI_WIN_MENU_ENTRY_CHECKED;
+        OptionsMenuEntries[MenuIndex].Flags = YORIWIN_MENU_ENTRY_CHECKED;
     }
     YoriLibConstantString(&OptionsMenuEntries[MenuIndex].Caption, _T("&Traditional navigation"));
-    OptionsMenuEntries[MenuIndex].NotifyCallback = EditTraditionalNavigationOptionsButtonClicked;
+    OptionsMenuEntries[MenuIndex].NotifyCbk = EditTraditionalNavigationOptionsButtonClicked;
     EditContext->OptionsTraditionalMenuIndex = MenuIndex;
 
     MenuIndex++;
     if (EditContext->AutoIndent) {
-        OptionsMenuEntries[MenuIndex].Flags = YORI_WIN_MENU_ENTRY_CHECKED;
+        OptionsMenuEntries[MenuIndex].Flags = YORIWIN_MENU_ENTRY_CHECKED;
     }
     YoriLibConstantString(&OptionsMenuEntries[MenuIndex].Caption, _T("&Auto indent"));
-    OptionsMenuEntries[MenuIndex].NotifyCallback = EditAutoIndentOptionsButtonClicked;
+    OptionsMenuEntries[MenuIndex].NotifyCbk = EditAutoIndentOptionsButtonClicked;
     EditContext->OptionsAutoIndentMenuIndex = MenuIndex;
 
     MenuIndex++;
     if (EditContext->ExpandTab) {
-        OptionsMenuEntries[MenuIndex].Flags = YORI_WIN_MENU_ENTRY_CHECKED;
+        OptionsMenuEntries[MenuIndex].Flags = YORIWIN_MENU_ENTRY_CHECKED;
     }
     YoriLibConstantString(&OptionsMenuEntries[MenuIndex].Caption, _T("&Expand tab"));
-    OptionsMenuEntries[MenuIndex].NotifyCallback = EditExpandTabOptionsButtonClicked;
+    OptionsMenuEntries[MenuIndex].NotifyCbk = EditExpandTabOptionsButtonClicked;
     EditContext->OptionsExpandTabMenuIndex = MenuIndex;
 
     MenuIndex++;
-    OptionsMenuEntries[MenuIndex].Flags = YORI_WIN_MENU_ENTRY_SEPERATOR;
+    OptionsMenuEntries[MenuIndex].Flags = YORIWIN_MENU_ENTRY_SEPERATOR;
 
     MenuIndex++;
     YoriLibConstantString(&OptionsMenuEntries[MenuIndex].Caption, _T("&Save default settings"));
-    OptionsMenuEntries[MenuIndex].NotifyCallback = EditSaveDefaultSettingsOptionsButtonClicked;
+    OptionsMenuEntries[MenuIndex].NotifyCbk = EditSaveDefaultSettingsOptionsButtonClicked;
 
     ZeroMemory(&HelpMenuEntries, sizeof(HelpMenuEntries));
     MenuIndex = 0;
     YoriLibConstantString(&HelpMenuEntries[MenuIndex].Caption, _T("&About..."));
-    HelpMenuEntries[MenuIndex].NotifyCallback = EditAboutButtonClicked;
+    HelpMenuEntries[MenuIndex].NotifyCbk = EditAboutButtonClicked;
 
     MenuBarItems.ItemCount = 5;
     MenuBarItems.Items = MenuEntries;
@@ -2893,7 +2893,7 @@ EditPopulateMenuBar(
     MenuIndex++;
     EditContext->EditMenuIndex = MenuIndex;
     YoriLibConstantString(&MenuEntries[MenuIndex].Caption, _T("&Edit"));
-    MenuEntries[MenuIndex].NotifyCallback = EditEditButtonClicked;
+    MenuEntries[MenuIndex].NotifyCbk = EditEditButtonClicked;
     MenuEntries[MenuIndex].ChildMenu.ItemCount = sizeof(EditMenuEntries)/sizeof(EditMenuEntries[0]);
     MenuEntries[MenuIndex].ChildMenu.Items = EditMenuEntries;
 
@@ -2950,20 +2950,20 @@ EditPopulateMenuBar(
  */
 VOID
 EditResizeWindowManager(
-    __in PYORI_WIN_WINDOW_HANDLE WindowHandle,
+    __in PYORIWIN_WINDOW_HANDLE WindowHandle,
     __in PSMALL_RECT OldPosition,
     __in PSMALL_RECT NewPosition
     )
 {
     PEDIT_CONTEXT EditContext;
-    PYORI_WIN_CTRL_HANDLE WindowCtrl;
+    PYORIWIN_CTRL_HANDLE WindowCtrl;
     SMALL_RECT Rect;
     COORD NewSize;
 
     UNREFERENCED_PARAMETER(OldPosition);
 
     WindowCtrl = YoriWinGetCtrlFromWindow(WindowHandle);
-    EditContext = YoriWinGetControlContext(WindowCtrl);
+    EditContext = YoriWinGetCtrlContext(WindowCtrl);
 
     NewSize.X = (SHORT)(NewPosition->Right - NewPosition->Left + 1);
     NewSize.Y = (SHORT)(NewPosition->Bottom - NewPosition->Top + 1);
@@ -2999,7 +2999,7 @@ EditResizeWindowManager(
     Rect.Right = (SHORT)(NewSize.X - 1);
     Rect.Bottom = (SHORT)(NewSize.Y - 2);
 
-    YoriWinMultilineEditReposition(EditContext->MultilineEdit, &Rect);
+    YoriWinMlEditReposition(EditContext->MultilineEdit, &Rect);
 
     Rect.Left = 0;
     Rect.Top = (SHORT)(NewSize.Y - 1);
@@ -3023,23 +3023,23 @@ EditCreateMainWindow(
     __in PEDIT_CONTEXT EditContext
     )
 {
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr;
-    PYORI_WIN_CTRL_HANDLE MultilineEdit;
-    PYORI_WIN_WINDOW_HANDLE Parent;
+    PYORIWIN_WINMGR_HANDLE WinMgr;
+    PYORIWIN_CTRL_HANDLE MultilineEdit;
+    PYORIWIN_WINDOW_HANDLE Parent;
     SMALL_RECT Rect;
     COORD WindowSize;
-    PYORI_WIN_CTRL_HANDLE MenuBar;
-    PYORI_WIN_CTRL_HANDLE StatusBar;
+    PYORIWIN_CTRL_HANDLE MenuBar;
+    PYORIWIN_CTRL_HANDLE StatusBar;
     DWORD_PTR Result;
     YORI_STRING Caption;
-    YORI_WIN_COLOR_TABLE_ID ColorTableId;
+    YORIWIN_COLOR_TABLE_ID ColorTableId;
 
     ColorTableId = YoriWinColorTableDefault;
     if (EditContext->UseMonoDisplay) {
         ColorTableId = YoriWinColorTableMono;
     }
 
-    if (!YoriWinOpenWindowManager(TRUE, ColorTableId, &WinMgr)) {
+    if (!YoriWinOpenWinMgr(TRUE, ColorTableId, &WinMgr)) {
         return FALSE;
     }
 
@@ -3048,25 +3048,25 @@ EditCreateMainWindow(
     }
 
     if (!YoriWinGetWinMgrDimensions(WinMgr, &WindowSize)) {
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
     if (WindowSize.X < 60 || WindowSize.Y < 20) {
         YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("edit: window size too small\n"));
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
     if (!YoriWinCreateWindow(WinMgr, WindowSize.X, WindowSize.Y, WindowSize.X, WindowSize.Y, 0, NULL, &Parent)) {
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
     MenuBar = EditPopulateMenuBar(EditContext, Parent);
     if (MenuBar == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
@@ -3077,35 +3077,35 @@ EditCreateMainWindow(
     Rect.Right = (SHORT)(WindowSize.X - 1);
     Rect.Bottom = (SHORT)(WindowSize.Y - 2);
 
-    MultilineEdit = YoriWinMultilineEditCreate(Parent, NULL, &Rect, YORI_WIN_MULTILINE_EDIT_STYLE_VSCROLLBAR);
+    MultilineEdit = YoriWinMlEditCreate(Parent, NULL, &Rect, YORIWIN_MLEDIT_STY_VSCROLLBAR);
     if (MultilineEdit == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
     if (EditContext->TabWidth != (DWORD)-1) {
-        YoriWinMultilineEditSetTabWidth(MultilineEdit, EditContext->TabWidth);
+        YoriWinMlEditSetTabWidth(MultilineEdit, EditContext->TabWidth);
     } else {
-        YoriWinMultilineEditGetTabWidth(MultilineEdit, &EditContext->TabWidth);
+        YoriWinMlEditGetTabWidth(MultilineEdit, &EditContext->TabWidth);
     }
-    YoriWinMultilineEditSetAutoIndent(MultilineEdit, EditContext->AutoIndent);
-    YoriWinMultilineEditSetTraditionalNavigation(MultilineEdit, EditContext->TraditionalNavigation);
-    YoriWinMultilineEditSetExpandTab(MultilineEdit, EditContext->ExpandTab);
+    YoriWinMlEditSetAutoIndent(MultilineEdit, EditContext->AutoIndent);
+    YoriWinMlEditSetTradNavigation(MultilineEdit, EditContext->TraditionalNavigation);
+    YoriWinMlEditSetExpandTab(MultilineEdit, EditContext->ExpandTab);
 
     Rect.Top = (SHORT)(Rect.Bottom + 1);
     Rect.Bottom = Rect.Top;
 
     YoriLibInitEmptyString(&Caption);
 
-    StatusBar = YoriWinLabelCreate(Parent, &Rect, &Caption, YORI_WIN_LABEL_STYLE_RIGHT_ALIGN);
+    StatusBar = YoriWinLabelCreate(Parent, &Rect, &Caption, YORIWIN_LABEL_STY_RIGHT_ALIGN);
     if (StatusBar == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
-    if (YoriLibDoesSystemSupportBackgroundColors()) {
+    if (YoriLibSystemSupportBgColors()) {
         YoriWinLabelSetTextAttributes(StatusBar, BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE);
     }
 
@@ -3114,28 +3114,28 @@ EditCreateMainWindow(
     EditContext->MenuBar = MenuBar;
     EditContext->StatusBar = StatusBar;
 
-    if (YoriLibDoesSystemSupportBackgroundColors()) {
+    if (YoriLibSystemSupportBgColors()) {
         if (EditContext->UseMonoDisplay) {
-            YoriWinMultilineEditSetColor(MultilineEdit,
+            YoriWinMlEditSetColor(MultilineEdit,
                                          FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,
                                          BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE);
         } else {
-            YoriWinMultilineEditSetColor(MultilineEdit,
+            YoriWinMlEditSetColor(MultilineEdit,
                                          BACKGROUND_BLUE | FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,
                                          BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE);
         }
     }
-    YoriWinMultilineEditSetCursorMoveNotifyCallback(MultilineEdit, EditNotifyCursorMove);
+    YoriWinMlEditSetCursorNotifyCbk(MultilineEdit, EditNotifyCursorMove);
 
-    YoriWinSetWindowManagerResizeNotifyCallback(Parent, EditResizeWindowManager);
+    YoriWinSetWinMgrResizeNotifyCbk(Parent, EditResizeWindowManager);
 
     if (EditContext->OpenFileName.StartOfString != NULL) {
         EditLoadFile(EditContext, &EditContext->OpenFileName);
         EditUpdateOpenedFileCaption(EditContext);
-        YoriWinMultilineEditSetReadOnly(EditContext->MultilineEdit, EditContext->ReadOnly);
+        YoriWinMlEditSetReadOnly(EditContext->MultilineEdit, EditContext->ReadOnly);
     }
 
-    YoriWinSetControlContext(Parent, EditContext);
+    YoriWinSetCtrlContext(Parent, EditContext);
     EditNotifyCursorMove(MultilineEdit, 0, 0);
 
     Result = FALSE;
@@ -3144,7 +3144,7 @@ EditCreateMainWindow(
     }
 
     YoriWinDestroyWindow(Parent);
-    YoriWinCloseWindowManager(WinMgr);
+    YoriWinCloseWinMgr(WinMgr);
     return (BOOL)Result;
 }
 

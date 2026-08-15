@@ -33,32 +33,32 @@
 /**
  A structure describing the contents of a list control.
  */
-typedef struct _YORI_WIN_CTRL_LIST {
+typedef struct _YORIWIN_CTRL_LIST {
 
     /**
      A common header for all controls
      */
-    YORI_WIN_CTRL Ctrl;
+    YORIWIN_CTRL Ctrl;
 
     /**
      Pointer to the vertical scroll bar associated with the list.
      */
-    PYORI_WIN_CTRL VScrollCtrl;
+    PYORIWIN_CTRL VScrollCtrl;
 
     /**
      Pointer to the horizontal scroll bar associated with the list.
      */
-    PYORI_WIN_CTRL HScrollCtrl;
+    PYORIWIN_CTRL HScrollCtrl;
 
     /**
      Callback function to notify after a selection has changed.
      */
-    PYORI_WIN_NOTIFY SelectionChangeCallback;
+    PYORIWIN_NOTIFY SelectionChangeCallback;
 
     /**
      The set of options to display in the list
      */
-    YORI_WIN_ITEM_ARRAY ItemArray;
+    YORIWIN_ITEM_ARRAY ItemArray;
 
     /**
      A string of keystrokes that the user has entered indicating the item to
@@ -100,7 +100,7 @@ typedef struct _YORI_WIN_CTRL_LIST {
      The number of character cells for each item when the list is displayed
      horizontally.
      */
-    WORD HorizontalItemWidth;
+    WORD HorizItemWidth;
 
     /**
      The color attributes to display the active item in.
@@ -133,7 +133,7 @@ typedef struct _YORI_WIN_CTRL_LIST {
      If TRUE, items should be displayed horizontally, with multiple items per
      line.  If FALSE, items are displayed vertically.
      */
-    BOOLEAN HorizontalDisplay;
+    BOOLEAN HorizDisplay;
 
     /**
      If TRUE, the control should display a border.
@@ -145,9 +145,9 @@ typedef struct _YORI_WIN_CTRL_LIST {
      the length of items within the list control.  If FALSE, it is still
      possible that a horizontal scrollbar is always present, or never present.
      */
-    BOOLEAN AutoHorizontalScroll;
+    BOOLEAN AutoHorizScroll;
 
-} YORI_WIN_CTRL_LIST, *PYORI_WIN_CTRL_LIST;
+} YORIWIN_CTRL_LIST, FAR *PYORIWIN_CTRL_LIST;
 
 /**
  Move the first displayed option in the list to ensure that the currently
@@ -156,8 +156,8 @@ typedef struct _YORI_WIN_CTRL_LIST {
  @param List Pointer to the list control.
  */
 VOID
-YoriWinListEnsureActiveItemVisible(
-    __inout PYORI_WIN_CTRL_LIST List
+YoriWinListEnsureActiveVisible(
+    __inout PYORIWIN_CTRL_LIST List
     )
 {
     WORD ElementCountToDisplay;
@@ -167,9 +167,9 @@ YoriWinListEnsureActiveItemVisible(
         return;
     }
 
-    YoriWinGetControlClientSize(&List->Ctrl, &ClientSize);
-    if (List->HorizontalDisplay) {
-        ElementCountToDisplay = (WORD)(ClientSize.X / List->HorizontalItemWidth);
+    YoriWinGetCtrlClientSize(&List->Ctrl, &ClientSize);
+    if (List->HorizDisplay) {
+        ElementCountToDisplay = (WORD)(ClientSize.X / List->HorizItemWidth);
     } else {
         ElementCountToDisplay = ClientSize.Y;
     }
@@ -209,7 +209,7 @@ YoriWinListEnsureActiveItemVisible(
  */
 BOOLEAN
 YoriWinListPaintBorder(
-    __inout PYORI_WIN_CTRL_LIST List
+    __inout PYORIWIN_CTRL_LIST List
     )
 {
     SMALL_RECT BorderRect;
@@ -222,7 +222,7 @@ YoriWinListPaintBorder(
         BorderRect.Right = (SHORT)(List->Ctrl.FullRect.Right - List->Ctrl.FullRect.Left);
         BorderRect.Bottom = (SHORT)(List->Ctrl.FullRect.Bottom - List->Ctrl.FullRect.Top);
 
-        YoriWinDrawBorderOnControl(&List->Ctrl, &BorderRect, WindowAttributes, YORI_WIN_BORDER_TYPE_SUNKEN);
+        YoriWinDrawBorderCtrl(&List->Ctrl, &BorderRect, WindowAttributes, YORIWIN_BORDER_TYPE_SUNKEN);
         return TRUE;
     }
     return FALSE;
@@ -230,7 +230,7 @@ YoriWinListPaintBorder(
 
 VOID
 YoriWinListNotifyHScrollChange(
-    __in PYORI_WIN_CTRL_HANDLE ScrollCtrlHandle
+    __in PYORIWIN_CTRL_HANDLE ScrollCtrlHandle
     );
 
 /**
@@ -243,8 +243,8 @@ YoriWinListNotifyHScrollChange(
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 BOOLEAN
-YoriWinListCreateHorizontalScrollbar(
-    __inout PYORI_WIN_CTRL_LIST List
+YoriWinListCreateHorizScrollbar(
+    __inout PYORIWIN_CTRL_LIST List
     )
 {
     SMALL_RECT ScrollBarRect;
@@ -269,14 +269,14 @@ YoriWinListCreateHorizontalScrollbar(
  @return The number of cells per item that can be displayed.
  */
 WORD
-YoriWinListGetVisibleCellCountPerItem(
-    __in PYORI_WIN_CTRL_LIST List
+YoriWinListVisibleCellsPerItem(
+    __in PYORIWIN_CTRL_LIST List
     )
 {
     WORD CharsToDisplay;
     COORD ClientSize;
 
-    YoriWinGetControlClientSize(&List->Ctrl, &ClientSize);
+    YoriWinGetCtrlClientSize(&List->Ctrl, &ClientSize);
 
     CharsToDisplay = (WORD)ClientSize.X;
     if (List->MultiSelect) {
@@ -297,7 +297,7 @@ YoriWinListGetVisibleCellCountPerItem(
  */
 BOOLEAN
 YoriWinListPaintVerticalList(
-    __inout PYORI_WIN_CTRL_LIST List
+    __inout PYORIWIN_CTRL_LIST List
     )
 {
     WORD RowIndex;
@@ -307,27 +307,27 @@ YoriWinListPaintVerticalList(
     WORD ElementCountToDisplay;
     WORD Attributes;
     WORD WindowAttributes;
-    PYORI_WIN_ITEM_ENTRY Element;
+    PYORIWIN_ITEM_ENTRY Element;
     COORD ClientSize;
     YORI_STRING DisplayCells;
     YORI_STRING VisibleString;
-    PYORI_WIN_WINDOW TopLevelWindow;
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+    PYORIWIN_WINDOW TopLevelWindow;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle;
     YORI_ALLOC_SIZE_T ViewportBufferOffset;
     YORI_ALLOC_SIZE_T Remainder;
 
     TopLevelWindow = YoriWinGetTopLevelWindow(List->Ctrl.Parent);
-    WinMgrHandle = YoriWinGetWindowManagerHandle(TopLevelWindow);
+    WinMgrHandle = YoriWinGetWinMgrHandle(TopLevelWindow);
 
     WindowAttributes = List->Ctrl.DefaultAttributes;
-    YoriWinGetControlClientSize(&List->Ctrl, &ClientSize);
+    YoriWinGetCtrlClientSize(&List->Ctrl, &ClientSize);
     ElementCountToDisplay = ClientSize.Y;
 
     if (List->ItemArray.Count < ElementCountToDisplay) {
         ElementCountToDisplay = (WORD)List->ItemArray.Count;
     }
 
-    MaxCharsToDisplay = YoriWinListGetVisibleCellCountPerItem(List);
+    MaxCharsToDisplay = YoriWinListVisibleCellsPerItem(List);
 
     for (RowIndex = 0; RowIndex < ElementCountToDisplay; RowIndex++) {
         Element = &List->ItemArray.Items[List->FirstDisplayedOption + RowIndex];
@@ -338,13 +338,13 @@ YoriWinListPaintVerticalList(
             Attributes = List->ActiveAttributes;
         }
 
-        YoriWinTextBufferOffsetFromDisplayCellOffset(WinMgrHandle,
-                                                     &Element->String,
-                                                     1,
-                                                     List->DisplayOffset,
-                                                     FALSE,
-                                                     &ViewportBufferOffset,
-                                                     &Remainder);
+        YoriWinTextBufferOffsetFromDisp(WinMgrHandle,
+                                        &Element->String,
+                                        1,
+                                        List->DisplayOffset,
+                                        FALSE,
+                                        &ViewportBufferOffset,
+                                        &Remainder);
 
         YoriLibInitEmptyString(&VisibleString);
         VisibleString.StartOfString = &Element->String.StartOfString[ViewportBufferOffset];
@@ -366,25 +366,25 @@ YoriWinListPaintVerticalList(
             CharsToDisplay = (WORD)DisplayCells.LengthInChars;
         }
         if (List->MultiSelect) {
-            if (Element->Flags & YORI_WIN_ITEM_SELECTED) {
-                YoriWinSetControlClientCell(&List->Ctrl, 0, RowIndex, '*', Attributes);
+            if (Element->Flags & YORIWIN_ITEM_SELECTED) {
+                YoriWinSetCtrlClientCell(&List->Ctrl, 0, RowIndex, '*', Attributes);
             } else {
-                YoriWinSetControlClientCell(&List->Ctrl, 0, RowIndex, ' ', Attributes);
+                YoriWinSetCtrlClientCell(&List->Ctrl, 0, RowIndex, ' ', Attributes);
             }
-            YoriWinSetControlClientCell(&List->Ctrl, 1, RowIndex, ' ', Attributes);
+            YoriWinSetCtrlClientCell(&List->Ctrl, 1, RowIndex, ' ', Attributes);
             for (CellIndex = 0; CellIndex < CharsToDisplay; CellIndex++) {
-                YoriWinSetControlClientCell(&List->Ctrl, (WORD)(CellIndex + 2), RowIndex, DisplayCells.StartOfString[CellIndex], Attributes);
+                YoriWinSetCtrlClientCell(&List->Ctrl, (WORD)(CellIndex + 2), RowIndex, DisplayCells.StartOfString[CellIndex], Attributes);
             }
-            for (;CellIndex < ClientSize.X - 2; CellIndex++) {
-                YoriWinSetControlClientCell(&List->Ctrl, (WORD)(CellIndex + 2), RowIndex, ' ', Attributes);
+            for (;CellIndex < (WORD)(ClientSize.X - 2); CellIndex++) {
+                YoriWinSetCtrlClientCell(&List->Ctrl, (WORD)(CellIndex + 2), RowIndex, ' ', Attributes);
             }
 
         } else {
             for (CellIndex = 0; CellIndex < CharsToDisplay; CellIndex++) {
-                YoriWinSetControlClientCell(&List->Ctrl, CellIndex, RowIndex, DisplayCells.StartOfString[CellIndex], Attributes);
+                YoriWinSetCtrlClientCell(&List->Ctrl, CellIndex, RowIndex, DisplayCells.StartOfString[CellIndex], Attributes);
             }
-            for (;CellIndex < ClientSize.X; CellIndex++) {
-                YoriWinSetControlClientCell(&List->Ctrl, CellIndex, RowIndex, ' ', Attributes);
+            for (;CellIndex < (WORD)ClientSize.X; CellIndex++) {
+                YoriWinSetCtrlClientCell(&List->Ctrl, CellIndex, RowIndex, ' ', Attributes);
             }
         }
         YoriLibFreeStringContents(&DisplayCells);
@@ -394,9 +394,9 @@ YoriWinListPaintVerticalList(
     //  Clear any rows following rows with contents
     //
 
-    for (;RowIndex < ClientSize.Y; RowIndex++) {
-        for (CellIndex = 0; CellIndex < ClientSize.X; CellIndex++) {
-            YoriWinSetControlClientCell(&List->Ctrl, CellIndex, RowIndex, ' ', WindowAttributes);
+    for (;RowIndex < (WORD)ClientSize.Y; RowIndex++) {
+        for (CellIndex = 0; CellIndex < (WORD)ClientSize.X; CellIndex++) {
+            YoriWinSetCtrlClientCell(&List->Ctrl, CellIndex, RowIndex, ' ', WindowAttributes);
         }
     }
 
@@ -406,7 +406,7 @@ YoriWinListPaintVerticalList(
     //  it, delete or create it respectively.
     //
 
-    if (List->AutoHorizontalScroll) {
+    if (List->AutoHorizScroll) {
         if (List->LongestItemLength <= MaxCharsToDisplay) {
             if (List->HScrollCtrl != NULL) {
                 YoriWinCloseControl(List->HScrollCtrl);
@@ -415,7 +415,7 @@ YoriWinListPaintVerticalList(
             }
         } else {
             if (List->HScrollCtrl == NULL) {
-                YoriWinListCreateHorizontalScrollbar(List);
+                YoriWinListCreateHorizScrollbar(List);
             }
         }
     }
@@ -425,8 +425,8 @@ YoriWinListPaintVerticalList(
     //
 
     if (List->VScrollCtrl) {
-        DWORD MaximumTopValue;
-        if (List->ItemArray.Count > (DWORD)ClientSize.Y) {
+        YORI_ALLOC_SIZE_T MaximumTopValue;
+        if (List->ItemArray.Count > (WORD)ClientSize.Y) {
             MaximumTopValue = List->ItemArray.Count - ClientSize.Y;
         } else {
             MaximumTopValue = 0;
@@ -459,7 +459,7 @@ YoriWinListPaintVerticalList(
                 SelectedRowOffset = 0;
             }
         }
-        YoriWinSetControlClientCursorLocation(&List->Ctrl, 0, (WORD)SelectedRowOffset);
+        YoriWinSetCtrlClientCursorPoint(&List->Ctrl, 0, (WORD)SelectedRowOffset);
     }
 
     return TRUE;
@@ -476,8 +476,8 @@ YoriWinListPaintVerticalList(
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 BOOLEAN
-YoriWinListPaintHorizontalList(
-    __inout PYORI_WIN_CTRL_LIST List
+YoriWinListPaintHorizList(
+    __inout PYORIWIN_CTRL_LIST List
     )
 {
     WORD RowIndex;
@@ -488,18 +488,18 @@ YoriWinListPaintHorizontalList(
     WORD ElementCountToDisplay;
     WORD Attributes;
     WORD WindowAttributes;
-    PYORI_WIN_ITEM_ENTRY Element;
+    PYORIWIN_ITEM_ENTRY Element;
     COORD ClientSize;
     YORI_STRING DisplayLine;
-    PYORI_WIN_WINDOW TopLevelWindow;
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+    PYORIWIN_WINDOW TopLevelWindow;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle;
 
     TopLevelWindow = YoriWinGetTopLevelWindow(List->Ctrl.Parent);
-    WinMgrHandle = YoriWinGetWindowManagerHandle(TopLevelWindow);
+    WinMgrHandle = YoriWinGetWinMgrHandle(TopLevelWindow);
 
     WindowAttributes = List->Ctrl.DefaultAttributes;
-    YoriWinGetControlClientSize(&List->Ctrl, &ClientSize);
-    ElementCountToDisplay = (WORD)(ClientSize.X / List->HorizontalItemWidth);
+    YoriWinGetCtrlClientSize(&List->Ctrl, &ClientSize);
+    ElementCountToDisplay = (WORD)(ClientSize.X / List->HorizItemWidth);
 
     if (List->ItemArray.Count < ElementCountToDisplay) {
         ElementCountToDisplay = (WORD)List->ItemArray.Count;
@@ -507,7 +507,7 @@ YoriWinListPaintHorizontalList(
 
     for (RowIndex = 0; RowIndex < ElementCountToDisplay; RowIndex++) {
         Element = &List->ItemArray.Items[List->FirstDisplayedOption + RowIndex];
-        CellOffset = (WORD)(List->HorizontalItemWidth * RowIndex);
+        CellOffset = (WORD)(List->HorizItemWidth * RowIndex);
         Attributes = WindowAttributes;
         if (List->ItemActive &&
             RowIndex + List->FirstDisplayedOption == List->ActiveOption) {
@@ -515,40 +515,40 @@ YoriWinListPaintHorizontalList(
             Attributes = (WORD)(((Attributes & 0xf0) >> 4) | ((Attributes & 0x0f) << 4));
         }
         YoriLibInitEmptyString(&DisplayLine);
-        if (!YoriWinTextStringToDisplayCells(WinMgrHandle, &Element->String, 0, 3, List->HorizontalItemWidth, &DisplayLine)) {
+        if (!YoriWinTextStringToDisplayCells(WinMgrHandle, &Element->String, 0, 3, List->HorizItemWidth, &DisplayLine)) {
             DisplayLine.StartOfString = Element->String.StartOfString;
             DisplayLine.LengthInChars = Element->String.LengthInChars;
         }
         if (List->MultiSelect) {
-            CharsToDisplay = (WORD)(List->HorizontalItemWidth - 4);
+            CharsToDisplay = (WORD)(List->HorizItemWidth - 4);
             if (CharsToDisplay > DisplayLine.LengthInChars) {
                 CharsToDisplay = (WORD)DisplayLine.LengthInChars;
             }
-            YoriWinSetControlClientCell(&List->Ctrl, CellOffset, 0, ' ', Attributes);
-            if (Element->Flags & YORI_WIN_ITEM_SELECTED) {
-                YoriWinSetControlClientCell(&List->Ctrl, (WORD)(CellOffset + 1), 0, '*', Attributes);
+            YoriWinSetCtrlClientCell(&List->Ctrl, CellOffset, 0, ' ', Attributes);
+            if (Element->Flags & YORIWIN_ITEM_SELECTED) {
+                YoriWinSetCtrlClientCell(&List->Ctrl, (WORD)(CellOffset + 1), 0, '*', Attributes);
             } else {
-                YoriWinSetControlClientCell(&List->Ctrl, (WORD)(CellOffset + 1), 0, ' ', Attributes);
+                YoriWinSetCtrlClientCell(&List->Ctrl, (WORD)(CellOffset + 1), 0, ' ', Attributes);
             }
-            YoriWinSetControlClientCell(&List->Ctrl, (WORD)(CellOffset + 2), 0, ' ', Attributes);
+            YoriWinSetCtrlClientCell(&List->Ctrl, (WORD)(CellOffset + 2), 0, ' ', Attributes);
             for (CellIndex = 0; CellIndex < CharsToDisplay; CellIndex++) {
-                YoriWinSetControlClientCell(&List->Ctrl, (WORD)(CellOffset + CellIndex + 3), 0, DisplayLine.StartOfString[CellIndex], Attributes);
+                YoriWinSetCtrlClientCell(&List->Ctrl, (WORD)(CellOffset + CellIndex + 3), 0, DisplayLine.StartOfString[CellIndex], Attributes);
             }
-            for (;CellIndex < List->HorizontalItemWidth - 3; CellIndex++) {
-                YoriWinSetControlClientCell(&List->Ctrl, (WORD)(CellOffset + CellIndex + 3), 0, ' ', Attributes);
+            for (;CellIndex < List->HorizItemWidth - 3; CellIndex++) {
+                YoriWinSetCtrlClientCell(&List->Ctrl, (WORD)(CellOffset + CellIndex + 3), 0, ' ', Attributes);
             }
 
         } else {
-            CharsToDisplay = (WORD)(List->HorizontalItemWidth - 2);
+            CharsToDisplay = (WORD)(List->HorizItemWidth - 2);
             if (CharsToDisplay > DisplayLine.LengthInChars) {
                 CharsToDisplay = (WORD)DisplayLine.LengthInChars;
             }
-            YoriWinSetControlClientCell(&List->Ctrl, CellOffset, 0, ' ', Attributes);
+            YoriWinSetCtrlClientCell(&List->Ctrl, CellOffset, 0, ' ', Attributes);
             for (CellIndex = 0; CellIndex < CharsToDisplay; CellIndex++) {
-                YoriWinSetControlClientCell(&List->Ctrl, (WORD)(CellOffset + CellIndex + 1), 0, DisplayLine.StartOfString[CellIndex], Attributes);
+                YoriWinSetCtrlClientCell(&List->Ctrl, (WORD)(CellOffset + CellIndex + 1), 0, DisplayLine.StartOfString[CellIndex], Attributes);
             }
-            for (;CellIndex < List->HorizontalItemWidth - 1; CellIndex++) {
-                YoriWinSetControlClientCell(&List->Ctrl, (WORD)(CellOffset + CellIndex + 1), 0, ' ', Attributes);
+            for (;CellIndex < List->HorizItemWidth - 1; CellIndex++) {
+                YoriWinSetCtrlClientCell(&List->Ctrl, (WORD)(CellOffset + CellIndex + 1), 0, ' ', Attributes);
             }
         }
         YoriLibFreeStringContents(&DisplayLine);
@@ -558,9 +558,9 @@ YoriWinListPaintHorizontalList(
     //  Clear any rows following rows with contents
     //
 
-    CellOffset = (WORD)(List->HorizontalItemWidth * RowIndex);
-    for (;CellOffset < ClientSize.X; CellOffset++) {
-        YoriWinSetControlClientCell(&List->Ctrl, CellOffset, 0, ' ', WindowAttributes);
+    CellOffset = (WORD)(List->HorizItemWidth * RowIndex);
+    for (;CellOffset < (WORD)ClientSize.X; CellOffset++) {
+        YoriWinSetCtrlClientCell(&List->Ctrl, CellOffset, 0, ' ', WindowAttributes);
     }
 
     if (List->HasFocus) {
@@ -568,11 +568,11 @@ YoriWinListPaintHorizontalList(
         SelectedRowOffset = 0;
         if (List->ItemActive) {
             SelectedRowOffset = List->ActiveOption - List->FirstDisplayedOption;
-            if (SelectedRowOffset >= (DWORD)(List->HorizontalItemWidth * RowIndex)) {
+            if (SelectedRowOffset >= (DWORD)(List->HorizItemWidth * RowIndex)) {
                 SelectedRowOffset = 0;
             }
         }
-        YoriWinSetControlClientCursorLocation(&List->Ctrl, (WORD)(SelectedRowOffset * List->HorizontalItemWidth), 0);
+        YoriWinSetCtrlClientCursorPoint(&List->Ctrl, (WORD)(SelectedRowOffset * List->HorizItemWidth), 0);
     }
 
     return TRUE;
@@ -590,11 +590,11 @@ YoriWinListPaintHorizontalList(
  */
 BOOLEAN
 YoriWinListPaint(
-    __inout PYORI_WIN_CTRL_LIST List
+    __inout PYORIWIN_CTRL_LIST List
     )
 {
-    if (List->HorizontalDisplay) {
-        return YoriWinListPaintHorizontalList(List);
+    if (List->HorizDisplay) {
+        return YoriWinListPaintHorizList(List);
     } else {
         return YoriWinListPaintVerticalList(List);
     }
@@ -607,24 +607,24 @@ YoriWinListPaint(
  @param List Pointer to the list control.
  */
 VOID
-YoriWinListRecalculateLongestItem(
-    __in PYORI_WIN_CTRL_LIST List
+YoriWinListRecalcLongestItem(
+    __in PYORIWIN_CTRL_LIST List
     )
 {
     YORI_ALLOC_SIZE_T Index;
     YORI_ALLOC_SIZE_T LongestItemLength;
     YORI_ALLOC_SIZE_T ThisLength;
     PYORI_STRING Text;
-    PYORI_WIN_WINDOW TopLevelWindow;
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+    PYORIWIN_WINDOW TopLevelWindow;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle;
 
     TopLevelWindow = YoriWinGetTopLevelWindow(List->Ctrl.Parent);
-    WinMgrHandle = YoriWinGetWindowManagerHandle(TopLevelWindow);
+    WinMgrHandle = YoriWinGetWinMgrHandle(TopLevelWindow);
 
     LongestItemLength = 0;
     for (Index = 0; Index < List->ItemArray.Count; Index++) {
         Text = &List->ItemArray.Items[Index].String;
-        YoriWinTextDisplayCellOffsetFromBufferOffset(WinMgrHandle, Text, 1, Text->LengthInChars - 1, &ThisLength);
+        YoriWinTextDispOffsetFromBuffer(WinMgrHandle, Text, 1, Text->LengthInChars - 1, &ThisLength);
         ThisLength = ThisLength + 2;
         if (ThisLength > LongestItemLength) {
             LongestItemLength = ThisLength;
@@ -644,14 +644,14 @@ YoriWinListRecalculateLongestItem(
  */
 BOOLEAN
 YoriWinListClearAllItems(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle
     )
 {
-    PYORI_WIN_CTRL Ctrl;
-    PYORI_WIN_CTRL_LIST List;
+    PYORIWIN_CTRL Ctrl;
+    PYORIWIN_CTRL_LIST List;
 
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    List = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_LIST, Ctrl);
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    List = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_LIST, Ctrl);
 
     YoriWinItemArrayCleanup(&List->ItemArray);
     List->FirstDisplayedOption = 0;
@@ -663,7 +663,7 @@ YoriWinListClearAllItems(
         }
     }
     List->DisplayOffset = 0;
-    YoriWinListRecalculateLongestItem(List);
+    YoriWinListRecalcLongestItem(List);
     YoriWinListPaint(List);
     return TRUE;
 }
@@ -676,19 +676,19 @@ YoriWinListClearAllItems(
  */
 VOID
 YoriWinListNotifyHScrollChange(
-    __in PYORI_WIN_CTRL_HANDLE ScrollCtrlHandle
+    __in PYORIWIN_CTRL_HANDLE ScrollCtrlHandle
     )
 {
-    PYORI_WIN_CTRL_LIST List;
-    PYORI_WIN_CTRL ScrollCtrl;
-    DWORDLONG ScrollValue;
+    PYORIWIN_CTRL_LIST List;
+    PYORIWIN_CTRL ScrollCtrl;
+    YORI_MAX_UNSIGNED_T ScrollValue;
     WORD MaxCharsToDisplay;
 
-    ScrollCtrl = (PYORI_WIN_CTRL)ScrollCtrlHandle;
-    List = CONTAINING_RECORD(ScrollCtrl->Parent, YORI_WIN_CTRL_LIST, Ctrl);
+    ScrollCtrl = (PYORIWIN_CTRL)ScrollCtrlHandle;
+    List = CONTAINING_RECORD(ScrollCtrl->Parent, YORIWIN_CTRL_LIST, Ctrl);
     ASSERT(List->HScrollCtrl == ScrollCtrl);
 
-    MaxCharsToDisplay = YoriWinListGetVisibleCellCountPerItem(List);
+    MaxCharsToDisplay = YoriWinListVisibleCellsPerItem(List);
 
     ScrollValue = YoriWinScrollBarGetPosition(ScrollCtrl);
     if (ScrollValue < MaxCharsToDisplay) {
@@ -705,20 +705,20 @@ YoriWinListNotifyHScrollChange(
  */
 VOID
 YoriWinListNotifyVScrollChange(
-    __in PYORI_WIN_CTRL_HANDLE ScrollCtrlHandle
+    __in PYORIWIN_CTRL_HANDLE ScrollCtrlHandle
     )
 {
-    PYORI_WIN_CTRL_LIST List;
-    DWORDLONG ScrollValue;
+    PYORIWIN_CTRL_LIST List;
+    YORI_MAX_UNSIGNED_T ScrollValue;
     COORD ClientSize;
     WORD ElementCountToDisplay;
-    PYORI_WIN_CTRL ScrollCtrl;
+    PYORIWIN_CTRL ScrollCtrl;
 
-    ScrollCtrl = (PYORI_WIN_CTRL)ScrollCtrlHandle;
-    List = CONTAINING_RECORD(ScrollCtrl->Parent, YORI_WIN_CTRL_LIST, Ctrl);
+    ScrollCtrl = (PYORIWIN_CTRL)ScrollCtrlHandle;
+    List = CONTAINING_RECORD(ScrollCtrl->Parent, YORIWIN_CTRL_LIST, Ctrl);
     ASSERT(List->VScrollCtrl == ScrollCtrl);
 
-    YoriWinGetControlClientSize(&List->Ctrl, &ClientSize);
+    YoriWinGetCtrlClientSize(&List->Ctrl, &ClientSize);
     ElementCountToDisplay = ClientSize.Y;
 
     ScrollValue = YoriWinScrollBarGetPosition(ScrollCtrl);
@@ -751,7 +751,7 @@ YoriWinListNotifyVScrollChange(
  */
 VOID
 YoriWinListNotifyMouseWheel(
-    __in PYORI_WIN_CTRL_LIST List,
+    __in PYORIWIN_CTRL_LIST List,
     __in YORI_ALLOC_SIZE_T LinesToMove,
     __in BOOLEAN MoveUp
     )
@@ -759,7 +759,7 @@ YoriWinListNotifyMouseWheel(
     COORD ClientSize;
     WORD ElementCountToDisplay;
 
-    YoriWinGetControlClientSize(&List->Ctrl, &ClientSize);
+    YoriWinGetCtrlClientSize(&List->Ctrl, &ClientSize);
     ElementCountToDisplay = ClientSize.Y;
 
     if (MoveUp) {
@@ -800,16 +800,16 @@ YoriWinListNotifyMouseWheel(
  */
 __success(return)
 BOOLEAN
-YoriWinListGetItemSelectedByMouseLocation(
-    __in PYORI_WIN_CTRL_LIST List,
+YoriWinListGetItemByMousePoint(
+    __in PYORIWIN_CTRL_LIST List,
     __in COORD MousePos,
     __out PYORI_ALLOC_SIZE_T SelectedItem
     )
 {
     YORI_ALLOC_SIZE_T ItemRelativeToFirstDisplayed;
 
-    if (List->HorizontalDisplay) {
-        ItemRelativeToFirstDisplayed = MousePos.X / List->HorizontalItemWidth;
+    if (List->HorizDisplay) {
+        ItemRelativeToFirstDisplayed = MousePos.X / List->HorizItemWidth;
     } else {
         ItemRelativeToFirstDisplayed = MousePos.Y;
     }
@@ -835,12 +835,12 @@ YoriWinListGetItemSelectedByMouseLocation(
  */
 BOOLEAN
 YoriWinListFindItemByChar(
-    __in PYORI_WIN_CTRL_LIST List,
+    __in PYORIWIN_CTRL_LIST List,
     __in TCHAR Char
     )
 {
     YORI_ALLOC_SIZE_T Index;
-    PYORI_WIN_ITEM_ENTRY Element;
+    PYORIWIN_ITEM_ENTRY Element;
     DWORD CurrentTick;
 
     //
@@ -927,25 +927,25 @@ YoriWinListFindItemByChar(
  */
 BOOLEAN
 YoriWinListEventHandler(
-    __in PYORI_WIN_CTRL Ctrl,
-    __in PYORI_WIN_EVENT Event
+    __in PYORIWIN_CTRL Ctrl,
+    __in PYORIWIN_EVENT Event
     )
 {
-    PYORI_WIN_CTRL_LIST List;
+    PYORIWIN_CTRL_LIST List;
     YORI_ALLOC_SIZE_T NewOption;
-    List = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_LIST, Ctrl);
+    List = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_LIST, Ctrl);
 
     switch(Event->EventType) {
         case YoriWinEventKeyDown:
-            if (Event->KeyDown.CtrlMask == ENHANCED_KEY ||
-                Event->KeyDown.CtrlMask == 0) {
+            if (Event->u.KeyDown.CtrlMask == ENHANCED_KEY ||
+                Event->u.KeyDown.CtrlMask == 0) {
 
-                if (Event->KeyDown.VirtualKeyCode == VK_UP ||
-                    (List->HorizontalDisplay && Event->KeyDown.VirtualKeyCode == VK_LEFT)) {
+                if (Event->u.KeyDown.VirtualKeyCode == VK_UP ||
+                    (List->HorizDisplay && Event->u.KeyDown.VirtualKeyCode == VK_LEFT)) {
                     if (List->ItemActive) {
                         if (List->ActiveOption > 0) {
                             List->ActiveOption--;
-                            YoriWinListEnsureActiveItemVisible(List);
+                            YoriWinListEnsureActiveVisible(List);
                             if (List->SelectionChangeCallback) {
                                 List->SelectionChangeCallback(&List->Ctrl);
                             }
@@ -954,18 +954,18 @@ YoriWinListEventHandler(
                     } else if (List->ItemArray.Count > 0) {
                         List->ItemActive = TRUE;
                         List->ActiveOption = 0;
-                        YoriWinListEnsureActiveItemVisible(List);
+                        YoriWinListEnsureActiveVisible(List);
                         if (List->SelectionChangeCallback) {
                             List->SelectionChangeCallback(&List->Ctrl);
                         }
                         YoriWinListPaint(List);
                     }
-                } else if (Event->KeyDown.VirtualKeyCode == VK_DOWN ||
-                    (List->HorizontalDisplay && Event->KeyDown.VirtualKeyCode == VK_RIGHT)) {
+                } else if (Event->u.KeyDown.VirtualKeyCode == VK_DOWN ||
+                    (List->HorizDisplay && Event->u.KeyDown.VirtualKeyCode == VK_RIGHT)) {
                     if (List->ItemActive) {
                         if (List->ActiveOption + 1 < List->ItemArray.Count) {
                             List->ActiveOption++;
-                            YoriWinListEnsureActiveItemVisible(List);
+                            YoriWinListEnsureActiveVisible(List);
                             if (List->SelectionChangeCallback) {
                                 List->SelectionChangeCallback(&List->Ctrl);
                             }
@@ -974,17 +974,17 @@ YoriWinListEventHandler(
                     } else if (List->ItemArray.Count > 0) {
                         List->ItemActive = TRUE;
                         List->ActiveOption = 0;
-                        YoriWinListEnsureActiveItemVisible(List);
+                        YoriWinListEnsureActiveVisible(List);
                         if (List->SelectionChangeCallback) {
                             List->SelectionChangeCallback(&List->Ctrl);
                         }
                         YoriWinListPaint(List);
                     }
-                } else if (Event->KeyDown.VirtualKeyCode == VK_PRIOR) {
+                } else if (Event->u.KeyDown.VirtualKeyCode == VK_PRIOR) {
                     COORD ClientSize;
                     YORI_ALLOC_SIZE_T ElementCountToDisplay;
                     if (List->ItemActive) {
-                        YoriWinGetControlClientSize(&List->Ctrl, &ClientSize);
+                        YoriWinGetCtrlClientSize(&List->Ctrl, &ClientSize);
                         ElementCountToDisplay = ClientSize.Y;
                         if (List->ActiveOption > List->FirstDisplayedOption) {
                             List->ActiveOption = List->FirstDisplayedOption;
@@ -997,16 +997,16 @@ YoriWinListEventHandler(
                         List->ItemActive = TRUE;
                         List->ActiveOption = 0;
                     }
-                    YoriWinListEnsureActiveItemVisible(List);
+                    YoriWinListEnsureActiveVisible(List);
                     if (List->SelectionChangeCallback) {
                         List->SelectionChangeCallback(&List->Ctrl);
                     }
                     YoriWinListPaint(List);
-                } else if (Event->KeyDown.VirtualKeyCode == VK_NEXT) {
+                } else if (Event->u.KeyDown.VirtualKeyCode == VK_NEXT) {
                     COORD ClientSize;
                     YORI_ALLOC_SIZE_T ElementCountToDisplay;
                     if (List->ItemActive) {
-                        YoriWinGetControlClientSize(&List->Ctrl, &ClientSize);
+                        YoriWinGetCtrlClientSize(&List->Ctrl, &ClientSize);
                         ElementCountToDisplay = ClientSize.Y;
                         if (List->ActiveOption < List->FirstDisplayedOption + ElementCountToDisplay - 1 &&
                             List->FirstDisplayedOption + ElementCountToDisplay - 1 < List->ItemArray.Count) {
@@ -1020,40 +1020,40 @@ YoriWinListEventHandler(
                         List->ItemActive = TRUE;
                         List->ActiveOption = 0;
                     }
-                    YoriWinListEnsureActiveItemVisible(List);
+                    YoriWinListEnsureActiveVisible(List);
                     if (List->SelectionChangeCallback) {
                         List->SelectionChangeCallback(&List->Ctrl);
                     }
                     YoriWinListPaint(List);
-                } else if (Event->KeyDown.VirtualKeyCode == VK_LEFT &&
-                           !List->HorizontalDisplay) {
+                } else if (Event->u.KeyDown.VirtualKeyCode == VK_LEFT &&
+                           !List->HorizDisplay) {
                     if (List->DisplayOffset > 0) {
                         List->DisplayOffset = List->DisplayOffset - 1;
                         YoriWinListPaint(List);
                     }
-                } else if (Event->KeyDown.VirtualKeyCode == VK_RIGHT &&
-                           !List->HorizontalDisplay) {
+                } else if (Event->u.KeyDown.VirtualKeyCode == VK_RIGHT &&
+                           !List->HorizDisplay) {
                     WORD MaxCharsToDisplay;
-                    MaxCharsToDisplay = YoriWinListGetVisibleCellCountPerItem(List);
+                    MaxCharsToDisplay = YoriWinListVisibleCellsPerItem(List);
                     if (List->DisplayOffset + MaxCharsToDisplay < List->LongestItemLength) {
                         List->DisplayOffset = List->DisplayOffset + 1;
                         YoriWinListPaint(List);
                     }
-                } else if (Event->KeyDown.Char == ' ' &&
+                } else if (Event->u.KeyDown.Char == ' ' &&
                            List->ItemActive &&
                            List->MultiSelect) {
-                    PYORI_WIN_ITEM_ENTRY Element;
+                    PYORIWIN_ITEM_ENTRY Element;
 
                     ASSERT(List->ActiveOption < List->ItemArray.Count);
                     Element = &List->ItemArray.Items[List->ActiveOption];
-                    Element->Flags = Element->Flags ^ YORI_WIN_ITEM_SELECTED;
+                    Element->Flags = Element->Flags ^ YORIWIN_ITEM_SELECTED;
                     if (List->SelectionChangeCallback) {
                         List->SelectionChangeCallback(&List->Ctrl);
                     }
                     YoriWinListPaint(List);
-                } else if (Event->KeyDown.Char >= ' ') {
-                    if (YoriWinListFindItemByChar(List, Event->KeyDown.Char)) {
-                        YoriWinListEnsureActiveItemVisible(List);
+                } else if (Event->u.KeyDown.Char >= ' ') {
+                    if (YoriWinListFindItemByChar(List, Event->u.KeyDown.Char)) {
+                        YoriWinListEnsureActiveVisible(List);
                         if (List->SelectionChangeCallback) {
                             List->SelectionChangeCallback(&List->Ctrl);
                         }
@@ -1062,16 +1062,16 @@ YoriWinListEventHandler(
                 }
             }
             break;
-        case YoriWinEventMouseDownInClient:
+        case YoriWinEventMouseDownClient:
 
-            if (YoriWinListGetItemSelectedByMouseLocation(List, Event->MouseDown.Location, &NewOption)) {
-                PYORI_WIN_ITEM_ENTRY Element;
+            if (YoriWinListGetItemByMousePoint(List, Event->u.MouseDown.Location, &NewOption)) {
+                PYORIWIN_ITEM_ENTRY Element;
 
                 List->ItemActive = TRUE;
                 if (List->ActiveOption == NewOption && List->MultiSelect) {
 
                     Element = &List->ItemArray.Items[List->ActiveOption];
-                    Element->Flags = Element->Flags ^ YORI_WIN_ITEM_SELECTED;
+                    Element->Flags = Element->Flags ^ YORIWIN_ITEM_SELECTED;
                 }
                 List->ActiveOption = NewOption;
                 if (List->SelectionChangeCallback) {
@@ -1081,16 +1081,16 @@ YoriWinListEventHandler(
             }
 
             break;
-        case YoriWinEventMouseDoubleClickInClient:
-            if (YoriWinListGetItemSelectedByMouseLocation(List, Event->MouseDown.Location, &NewOption)) {
-                YORI_WIN_EVENT DefaultEvent;
-                PYORI_WIN_ITEM_ENTRY Element;
+        case YoriWinEventMouseDblClickClient:
+            if (YoriWinListGetItemByMousePoint(List, Event->u.MouseDown.Location, &NewOption)) {
+                YORIWIN_EVENT DefaultEvent;
+                PYORIWIN_ITEM_ENTRY Element;
 
                 List->ItemActive = TRUE;
                 List->ActiveOption = NewOption;
                 if (List->MultiSelect) {
                     Element = &List->ItemArray.Items[List->ActiveOption];
-                    Element->Flags = Element->Flags ^ YORI_WIN_ITEM_SELECTED;
+                    Element->Flags = Element->Flags ^ YORIWIN_ITEM_SELECTED;
                 }
 
                 if (List->SelectionChangeCallback) {
@@ -1105,46 +1105,46 @@ YoriWinListEventHandler(
                 }
             }
             break;
-        case YoriWinEventMouseDownInNonClient:
-        case YoriWinEventMouseUpInNonClient:
-        case YoriWinEventMouseDoubleClickInNonClient:
+        case YoriWinEventMouseDownNonCli:
+        case YoriWinEventMouseUpNonCli:
+        case YoriWinEventMouseDblClickNonCli:
             {
-                PYORI_WIN_CTRL Child;
+                PYORIWIN_CTRL Child;
                 COORD ChildLocation;
                 BOOLEAN InChildClientArea;
                 Child = YoriWinFindControlAtCoordinates(Ctrl,
-                                                        Event->MouseDown.Location,
+                                                        Event->u.MouseDown.Location,
                                                         FALSE,
                                                         &ChildLocation,
                                                         &InChildClientArea);
 
                 if (Child != NULL &&
-                    YoriWinTranslateMouseEventForChild(Event, Child, ChildLocation, InChildClientArea)) {
+                    YoriWinTransMouseEventForChild(Event, Child, ChildLocation, InChildClientArea)) {
 
                     return TRUE;
                 }
             }
             break;
 
-        case YoriWinEventMouseWheelDownInClient:
-        case YoriWinEventMouseWheelDownInNonClient:
-            YoriWinListNotifyMouseWheel(List, (YORI_ALLOC_SIZE_T)Event->MouseWheel.LinesToMove, FALSE);
+        case YoriWinEventMouseWhlDownClient:
+        case YoriWinEventMouseWhlDownNonCli:
+            YoriWinListNotifyMouseWheel(List, (YORI_ALLOC_SIZE_T)Event->u.MouseWheel.LinesToMove, FALSE);
             break;
 
-        case YoriWinEventMouseWheelUpInClient:
-        case YoriWinEventMouseWheelUpInNonClient:
-            YoriWinListNotifyMouseWheel(List, (YORI_ALLOC_SIZE_T)Event->MouseWheel.LinesToMove, TRUE);
+        case YoriWinEventMouseWhlUpClient:
+        case YoriWinEventMouseWhlUpNonCli:
+            YoriWinListNotifyMouseWheel(List, (YORI_ALLOC_SIZE_T)Event->u.MouseWheel.LinesToMove, TRUE);
             break;
 
         case YoriWinEventGetFocus:
             List->HasFocus = TRUE;
-            YoriWinSetControlCursorState(&List->Ctrl, TRUE, 20);
+            YoriWinSetCtrlCursorState(&List->Ctrl, TRUE, 20);
             YoriWinListPaint(List);
             break;
 
         case YoriWinEventLoseFocus:
             List->HasFocus = FALSE;
-            YoriWinSetControlCursorState(&List->Ctrl, FALSE, 20);
+            YoriWinSetCtrlCursorState(&List->Ctrl, FALSE, 20);
             if (List->DeselectOnLoseFocus) {
                 if (List->ItemActive) {
                     List->ItemActive = FALSE;
@@ -1174,13 +1174,13 @@ YoriWinListEventHandler(
  */
 DWORD
 YoriWinListGetItemCount(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle
     )
 {
-    PYORI_WIN_CTRL Ctrl;
-    PYORI_WIN_CTRL_LIST List;
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    List = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_LIST, Ctrl);
+    PYORIWIN_CTRL Ctrl;
+    PYORIWIN_CTRL_LIST List;
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    List = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_LIST, Ctrl);
     return List->ItemArray.Count;
 }
 
@@ -1197,14 +1197,14 @@ YoriWinListGetItemCount(
 __success(return)
 BOOLEAN
 YoriWinListGetActiveOption(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle,
     __out PYORI_ALLOC_SIZE_T CurrentlyActiveIndex
     )
 {
-    PYORI_WIN_CTRL Ctrl;
-    PYORI_WIN_CTRL_LIST List;
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    List = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_LIST, Ctrl);
+    PYORIWIN_CTRL Ctrl;
+    PYORIWIN_CTRL_LIST List;
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    List = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_LIST, Ctrl);
     if (!List->ItemActive) {
         return FALSE;
     }
@@ -1224,19 +1224,19 @@ YoriWinListGetActiveOption(
 __success(return)
 BOOLEAN
 YoriWinListSetActiveOption(
-    __inout PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __inout PYORIWIN_CTRL_HANDLE CtrlHandle,
     __in YORI_ALLOC_SIZE_T ActiveOption
     )
 {
-    PYORI_WIN_CTRL Ctrl;
-    PYORI_WIN_CTRL_LIST List;
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    List = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_LIST, Ctrl);
+    PYORIWIN_CTRL Ctrl;
+    PYORIWIN_CTRL_LIST List;
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    List = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_LIST, Ctrl);
 
     if (ActiveOption < List->ItemArray.Count) {
         List->ItemActive = TRUE;
         List->ActiveOption = ActiveOption;
-        YoriWinListEnsureActiveItemVisible(List);
+        YoriWinListEnsureActiveVisible(List);
         if (List->SelectionChangeCallback) {
             List->SelectionChangeCallback(&List->Ctrl);
         }
@@ -1260,18 +1260,18 @@ YoriWinListSetActiveOption(
  */
 BOOLEAN
 YoriWinListIsOptionSelected(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle,
     __in YORI_ALLOC_SIZE_T Index
     )
 {
-    PYORI_WIN_CTRL Ctrl;
-    PYORI_WIN_CTRL_LIST List;
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    List = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_LIST, Ctrl);
+    PYORIWIN_CTRL Ctrl;
+    PYORIWIN_CTRL_LIST List;
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    List = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_LIST, Ctrl);
 
     if (Index < List->ItemArray.Count) {
         if (List->MultiSelect) {
-            if (List->ItemArray.Items[Index].Flags & YORI_WIN_ITEM_SELECTED) {
+            if (List->ItemArray.Items[Index].Flags & YORIWIN_ITEM_SELECTED) {
                 return TRUE;
             }
         } else {
@@ -1299,24 +1299,24 @@ YoriWinListIsOptionSelected(
 __success(return)
 BOOLEAN
 YoriWinListAddItems(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle,
     __in PCYORI_STRING ListOptions,
     __in YORI_ALLOC_SIZE_T NumberOptions
     )
 {
-    PYORI_WIN_CTRL Ctrl;
-    PYORI_WIN_CTRL_LIST List;
+    PYORIWIN_CTRL Ctrl;
+    PYORIWIN_CTRL_LIST List;
 
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    List = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_LIST, Ctrl);
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    List = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_LIST, Ctrl);
 
     if (!YoriWinItemArrayAddItems(&List->ItemArray, ListOptions, NumberOptions)) {
         return FALSE;
     }
 
-    YoriWinListEnsureActiveItemVisible(List);
+    YoriWinListEnsureActiveVisible(List);
     List->DisplayOffset = 0;
-    YoriWinListRecalculateLongestItem(List);
+    YoriWinListRecalcLongestItem(List);
     YoriWinListPaint(List);
     return TRUE;
 }
@@ -1333,23 +1333,23 @@ YoriWinListAddItems(
 __success(return)
 BOOLEAN
 YoriWinListAddItemArray(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __in PYORI_WIN_ITEM_ARRAY NewItems
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle,
+    __in PYORIWIN_ITEM_ARRAY NewItems
     )
 {
-    PYORI_WIN_CTRL Ctrl;
-    PYORI_WIN_CTRL_LIST List;
+    PYORIWIN_CTRL Ctrl;
+    PYORIWIN_CTRL_LIST List;
 
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    List = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_LIST, Ctrl);
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    List = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_LIST, Ctrl);
 
     if (!YoriWinItemArrayAddItemArray(&List->ItemArray, NewItems)) {
         return FALSE;
     }
 
-    YoriWinListEnsureActiveItemVisible(List);
+    YoriWinListEnsureActiveVisible(List);
     List->DisplayOffset = 0;
-    YoriWinListRecalculateLongestItem(List);
+    YoriWinListRecalcLongestItem(List);
     YoriWinListPaint(List);
     return TRUE;
 }
@@ -1369,17 +1369,17 @@ YoriWinListAddItemArray(
  */
 BOOLEAN
 YoriWinListGetItemText(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle,
     __in YORI_ALLOC_SIZE_T Index,
     __inout PYORI_STRING Text
     )
 {
-    PYORI_WIN_CTRL Ctrl;
-    PYORI_WIN_CTRL_LIST List;
+    PYORIWIN_CTRL Ctrl;
+    PYORIWIN_CTRL_LIST List;
     PYORI_STRING Source;
 
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    List = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_LIST, Ctrl);
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    List = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_LIST, Ctrl);
 
     if (Index >= List->ItemArray.Count) {
         return FALSE;
@@ -1414,23 +1414,23 @@ YoriWinListGetItemText(
  */
 BOOLEAN
 YoriWinListReposition(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle,
     __in PSMALL_RECT CtrlRect
     )
 {
-    PYORI_WIN_CTRL Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    PYORI_WIN_CTRL_LIST List;
+    PYORIWIN_CTRL Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    PYORIWIN_CTRL_LIST List;
     WORD WindowAttributes;
     SMALL_RECT ScrollBarRect;
 
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    List = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_LIST, Ctrl);
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    List = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_LIST, Ctrl);
 
     if (!YoriWinControlReposition(Ctrl, CtrlRect)) {
         return FALSE;
     }
 
-    YoriWinListEnsureActiveItemVisible(List);
+    YoriWinListEnsureActiveVisible(List);
 
     WindowAttributes = List->Ctrl.DefaultAttributes;
 
@@ -1474,16 +1474,16 @@ YoriWinListReposition(
          another callback is already registered.
  */
 BOOLEAN
-YoriWinListSetSelectionNotifyCallback(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __in PYORI_WIN_NOTIFY NotifyCallback
+YoriWinListSetSelNotifyCbk(
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle,
+    __in PYORIWIN_NOTIFY NotifyCallback
     )
 {
-    PYORI_WIN_CTRL Ctrl;
-    PYORI_WIN_CTRL_LIST List;
+    PYORIWIN_CTRL Ctrl;
+    PYORIWIN_CTRL_LIST List;
 
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    List = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_LIST, Ctrl);
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    List = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_LIST, Ctrl);
 
     if (List->SelectionChangeCallback != NULL) {
         return FALSE;
@@ -1504,19 +1504,19 @@ YoriWinListSetSelectionNotifyCallback(
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 BOOLEAN
-YoriWinListSetHorizontalItemWidth(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+YoriWinListSetHorizItemWidth(
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle,
     __in WORD ItemWidth
     )
 {
-    PYORI_WIN_CTRL Ctrl;
-    PYORI_WIN_CTRL_LIST List;
+    PYORIWIN_CTRL Ctrl;
+    PYORIWIN_CTRL_LIST List;
     COORD ClientSize;
 
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    List = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_LIST, Ctrl);
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    List = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_LIST, Ctrl);
 
-    if (!List->HorizontalDisplay) {
+    if (!List->HorizDisplay) {
         return FALSE;
     }
 
@@ -1524,12 +1524,12 @@ YoriWinListSetHorizontalItemWidth(
         return FALSE;
     }
 
-    YoriWinGetControlClientSize(&List->Ctrl, &ClientSize);
+    YoriWinGetCtrlClientSize(&List->Ctrl, &ClientSize);
 
-    if (ItemWidth > ClientSize.X) {
-        List->HorizontalItemWidth = ClientSize.X;
+    if (ItemWidth > (WORD)ClientSize.X) {
+        List->HorizItemWidth = ClientSize.X;
     } else {
-        List->HorizontalItemWidth = ItemWidth;
+        List->HorizItemWidth = ItemWidth;
     }
     YoriWinListPaint(List);
     return TRUE;
@@ -1549,38 +1549,38 @@ YoriWinListSetHorizontalItemWidth(
 
  @return Pointer to the newly created control or NULL on failure.
  */
-PYORI_WIN_CTRL_HANDLE
+PYORIWIN_CTRL_HANDLE
 YoriWinListCreate(
-    __in PYORI_WIN_WINDOW_HANDLE ParentHandle,
+    __in PYORIWIN_WINDOW_HANDLE ParentHandle,
     __in PSMALL_RECT Size,
-    __in DWORD Style
+    __in WORD Style
     )
 {
-    PYORI_WIN_CTRL_LIST List;
-    PYORI_WIN_WINDOW Parent;
+    PYORIWIN_CTRL_LIST List;
+    PYORIWIN_WINDOW Parent;
     SMALL_RECT ScrollBarRect;
     WORD WindowAttributes;
-    PYORI_WIN_WINDOW TopLevelWindow;
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+    PYORIWIN_WINDOW TopLevelWindow;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle;
 
-    Parent = (PYORI_WIN_WINDOW)ParentHandle;
+    Parent = (PYORIWIN_WINDOW)ParentHandle;
 
     //
     //  Scrollbars need borders, and need a vertical control.
     //
 
-    if ((Style & (YORI_WIN_LIST_STYLE_NO_BORDER | YORI_WIN_LIST_STYLE_HORIZONTAL)) != 0) {
-        if ((Style & (YORI_WIN_LIST_STYLE_VSCROLLBAR|YORI_WIN_LIST_STYLE_HSCROLLBAR|YORI_WIN_LIST_STYLE_AUTO_HSCROLLBAR)) != 0) {
+    if ((Style & (YORIWIN_LIST_STY_NO_BORDER | YORIWIN_LIST_STY_HORIZONTAL)) != 0) {
+        if ((Style & (YORIWIN_LIST_STY_VSCROLL|YORIWIN_LIST_STY_HSCROLL|YORIWIN_LIST_STY_AUTO_HSCROLL)) != 0) {
             return NULL;
         }
     }
 
-    List = YoriLibReferencedMalloc(sizeof(YORI_WIN_CTRL_LIST));
+    List = YoriLibReferencedMalloc(sizeof(YORIWIN_CTRL_LIST));
     if (List == NULL) {
         return NULL;
     }
 
-    ZeroMemory(List, sizeof(YORI_WIN_CTRL_LIST));
+    ZeroMemory(List, sizeof(YORIWIN_CTRL_LIST));
 
     YoriWinItemArrayInitialize(&List->ItemArray);
 
@@ -1591,34 +1591,34 @@ YoriWinListCreate(
     }
 
     TopLevelWindow = YoriWinGetTopLevelWindow(Parent);
-    WinMgrHandle = YoriWinGetWindowManagerHandle(TopLevelWindow);
+    WinMgrHandle = YoriWinGetWinMgrHandle(TopLevelWindow);
 
     List->ActiveAttributes = YoriWinMgrDefaultColorLookup(WinMgrHandle, YoriWinColorListActive);
 
     WindowAttributes = List->Ctrl.DefaultAttributes;
 
-    if ((Style & YORI_WIN_LIST_STYLE_NO_BORDER) == 0) {
+    if ((Style & YORIWIN_LIST_STY_NO_BORDER) == 0) {
         List->DisplayBorder = TRUE;
 
-        YoriWinDrawBorderOnControl(&List->Ctrl, &List->Ctrl.ClientRect, WindowAttributes, YORI_WIN_BORDER_TYPE_SUNKEN);
+        YoriWinDrawBorderCtrl(&List->Ctrl, &List->Ctrl.ClientRect, WindowAttributes, YORIWIN_BORDER_TYPE_SUNKEN);
         List->Ctrl.ClientRect.Top++;
         List->Ctrl.ClientRect.Left++;
         List->Ctrl.ClientRect.Bottom--;
         List->Ctrl.ClientRect.Right--;
     }
 
-    if (Style & YORI_WIN_LIST_STYLE_HORIZONTAL) {
-        List->HorizontalDisplay = TRUE;
-        YoriWinListSetHorizontalItemWidth(&List->Ctrl, 20);
+    if (Style & YORIWIN_LIST_STY_HORIZONTAL) {
+        List->HorizDisplay = TRUE;
+        YoriWinListSetHorizItemWidth(&List->Ctrl, 20);
     }
 
-    if (Style & YORI_WIN_LIST_STYLE_AUTO_HSCROLLBAR) {
-        List->AutoHorizontalScroll = TRUE;
-    } else if (Style & YORI_WIN_LIST_STYLE_HSCROLLBAR) {
-        YoriWinListCreateHorizontalScrollbar(List);
+    if (Style & YORIWIN_LIST_STY_AUTO_HSCROLL) {
+        List->AutoHorizScroll = TRUE;
+    } else if (Style & YORIWIN_LIST_STY_HSCROLL) {
+        YoriWinListCreateHorizScrollbar(List);
     }
 
-    if (Style & YORI_WIN_LIST_STYLE_VSCROLLBAR) {
+    if (Style & YORIWIN_LIST_STY_VSCROLL) {
         ScrollBarRect.Left = (SHORT)(List->Ctrl.FullRect.Right - List->Ctrl.FullRect.Left);
         ScrollBarRect.Right = ScrollBarRect.Left;
         ScrollBarRect.Top = 1;
@@ -1626,17 +1626,17 @@ YoriWinListCreate(
         List->VScrollCtrl = YoriWinScrollBarCreate(&List->Ctrl, &ScrollBarRect, 0, YoriWinListNotifyVScrollChange);
     }
 
-    if (Style & YORI_WIN_LIST_STYLE_MULTISELECT) {
+    if (Style & YORIWIN_LIST_STY_MULTISELECT) {
         List->MultiSelect = TRUE;
     }
 
-    if (Style & YORI_WIN_LIST_STYLE_DESELECT_ON_LOSE_FOCUS) {
+    if (Style & YORIWIN_LIST_STY_DESEL_FOCUS) {
         List->DeselectOnLoseFocus = TRUE;
     }
 
     List->ItemActive = FALSE;
 
-    YoriWinListEnsureActiveItemVisible(List);
+    YoriWinListEnsureActiveVisible(List);
     YoriWinListPaint(List);
 
     return &List->Ctrl;

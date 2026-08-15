@@ -93,7 +93,7 @@ typedef struct _DF_CONTEXT {
     /**
      Color information to display against matching directories.
      */
-    YORI_LIB_FILE_FILTER ColorRules;
+    YORILIB_FILE_FILTER ColorRules;
 
 } DF_CONTEXT, *PDF_CONTEXT;
 
@@ -184,7 +184,7 @@ DfReportSingleVolume(
                 YoriLibOutput(YORI_LIB_OUTPUT_STDOUT, _T("\n"));
             }
 
-            YoriLibUpdateFindDataFromFileInformation(&FindData, VolName, FALSE);
+            YoriLibUpdateFindDataFromFile(&FindData, VolName, FALSE);
             FinalComponent = _tcsrchr(NameToReport, '\\');
             if (FinalComponent != NULL) {
                 YoriLibSPrintfS(FindData.cFileName, MAX_PATH, _T("%s"), FinalComponent + 1);
@@ -192,7 +192,7 @@ DfReportSingleVolume(
                 YoriLibSPrintfS(FindData.cFileName, MAX_PATH, _T("%s"), NameToReport);
             }
             YoriLibConstantString(&YsVolName, VolName);
-            if (!YoriLibFileFiltCheckColorMatch(&DfContext->ColorRules, &YsVolName, &FindData, &Attribute)) {
+            if (!YoriLibFilFltCheckColorMatch(&DfContext->ColorRules, &YsVolName, &FindData, &Attribute)) {
                 Attribute.Ctrl = YORILIB_ATTRCTRL_WINDOW_BG | YORILIB_ATTRCTRL_WINDOW_FG;
                 Attribute.Win32Attr = (UCHAR)YoriLibVtGetDefaultColor();
             }
@@ -298,9 +298,9 @@ ENTRYPOINT(
     //  Load the default color string and parse it into rules.
     //
 
-    if (YoriLibLoadCombinedFileColorString(NULL, &Combined)) {
+    if (YoriLibLoadCombinedFileColorStr(NULL, &Combined)) {
         YORI_STRING ErrorSubstring;
-        YoriLibFileFiltParseColorString(&DfContext.ColorRules, &Combined, &ErrorSubstring);
+        YoriLibFilFltParseColorStr(&DfContext.ColorRules, &Combined, &ErrorSubstring);
         YoriLibFreeStringContents(&Combined);
     }
 
@@ -338,7 +338,7 @@ ENTRYPOINT(
         }
     }
 
-    YoriLibFileFiltFreeFilter(&DfContext.ColorRules);
+    YoriLibFilFltFreeFilter(&DfContext.ColorRules);
 
     return EXIT_SUCCESS;
 }

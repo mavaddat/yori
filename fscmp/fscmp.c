@@ -65,7 +65,7 @@ FsCmpHelp(VOID)
     //  Display supported options and operators
     //
 
-    YoriLibFileFiltHelp();
+    YoriLibFilFltHelp();
     return TRUE;
 }
 
@@ -99,7 +99,7 @@ typedef struct _FSCMP_CONTEXT {
     /**
      A list of criteria to filter matches against.
      */
-    YORI_LIB_FILE_FILTER Filter;
+    YORILIB_FILE_FILTER Filter;
 } FSCMP_CONTEXT, *PFSCMP_CONTEXT;
 
 /**
@@ -155,7 +155,7 @@ FsCmpFileFoundCallback(
             return FALSE;
         }
     } else if (FsCmpContext->TestType == FsCmpTestTypeApplyFilter) {
-        if (YoriLibFileFiltCheckFilterMatch(&FsCmpContext->Filter, FilePath, FileInfo)) {
+        if (YoriLibFilFltCheckFilterMatch(&FsCmpContext->Filter, FilePath, FileInfo)) {
             FsCmpContext->ConditionMet = TRUE;
             return FALSE;
         }
@@ -231,11 +231,11 @@ ENTRYPOINT(
             } else if (YoriLibCompareStringLitIns(&Arg, _T("i")) == 0) {
                 if (i + 1 < ArgC) {
                     YORI_STRING ErrorSubstring;
-                    YORI_LIB_FILE_FILTER Filter;
+                    YORILIB_FILE_FILTER Filter;
                     YoriLibInitEmptyString(&ErrorSubstring);
 
-                    YoriLibFileFiltFreeFilter(&FsCmpContext.Filter);
-                    if (!YoriLibFileFiltParseFilterString(&Filter, &ArgV[i + 1], &ErrorSubstring)) {
+                    YoriLibFilFltFreeFilter(&FsCmpContext.Filter);
+                    if (!YoriLibFilFltParseString(&Filter, &ArgV[i + 1], &ErrorSubstring)) {
                         if (ErrorSubstring.LengthInChars > 0) {
                             YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("fscmp: error parsing filter string '%y' at '%y'\n"), &ArgV[i + 1], &ErrorSubstring);
                         } else {
@@ -288,7 +288,7 @@ ENTRYPOINT(
 
 cleanup_and_exit:
 
-    YoriLibFileFiltFreeFilter(&FsCmpContext.Filter);
+    YoriLibFilFltFreeFilter(&FsCmpContext.Filter);
 
     if (FsCmpContext.ConditionMet) {
         return EXIT_SUCCESS;

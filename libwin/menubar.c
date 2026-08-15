@@ -38,7 +38,7 @@
 /**
  A structure describing an internal representation of a menu item.
  */
-typedef struct _YORI_WIN_CTRL_MENU_ENTRY {
+typedef struct _YORIWIN_CTRL_MENU_ENTRY {
 
     /**
      The string to display for this menu item.  Note that any accelerator
@@ -50,13 +50,13 @@ typedef struct _YORI_WIN_CTRL_MENU_ENTRY {
     /**
      A callback function to invoke when this menu item is activated.
      */
-    PYORI_WIN_NOTIFY NotifyCallback;
+    PYORIWIN_NOTIFY NotifyCbk;
 
     /**
      Pointer to an array of child menu items.  This is only meaningful if
      ChildItemCount below is nonzero.
      */
-    struct _YORI_WIN_CTRL_MENU_ENTRY *ChildItems;
+    struct _YORIWIN_CTRL_MENU_ENTRY *ChildItems;
 
     /**
      The number of child menu items associated with this menu item, or zero
@@ -81,13 +81,13 @@ typedef struct _YORI_WIN_CTRL_MENU_ENTRY {
      accelerator.
      */
     TCHAR AcceleratorChar;
-} YORI_WIN_CTRL_MENU_ENTRY, *PYORI_WIN_CTRL_MENU_ENTRY;
+} YORIWIN_CTRL_MENU_ENTRY, FAR *PYORIWIN_CTRL_MENU_ENTRY;
 
 /**
  A structure that describes a single hotkey specification in a form that a
  keystroke can be compared against.
  */
-typedef struct _YORI_WIN_CTRL_MENU_HOTKEY {
+typedef struct _YORIWIN_CTRL_MENU_HOTKEY {
 
     /**
      The set of control keys that should be considered when testing for a
@@ -110,13 +110,13 @@ typedef struct _YORI_WIN_CTRL_MENU_HOTKEY {
      When a match is found, the menu entry to invoke.  When this entry is
      torn down, it must find the hotkey reference and remove it.
      */
-    PYORI_WIN_CTRL_MENU_ENTRY EntryToInvoke;
-} YORI_WIN_CTRL_MENU_HOTKEY, *PYORI_WIN_CTRL_MENU_HOTKEY;
+    PYORIWIN_CTRL_MENU_ENTRY EntryToInvoke;
+} YORIWIN_CTRL_MENU_HOTKEY, FAR *PYORIWIN_CTRL_MENU_HOTKEY;
 
 /**
  An array of hotkeys that an incoming keystroke can be compared against.
  */
-typedef struct _YORI_WIN_CTRL_MENU_HOTKEY_ARRAY {
+typedef struct _YORIWIN_CTRL_MENU_HOTKEY_ARRAY {
 
     /**
      The number of entries that have been allocated.
@@ -131,8 +131,8 @@ typedef struct _YORI_WIN_CTRL_MENU_HOTKEY_ARRAY {
     /**
      An array of entries.
      */
-    PYORI_WIN_CTRL_MENU_HOTKEY Keys;
-} YORI_WIN_CTRL_MENU_HOTKEY_ARRAY, *PYORI_WIN_CTRL_MENU_HOTKEY_ARRAY;
+    PYORIWIN_CTRL_MENU_HOTKEY Keys;
+} YORIWIN_CTRL_MENU_HOTKEY_ARRAY, FAR *PYORIWIN_CTRL_MENU_HOTKEY_ARRAY;
 
 /**
  Parse a hotkey string into a keystroke that can be compared against.
@@ -148,7 +148,7 @@ __success(return)
 BOOLEAN
 YoriWinMenuGenerateHotkey(
     __in PYORI_STRING HotkeyString,
-    __out PYORI_WIN_CTRL_MENU_HOTKEY HotkeyInfo
+    __out PYORIWIN_CTRL_MENU_HOTKEY HotkeyInfo
     )
 {
     BOOLEAN RequiresCtrl = FALSE;
@@ -241,31 +241,31 @@ YoriWinMenuGenerateHotkey(
 __success(return)
 BOOLEAN
 YoriWinMenuAddHotkeyToArray(
-    __in PYORI_WIN_CTRL_MENU_HOTKEY_ARRAY Array,
-    __in PYORI_WIN_CTRL_MENU_HOTKEY Hotkey
+    __in PYORIWIN_CTRL_MENU_HOTKEY_ARRAY Array,
+    __in PYORIWIN_CTRL_MENU_HOTKEY Hotkey
     )
 {
     ASSERT(Hotkey->EntryToInvoke != NULL);
 
     if (Array->Populated + 1 >= Array->Allocated) {
         YORI_ALLOC_SIZE_T NewAllocated;
-        PYORI_WIN_CTRL_MENU_HOTKEY NewKeysArray;
+        PYORIWIN_CTRL_MENU_HOTKEY NewKeysArray;
 
         NewAllocated = Array->Allocated + 100;
-        NewKeysArray = YoriLibReferencedMalloc(NewAllocated * sizeof(YORI_WIN_CTRL_MENU_HOTKEY));
+        NewKeysArray = YoriLibReferencedMalloc(NewAllocated * sizeof(YORIWIN_CTRL_MENU_HOTKEY));
         if (NewKeysArray == NULL) {
             return FALSE;
         }
 
         if (Array->Populated > 0) {
-            memcpy(NewKeysArray, Array->Keys, Array->Populated * sizeof(YORI_WIN_CTRL_MENU_HOTKEY));
+            memcpy(NewKeysArray, Array->Keys, Array->Populated * sizeof(YORIWIN_CTRL_MENU_HOTKEY));
             YoriLibDereference(Array->Keys);
         }
         Array->Keys = NewKeysArray;
         Array->Allocated = NewAllocated;
     }
 
-    memcpy(&Array->Keys[Array->Populated], Hotkey, sizeof(YORI_WIN_CTRL_MENU_HOTKEY));
+    memcpy(&Array->Keys[Array->Populated], Hotkey, sizeof(YORIWIN_CTRL_MENU_HOTKEY));
     Array->Populated++;
     return TRUE;
 }
@@ -280,19 +280,19 @@ YoriWinMenuAddHotkeyToArray(
  @param MenuEntry Pointer to the menu entry being removed.
  */
 VOID
-YoriWinMenuRemoveHotkeyFromArray(
-    __in PYORI_WIN_CTRL_MENU_HOTKEY_ARRAY Array,
-    __in PYORI_WIN_CTRL_MENU_ENTRY MenuEntry
+YoriWinMenuDelHotkeyFromArray(
+    __in PYORIWIN_CTRL_MENU_HOTKEY_ARRAY Array,
+    __in PYORIWIN_CTRL_MENU_ENTRY MenuEntry
     )
 {
-    DWORD Index;
+    YORI_ALLOC_SIZE_T Index;
 
     for (Index = 0; Index < Array->Populated; Index++) {
         if (Array->Keys[Index].EntryToInvoke == MenuEntry) {
             if (Index + 1 < Array->Populated) {
-                DWORD NumberToCopy;
+                YORI_ALLOC_SIZE_T NumberToCopy;
                 NumberToCopy = Array->Populated - Index - 1;
-                memcpy(&Array->Keys[Index], &Array->Keys[Index + 1], NumberToCopy * sizeof(YORI_WIN_CTRL_MENU_HOTKEY));
+                memcpy(&Array->Keys[Index], &Array->Keys[Index + 1], NumberToCopy * sizeof(YORIWIN_CTRL_MENU_HOTKEY));
                 Array->Populated--;
                 return;
             }
@@ -303,8 +303,8 @@ YoriWinMenuRemoveHotkeyFromArray(
 
 VOID
 YoriWinMenuFreeMenuEntry(
-    __in PYORI_WIN_CTRL_MENU_HOTKEY_ARRAY HotkeyArray,
-    __in PYORI_WIN_CTRL_MENU_ENTRY Entry
+    __in PYORIWIN_CTRL_MENU_HOTKEY_ARRAY HotkeyArray,
+    __in PYORIWIN_CTRL_MENU_ENTRY Entry
     );
 
 /**
@@ -319,8 +319,8 @@ YoriWinMenuFreeMenuEntry(
  */
 VOID
 YoriWinMenuFreeEntryArray(
-    __in PYORI_WIN_CTRL_MENU_HOTKEY_ARRAY HotkeyArray,
-    __in PYORI_WIN_CTRL_MENU_ENTRY ItemArray,
+    __in PYORIWIN_CTRL_MENU_HOTKEY_ARRAY HotkeyArray,
+    __in PYORIWIN_CTRL_MENU_ENTRY ItemArray,
     __in YORI_ALLOC_SIZE_T ItemCount
     )
 {
@@ -342,11 +342,11 @@ YoriWinMenuFreeEntryArray(
  */
 VOID
 YoriWinMenuFreeMenuEntry(
-    __in PYORI_WIN_CTRL_MENU_HOTKEY_ARRAY HotkeyArray,
-    __in PYORI_WIN_CTRL_MENU_ENTRY Entry
+    __in PYORIWIN_CTRL_MENU_HOTKEY_ARRAY HotkeyArray,
+    __in PYORIWIN_CTRL_MENU_ENTRY Entry
     )
 {
-    YoriWinMenuRemoveHotkeyFromArray(HotkeyArray, Entry);
+    YoriWinMenuDelHotkeyFromArray(HotkeyArray, Entry);
     YoriLibFreeStringContents(&Entry->DisplayCaption);
     if (Entry->ChildItemCount > 0) {
         YoriWinMenuFreeEntryArray(HotkeyArray, Entry->ChildItems, Entry->ChildItemCount);
@@ -360,9 +360,9 @@ YoriWinMenuFreeMenuEntry(
 __success(return)
 BOOLEAN
 YoriWinMenuCopySubMenu(
-    __in PYORI_WIN_CTRL_MENU_HOTKEY_ARRAY HotkeyArray,
-    __in PYORI_WIN_MENU_ENTRY Input,
-    __inout PYORI_WIN_CTRL_MENU_ENTRY Output
+    __in PYORIWIN_CTRL_MENU_HOTKEY_ARRAY HotkeyArray,
+    __in PYORIWIN_MENU_ENTRY Input,
+    __inout PYORIWIN_CTRL_MENU_ENTRY Output
     );
 
 /**
@@ -388,15 +388,15 @@ YoriWinMenuCopySubMenu(
 __success(return)
 BOOLEAN
 YoriWinMenuCopyUserEntry(
-    __in PYORI_WIN_CTRL_MENU_HOTKEY_ARRAY HotkeyArray,
-    __in PYORI_WIN_MENU_ENTRY Input,
+    __in PYORIWIN_CTRL_MENU_HOTKEY_ARRAY HotkeyArray,
+    __in PYORIWIN_MENU_ENTRY Input,
     __in YORI_ALLOC_SIZE_T MaxCaption,
-    __out PYORI_WIN_CTRL_MENU_ENTRY Output
+    __out PYORIWIN_CTRL_MENU_ENTRY Output
     )
 {
     YORI_ALLOC_SIZE_T CharsNeeded;
     YORI_ALLOC_SIZE_T Index;
-    YORI_WIN_CTRL_MENU_HOTKEY Hotkey;
+    YORIWIN_CTRL_MENU_HOTKEY Hotkey;
 
     if (Input->Hotkey.LengthInChars > 0) {
         CharsNeeded = MaxCaption + 2 + Input->Hotkey.LengthInChars + 1;
@@ -430,13 +430,13 @@ YoriWinMenuCopyUserEntry(
         YoriWinMenuAddHotkeyToArray(HotkeyArray, &Hotkey);
     }
 
-    Output->NotifyCallback = Input->NotifyCallback;
+    Output->NotifyCbk = Input->NotifyCbk;
     Output->Flags = Input->Flags;
 
     if (Input->ChildMenu.ItemCount > 0) {
         if (!YoriWinMenuCopySubMenu(HotkeyArray, Input, Output)) {
             if (Input->Hotkey.LengthInChars > 0) {
-                YoriWinMenuRemoveHotkeyFromArray(HotkeyArray, Output);
+                YoriWinMenuDelHotkeyFromArray(HotkeyArray, Output);
             }
             YoriLibFreeStringContents(&Output->DisplayCaption);
             return FALSE;
@@ -469,9 +469,9 @@ YoriWinMenuCopyUserEntry(
 __success(return)
 BOOLEAN
 YoriWinMenuCopyMultipleItems(
-    __in PYORI_WIN_CTRL_MENU_HOTKEY_ARRAY HotkeyArray,
-    __in PYORI_WIN_MENU_ENTRY SourceArray,
-    __out_ecount(ItemCount) PYORI_WIN_CTRL_MENU_ENTRY DestArray,
+    __in PYORIWIN_CTRL_MENU_HOTKEY_ARRAY HotkeyArray,
+    __in PYORIWIN_MENU_ENTRY SourceArray,
+    __out_ecount(ItemCount) PYORIWIN_CTRL_MENU_ENTRY DestArray,
     __in YORI_ALLOC_SIZE_T ItemCount
     )
 {
@@ -532,14 +532,14 @@ YoriWinMenuCopyMultipleItems(
 __success(return)
 BOOLEAN
 YoriWinMenuCopySubMenu(
-    __in PYORI_WIN_CTRL_MENU_HOTKEY_ARRAY HotkeyArray,
-    __in PYORI_WIN_MENU_ENTRY Input,
-    __inout PYORI_WIN_CTRL_MENU_ENTRY Output
+    __in PYORIWIN_CTRL_MENU_HOTKEY_ARRAY HotkeyArray,
+    __in PYORIWIN_MENU_ENTRY Input,
+    __inout PYORIWIN_CTRL_MENU_ENTRY Output
     )
 {
-    PYORI_WIN_CTRL_MENU_ENTRY NewItems;
+    PYORIWIN_CTRL_MENU_ENTRY NewItems;
 
-    NewItems = YoriLibReferencedMalloc(Input->ChildMenu.ItemCount * sizeof(YORI_WIN_CTRL_MENU_ENTRY));
+    NewItems = YoriLibReferencedMalloc(Input->ChildMenu.ItemCount * sizeof(YORIWIN_CTRL_MENU_ENTRY));
     if (NewItems == NULL) {
         return FALSE;
     }
@@ -565,7 +565,7 @@ YoriWinMenuCopySubMenu(
  perform when a popup menu has completed and the user has indicated an item
  to execute or another action to perform.
  */
-typedef struct _YORI_WIN_MENU_OUTCOME {
+typedef struct _YORIWIN_MENU_OUTCOME {
     /**
      The type of the outcome.
      */
@@ -576,37 +576,40 @@ typedef struct _YORI_WIN_MENU_OUTCOME {
         YoriWinMenuOutcomeMenuRight             = 4,
     } Outcome;
 
+    /**
+     A union of extra state for each outcome.
+     */
     union {
         struct {
             /**
              Pointer to a callback function to invoke if the outcome of the
              popup menu is that it should execute an item.
              */
-            PYORI_WIN_NOTIFY Callback;
+            PYORIWIN_NOTIFY Callback;
         } Execute;
-    };
-} YORI_WIN_MENU_OUTCOME, *PYORI_WIN_MENU_OUTCOME;
+    } u;
+} YORIWIN_MENU_OUTCOME, FAR *PYORIWIN_MENU_OUTCOME;
 
 /**
  A structure describing the contents of a popup menu control.
  */
-typedef struct _YORI_WIN_CTRL_MENU_POPUP {
+typedef struct _YORIWIN_CTRL_MENU_POPUP {
 
     /**
      A common header for all controls
      */
-    YORI_WIN_CTRL Ctrl;
+    YORIWIN_CTRL Ctrl;
 
     /**
      When the control terminates the parent window, this structure is
      populated with information about the action to perform.
      */
-    PYORI_WIN_MENU_OUTCOME Outcome;
+    PYORIWIN_MENU_OUTCOME Outcome;
 
     /**
      Information about the complete heirarchy of menu options.
      */
-    PYORI_WIN_CTRL_MENU_ENTRY Items;
+    PYORIWIN_CTRL_MENU_ENTRY Items;
 
     /**
      the number of elements in the Items and ItemCtrlArray arrays.
@@ -641,16 +644,16 @@ typedef struct _YORI_WIN_CTRL_MENU_POPUP {
      */
     BOOLEAN ActiveMenuItem;
 
-} YORI_WIN_CTRL_MENU_POPUP, *PYORI_WIN_CTRL_MENU_POPUP;
+} YORIWIN_CTRL_MENU_POPUP, FAR *PYORIWIN_CTRL_MENU_POPUP;
 
 BOOLEAN
 YoriWinMenuPopupWindowCreate(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in PSMALL_RECT WindowRect,
     __in BOOLEAN Shadow,
-    __in_ecount(ChildItemCount) PYORI_WIN_CTRL_MENU_ENTRY ChildItems,
+    __in_ecount(ChildItemCount) PYORIWIN_CTRL_MENU_ENTRY ChildItems,
     __in YORI_ALLOC_SIZE_T ChildItemCount,
-    __in PYORI_WIN_MENU_OUTCOME Outcome
+    __in PYORIWIN_MENU_OUTCOME Outcome
     );
 
 /**
@@ -679,7 +682,7 @@ YoriWinMenuControlMask(
  */
 BOOLEAN
 YoriWinMenuPopupPaint(
-    __in PYORI_WIN_CTRL_MENU_POPUP MenuPopup
+    __in PYORIWIN_CTRL_MENU_POPUP MenuPopup
     )
 {
     YORI_ALLOC_SIZE_T Index;
@@ -688,17 +691,17 @@ YoriWinMenuPopupPaint(
     WORD ItemAttributes;
     WORD CharAttributes;
     WORD RenderLine;
-    PYORI_WIN_CTRL_MENU_ENTRY Item;
+    PYORIWIN_CTRL_MENU_ENTRY Item;
     COORD ClientSize;
     CONST TCHAR* Chars;
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle;
 
     TextAttributes = MenuPopup->Ctrl.DefaultAttributes;
-    YoriWinGetControlClientSize(&MenuPopup->Ctrl, &ClientSize);
+    YoriWinGetCtrlClientSize(&MenuPopup->Ctrl, &ClientSize);
 
-    YoriWinDrawBorderOnControl(&MenuPopup->Ctrl, &MenuPopup->Ctrl.ClientRect, TextAttributes, YORI_WIN_BORDER_TYPE_SINGLE);
-    WinMgrHandle = YoriWinGetWindowManagerHandle(YoriWinGetTopLevelWindow(&MenuPopup->Ctrl));
-    Chars = YoriWinGetDrawingCharacters(WinMgrHandle, YoriWinCharsMenu);
+    YoriWinDrawBorderCtrl(&MenuPopup->Ctrl, &MenuPopup->Ctrl.ClientRect, TextAttributes, YORIWIN_BORDER_TYPE_SINGLE);
+    WinMgrHandle = YoriWinGetWinMgrHandle(YoriWinGetTopLevelWindow(&MenuPopup->Ctrl));
+    Chars = YoriWinGetDrawingCharacters(WinMgrHandle, YoriWinChrMenu);
 
     for (Index = 0; Index < MenuPopup->ItemCount; Index++) {
         Item = &MenuPopup->Items[Index];
@@ -707,7 +710,7 @@ YoriWinMenuPopupPaint(
             Index == MenuPopup->ActiveItemIndex) {
 
             ItemAttributes = MenuPopup->SelectedTextAttributes;
-        } else if (Item->Flags & YORI_WIN_MENU_ENTRY_DISABLED) {
+        } else if (Item->Flags & YORIWIN_MENU_ENTRY_DISABLED) {
             ItemAttributes = (WORD)((ItemAttributes & 0xF0) | FOREGROUND_INTENSITY);
         }
 
@@ -718,25 +721,25 @@ YoriWinMenuPopupPaint(
 
         RenderLine = (WORD)(Index + 1);
 
-        if (Item->Flags & YORI_WIN_MENU_ENTRY_SEPERATOR) {
-            YoriWinSetControlClientCell(&MenuPopup->Ctrl, 0, RenderLine, Chars[0], ItemAttributes);
+        if (Item->Flags & YORIWIN_MENU_ENTRY_SEPERATOR) {
+            YoriWinSetCtrlClientCell(&MenuPopup->Ctrl, 0, RenderLine, Chars[0], ItemAttributes);
             for (CharIndex = 1; (SHORT)CharIndex < ClientSize.X - 1; CharIndex++) {
-                YoriWinSetControlClientCell(&MenuPopup->Ctrl, (WORD)(CharIndex), RenderLine, Chars[1], ItemAttributes);
+                YoriWinSetCtrlClientCell(&MenuPopup->Ctrl, (WORD)(CharIndex), RenderLine, Chars[1], ItemAttributes);
             }
-            YoriWinSetControlClientCell(&MenuPopup->Ctrl, (WORD)(CharIndex), RenderLine, Chars[2], ItemAttributes);
+            YoriWinSetCtrlClientCell(&MenuPopup->Ctrl, (WORD)(CharIndex), RenderLine, Chars[2], ItemAttributes);
         } else {
 
             //
             //  Add spaces and possibly a check mark to the left of the entry
             //
 
-            YoriWinSetControlClientCell(&MenuPopup->Ctrl, 1, RenderLine, ' ', ItemAttributes);
-            if (Item->Flags & YORI_WIN_MENU_ENTRY_CHECKED) {
-                YoriWinSetControlClientCell(&MenuPopup->Ctrl, 2, RenderLine, Chars[3], ItemAttributes);
+            YoriWinSetCtrlClientCell(&MenuPopup->Ctrl, 1, RenderLine, ' ', ItemAttributes);
+            if (Item->Flags & YORIWIN_MENU_ENTRY_CHECKED) {
+                YoriWinSetCtrlClientCell(&MenuPopup->Ctrl, 2, RenderLine, Chars[3], ItemAttributes);
             } else {
-                YoriWinSetControlClientCell(&MenuPopup->Ctrl, 2, RenderLine, ' ', ItemAttributes);
+                YoriWinSetCtrlClientCell(&MenuPopup->Ctrl, 2, RenderLine, ' ', ItemAttributes);
             }
-            YoriWinSetControlClientCell(&MenuPopup->Ctrl, 3, RenderLine, ' ', ItemAttributes);
+            YoriWinSetCtrlClientCell(&MenuPopup->Ctrl, 3, RenderLine, ' ', ItemAttributes);
 
             //
             //  Copy the display string to the display.  Note this includes
@@ -745,7 +748,7 @@ YoriWinMenuPopupPaint(
 
             for (CharIndex = 0; CharIndex < Item->DisplayCaption.LengthInChars; CharIndex++) {
                 CharAttributes = ItemAttributes;
-                if ((Item->Flags & YORI_WIN_MENU_ENTRY_DISABLED) == 0 &&
+                if ((Item->Flags & YORIWIN_MENU_ENTRY_DISABLED) == 0 &&
                     Item->AcceleratorChar != '\0' &&
                     Item->AcceleratorOffset == CharIndex) {
 
@@ -757,7 +760,7 @@ YoriWinMenuPopupPaint(
                         CharAttributes = MenuPopup->AcceleratorAttributes;
                     }
                 }
-                YoriWinSetControlClientCell(&MenuPopup->Ctrl, (WORD)(CharIndex + 4), RenderLine, Item->DisplayCaption.StartOfString[CharIndex], CharAttributes);
+                YoriWinSetCtrlClientCell(&MenuPopup->Ctrl, (WORD)(CharIndex + 4), RenderLine, Item->DisplayCaption.StartOfString[CharIndex], CharAttributes);
             }
 
             //
@@ -765,7 +768,7 @@ YoriWinMenuPopupPaint(
             //
 
             for (; (SHORT)CharIndex < ClientSize.X - 6; CharIndex++) {
-                YoriWinSetControlClientCell(&MenuPopup->Ctrl, (WORD)(CharIndex + 4), RenderLine, ' ', ItemAttributes);
+                YoriWinSetCtrlClientCell(&MenuPopup->Ctrl, (WORD)(CharIndex + 4), RenderLine, ' ', ItemAttributes);
             }
 
             //
@@ -773,9 +776,9 @@ YoriWinMenuPopupPaint(
             //
 
             if (Item->ChildItems != NULL) {
-                YoriWinSetControlClientCell(&MenuPopup->Ctrl, (WORD)(CharIndex + 4), RenderLine, Chars[4], ItemAttributes);
+                YoriWinSetCtrlClientCell(&MenuPopup->Ctrl, (WORD)(CharIndex + 4), RenderLine, Chars[4], ItemAttributes);
             } else {
-                YoriWinSetControlClientCell(&MenuPopup->Ctrl, (WORD)(CharIndex + 4), RenderLine, ' ', ItemAttributes);
+                YoriWinSetCtrlClientCell(&MenuPopup->Ctrl, (WORD)(CharIndex + 4), RenderLine, ' ', ItemAttributes);
             }
         }
 
@@ -797,13 +800,13 @@ YoriWinMenuPopupPaint(
  */
 BOOLEAN
 YoriWinMenuPopupCanItemBeActive(
-    __in PYORI_WIN_CTRL_MENU_POPUP MenuPopup,
+    __in PYORIWIN_CTRL_MENU_POPUP MenuPopup,
     __in DWORD Index
     )
 {
-    PYORI_WIN_CTRL_MENU_ENTRY Item;
+    PYORIWIN_CTRL_MENU_ENTRY Item;
     Item = &MenuPopup->Items[Index];
-    if (Item->Flags & (YORI_WIN_MENU_ENTRY_SEPERATOR | YORI_WIN_MENU_ENTRY_DISABLED)) {
+    if (Item->Flags & (YORIWIN_MENU_ENTRY_SEPERATOR | YORIWIN_MENU_ENTRY_DISABLED)) {
         return FALSE;
     }
 
@@ -819,13 +822,13 @@ YoriWinMenuPopupCanItemBeActive(
  @param MenuPopup Pointer to the menu popup control.
  */
 VOID
-YoriWinMenuPopupSetNextItemActive(
-    __in PYORI_WIN_CTRL_MENU_POPUP MenuPopup
+YoriWinMenuPopupSetNextActive(
+    __in PYORIWIN_CTRL_MENU_POPUP MenuPopup
     )
 {
     YORI_ALLOC_SIZE_T ProbeIndex;
     YORI_ALLOC_SIZE_T TerminateIndex;
-    PYORI_WIN_CTRL_MENU_ENTRY Item;
+    PYORIWIN_CTRL_MENU_ENTRY Item;
 
     if (MenuPopup->ItemCount == 0) {
         MenuPopup->ActiveMenuItem = FALSE;
@@ -874,13 +877,13 @@ YoriWinMenuPopupSetNextItemActive(
  @param MenuPopup Pointer to the menu popup control.
  */
 VOID
-YoriWinMenuPopupSetPreviousItemActive(
-    __in PYORI_WIN_CTRL_MENU_POPUP MenuPopup
+YoriWinMenuPopupSetPrevActive(
+    __in PYORIWIN_CTRL_MENU_POPUP MenuPopup
     )
 {
     YORI_ALLOC_SIZE_T ProbeIndex;
     YORI_ALLOC_SIZE_T TerminateIndex;
-    PYORI_WIN_CTRL_MENU_ENTRY Item;
+    PYORIWIN_CTRL_MENU_ENTRY Item;
 
     if (MenuPopup->ItemCount == 0) {
         MenuPopup->ActiveMenuItem = FALSE;
@@ -939,7 +942,7 @@ YoriWinMenuPopupSetPreviousItemActive(
  */
 VOID
 YoriWinMenuPopupSetActiveItem(
-    __in PYORI_WIN_CTRL_MENU_POPUP MenuPopup,
+    __in PYORIWIN_CTRL_MENU_POPUP MenuPopup,
     __in YORI_ALLOC_SIZE_T ProbeIndex
     )
 {
@@ -956,8 +959,8 @@ YoriWinMenuPopupSetActiveItem(
 }
 
 VOID
-YoriWinMenuGetPopupSizeNeededForItems(
-    __in PYORI_WIN_CTRL_MENU_ENTRY Items,
+YoriWinMenuGetPopupSizeNeeded(
+    __in PYORIWIN_CTRL_MENU_ENTRY Items,
     __in YORI_ALLOC_SIZE_T ItemCount,
     __out PCOORD SizeNeeded
     );
@@ -972,17 +975,17 @@ YoriWinMenuGetPopupSizeNeededForItems(
  */
 VOID
 YoriWinMenuPopupInvokeItem(
-    __in PYORI_WIN_CTRL_MENU_POPUP MenuPopup,
+    __in PYORIWIN_CTRL_MENU_POPUP MenuPopup,
     __in DWORD Index
     )
 {
-    PYORI_WIN_WINDOW Window;
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+    PYORIWIN_WINDOW Window;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle;
 
     Window = YoriWinGetTopLevelWindow(&MenuPopup->Ctrl);
 
     if (MenuPopup->Items[Index].ChildItems != NULL) {
-        PYORI_WIN_CTRL_MENU_ENTRY ChildItems;
+        PYORIWIN_CTRL_MENU_ENTRY ChildItems;
         YORI_ALLOC_SIZE_T ChildItemCount;
         COORD ClientSize;
         SMALL_RECT ChildRect;
@@ -992,17 +995,17 @@ YoriWinMenuPopupInvokeItem(
         COORD WinMgrSize;
         BOOLEAN Shadow;
 
-        WinMgrHandle = YoriWinGetWindowManagerHandle(Window);
+        WinMgrHandle = YoriWinGetWinMgrHandle(Window);
 
         ChildItems = MenuPopup->Items[Index].ChildItems;
         ChildItemCount = MenuPopup->Items[Index].ChildItemCount;
 
-        YoriWinMenuGetPopupSizeNeededForItems(ChildItems, ChildItemCount, &ClientSize);
+        YoriWinMenuGetPopupSizeNeeded(ChildItems, ChildItemCount, &ClientSize);
         YoriWinGetWindowSize(Window, &WindowSize);
 
         CtrlCoord.X = 0;
         CtrlCoord.Y = (SHORT)(Index + 1);
-        YoriWinTranslateCtrlCoordinatesToScreenCoordinates(YoriWinGetCtrlFromWindow(Window), FALSE, CtrlCoord, &ScreenCoord);
+        YoriWinTransCtrlCoordToScreen(YoriWinGetCtrlFromWindow(Window), FALSE, CtrlCoord, &ScreenCoord);
 
         ChildRect.Left = (SHORT)(ScreenCoord.X + WindowSize.X);
         ChildRect.Top = (SHORT)(ScreenCoord.Y - 1);
@@ -1020,10 +1023,10 @@ YoriWinMenuPopupInvokeItem(
             Shadow = FALSE;
         }
 
-        YoriWinMgrUnlockMouseExclusively(WinMgrHandle, Window);
+        YoriWinMgrUnlockMouseExcl(WinMgrHandle, Window);
         YoriWinMenuPopupWindowCreate(WinMgrHandle, &ChildRect, Shadow, ChildItems, ChildItemCount, MenuPopup->Outcome);
 
-        YoriWinMgrLockMouseExclusively(WinMgrHandle, Window);
+        YoriWinMgrLockMouseExcl(WinMgrHandle, Window);
 
         //
         //  The user can execute something from the child menu, causing this
@@ -1044,14 +1047,14 @@ YoriWinMenuPopupInvokeItem(
             MenuPopup->Outcome->Outcome == YoriWinMenuOutcomeMenuRight ||
             MenuPopup->Outcome->Outcome == YoriWinMenuOutcomeCancel) {
 
-            YoriWinCloseWindow(Window, 1);
+            YoriWinCloseWindow(Window, 1L);
         }
     }
 
-    if (MenuPopup->Items[Index].NotifyCallback != NULL) {
+    if (MenuPopup->Items[Index].NotifyCbk != NULL) {
         MenuPopup->Outcome->Outcome = YoriWinMenuOutcomeExecute;
-        MenuPopup->Outcome->Execute.Callback = MenuPopup->Items[Index].NotifyCallback;
-        YoriWinCloseWindow(Window, 1);
+        MenuPopup->Outcome->u.Execute.Callback = MenuPopup->Items[Index].NotifyCbk;
+        YoriWinCloseWindow(Window, 1L);
     }
 }
 
@@ -1069,52 +1072,52 @@ YoriWinMenuPopupInvokeItem(
  */
 BOOLEAN
 YoriWinMenuPopupEventHandler(
-    __in PYORI_WIN_CTRL Ctrl,
-    __in PYORI_WIN_EVENT Event
+    __in PYORIWIN_CTRL Ctrl,
+    __in PYORIWIN_EVENT Event
     )
 {
-    PYORI_WIN_CTRL_MENU_POPUP MenuPopup;
-    PYORI_WIN_WINDOW Window;
+    PYORIWIN_CTRL_MENU_POPUP MenuPopup;
+    PYORIWIN_WINDOW Window;
 
-    MenuPopup = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_MENU_POPUP, Ctrl);
+    MenuPopup = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_MENU_POPUP, Ctrl);
     switch(Event->EventType) {
         case YoriWinEventParentDestroyed:
             YoriWinDestroyControl(Ctrl);
             YoriLibDereference(MenuPopup);
             break;
         case YoriWinEventKeyDown:
-            if (Event->KeyDown.VirtualKeyCode == VK_DOWN) {
-                YoriWinMenuPopupSetNextItemActive(MenuPopup);
+            if (Event->u.KeyDown.VirtualKeyCode == VK_DOWN) {
+                YoriWinMenuPopupSetNextActive(MenuPopup);
                 YoriWinMenuPopupPaint(MenuPopup);
-            } else if (Event->KeyDown.VirtualKeyCode == VK_UP) {
-                YoriWinMenuPopupSetPreviousItemActive(MenuPopup);
+            } else if (Event->u.KeyDown.VirtualKeyCode == VK_UP) {
+                YoriWinMenuPopupSetPrevActive(MenuPopup);
                 YoriWinMenuPopupPaint(MenuPopup);
-            } else if (Event->KeyDown.VirtualKeyCode == VK_LEFT) {
+            } else if (Event->u.KeyDown.VirtualKeyCode == VK_LEFT) {
                 Window = YoriWinGetTopLevelWindow(Ctrl);
                 MenuPopup->Outcome->Outcome = YoriWinMenuOutcomeMenuLeft;
-                YoriWinCloseWindow(Window, 1);
-            } else if (Event->KeyDown.VirtualKeyCode == VK_RIGHT) {
+                YoriWinCloseWindow(Window, 1L);
+            } else if (Event->u.KeyDown.VirtualKeyCode == VK_RIGHT) {
                 if (MenuPopup->ActiveMenuItem && MenuPopup->Items[MenuPopup->ActiveItemIndex].ChildItems != NULL) {
                     YoriWinMenuPopupInvokeItem(MenuPopup, MenuPopup->ActiveItemIndex);
                 } else {
                     Window = YoriWinGetTopLevelWindow(Ctrl);
                     MenuPopup->Outcome->Outcome = YoriWinMenuOutcomeMenuRight;
-                    YoriWinCloseWindow(Window, 1);
+                    YoriWinCloseWindow(Window, 1L);
                 }
-            } else if (Event->KeyDown.VirtualKeyCode == VK_RETURN) {
+            } else if (Event->u.KeyDown.VirtualKeyCode == VK_RETURN) {
                 if (MenuPopup->ActiveMenuItem) {
                     YoriWinMenuPopupInvokeItem(MenuPopup, MenuPopup->ActiveItemIndex);
                 }
-            } else if (Event->KeyDown.VirtualKeyCode == VK_ESCAPE) {
+            } else if (Event->u.KeyDown.VirtualKeyCode == VK_ESCAPE) {
                 Window = YoriWinGetTopLevelWindow(Ctrl);
                 MenuPopup->Outcome->Outcome = YoriWinMenuOutcomeCancel;
-                YoriWinCloseWindow(Window, 1);
-            } else if ((Event->KeyDown.CtrlMask & ~(LEFT_ALT_PRESSED | RIGHT_ALT_PRESSED | SHIFT_PRESSED)) == 0) {
-                DWORD Index;
+                YoriWinCloseWindow(Window, 1L);
+            } else if ((Event->u.KeyDown.CtrlMask & ~(LEFT_ALT_PRESSED | RIGHT_ALT_PRESSED | SHIFT_PRESSED)) == 0) {
+                YORI_ALLOC_SIZE_T Index;
                 for (Index = 0; Index < MenuPopup->ItemCount; Index++) {
-                    if ((MenuPopup->Items[Index].Flags & YORI_WIN_MENU_ENTRY_DISABLED) == 0 &&
+                    if ((MenuPopup->Items[Index].Flags & YORIWIN_MENU_ENTRY_DISABLED) == 0 &&
                         MenuPopup->Items[Index].AcceleratorChar != '\0' &&
-                        YoriLibUpcaseChar(Event->KeyDown.Char) == YoriLibUpcaseChar(MenuPopup->Items[Index].AcceleratorChar)) {
+                        YoriLibUpcaseChar(Event->u.KeyDown.Char) == YoriLibUpcaseChar(MenuPopup->Items[Index].AcceleratorChar)) {
                         YoriWinMenuPopupInvokeItem(MenuPopup, Index);
                         break;
                     }
@@ -1122,20 +1125,20 @@ YoriWinMenuPopupEventHandler(
 
             }
             break;
-        case YoriWinEventMouseDownInClient:
-            if (YoriWinMenuControlMask(Event->MouseDown.ControlKeyState) == 0 &&
-                Event->MouseDown.ButtonsPressed & FROM_LEFT_1ST_BUTTON_PRESSED &&
-                Event->MouseDown.Location.Y >= 1 && (DWORD)Event->MouseDown.Location.Y <= MenuPopup->ItemCount) {
+        case YoriWinEventMouseDownClient:
+            if (YoriWinMenuControlMask(Event->u.MouseDown.ControlKeyState) == 0 &&
+                Event->u.MouseDown.ButtonsPressed & FROM_LEFT_1ST_BUTTON_PRESSED &&
+                Event->u.MouseDown.Location.Y >= 1 && (YORI_ALLOC_SIZE_T)Event->u.MouseDown.Location.Y <= MenuPopup->ItemCount) {
 
-                YoriWinMenuPopupSetActiveItem(MenuPopup, Event->MouseDown.Location.Y - 1);
+                YoriWinMenuPopupSetActiveItem(MenuPopup, Event->u.MouseDown.Location.Y - 1);
                 YoriWinMenuPopupPaint(MenuPopup);
             }
             break;
-        case YoriWinEventMouseUpInClient:
-            if (YoriWinMenuControlMask(Event->MouseUp.ControlKeyState) == 0 &&
-                Event->MouseUp.ButtonsReleased & FROM_LEFT_1ST_BUTTON_PRESSED &&
+        case YoriWinEventMouseUpClient:
+            if (YoriWinMenuControlMask(Event->u.MouseUp.ControlKeyState) == 0 &&
+                Event->u.MouseUp.ButtonsReleased & FROM_LEFT_1ST_BUTTON_PRESSED &&
                 MenuPopup->ActiveMenuItem &&
-                MenuPopup->ActiveItemIndex == (DWORD)(Event->MouseUp.Location.Y - 1)) {
+                MenuPopup->ActiveItemIndex == (YORI_ALLOC_SIZE_T)(Event->u.MouseUp.Location.Y - 1)) {
 
                 YoriWinMenuPopupInvokeItem(MenuPopup, MenuPopup->ActiveItemIndex);
             }
@@ -1168,30 +1171,30 @@ YoriWinMenuPopupEventHandler(
 
  @return Pointer to the newly created control or NULL on failure.
  */
-PYORI_WIN_CTRL_HANDLE
+PYORIWIN_CTRL_HANDLE
 YoriWinMenuPopupCreate(
-    __in PYORI_WIN_CTRL_HANDLE ParentHandle,
+    __in PYORIWIN_CTRL_HANDLE ParentHandle,
     __in PSMALL_RECT Size,
-    __in PYORI_WIN_CTRL_MENU_ENTRY Items,
+    __in PYORIWIN_CTRL_MENU_ENTRY Items,
     __in YORI_ALLOC_SIZE_T ItemCount,
-    __in PYORI_WIN_MENU_OUTCOME Outcome,
+    __in PYORIWIN_MENU_OUTCOME Outcome,
     __in DWORD Style
     )
 {
-    PYORI_WIN_CTRL_MENU_POPUP MenuPopup;
-    PYORI_WIN_CTRL Parent;
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+    PYORIWIN_CTRL_MENU_POPUP MenuPopup;
+    PYORIWIN_CTRL Parent;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle;
 
     UNREFERENCED_PARAMETER(Style);
 
-    Parent = (PYORI_WIN_CTRL)ParentHandle;
+    Parent = (PYORIWIN_CTRL)ParentHandle;
 
-    MenuPopup = YoriLibReferencedMalloc(sizeof(YORI_WIN_CTRL_MENU_POPUP));
+    MenuPopup = YoriLibReferencedMalloc(sizeof(YORIWIN_CTRL_MENU_POPUP));
     if (MenuPopup == NULL) {
         return NULL;
     }
 
-    ZeroMemory(MenuPopup, sizeof(YORI_WIN_CTRL_MENU_POPUP));
+    ZeroMemory(MenuPopup, sizeof(YORIWIN_CTRL_MENU_POPUP));
     MenuPopup->Items = Items;
     MenuPopup->ItemCount = ItemCount;
     MenuPopup->Ctrl.NotifyEventFn = YoriWinMenuPopupEventHandler;
@@ -1201,15 +1204,15 @@ YoriWinMenuPopupCreate(
         return NULL;
     }
 
-    WinMgrHandle = YoriWinGetWindowManagerHandle(YoriWinGetTopLevelWindow(Parent));
+    WinMgrHandle = YoriWinGetWinMgrHandle(YoriWinGetTopLevelWindow(Parent));
 
     MenuPopup->SelectedTextAttributes = YoriWinMgrDefaultColorLookup(WinMgrHandle, YoriWinColorMenuSelected);
-    MenuPopup->SelectedAcceleratorAttributes = YoriWinMgrDefaultColorLookup(WinMgrHandle, YoriWinColorMenuSelectedAccelerator);
-    MenuPopup->AcceleratorAttributes = YoriWinMgrDefaultColorLookup(WinMgrHandle, YoriWinColorMenuAccelerator);
+    MenuPopup->SelectedAcceleratorAttributes = YoriWinMgrDefaultColorLookup(WinMgrHandle, YoriWinColorMenuSelectedAccel);
+    MenuPopup->AcceleratorAttributes = YoriWinMgrDefaultColorLookup(WinMgrHandle, YoriWinColorMenuAccel);
 
-    YoriWinMenuPopupSetNextItemActive(MenuPopup);
+    YoriWinMenuPopupSetNextActive(MenuPopup);
     YoriWinMenuPopupPaint(MenuPopup);
-    YoriWinSetControlId(MenuPopup, 1);
+    YoriWinSetCtrlId(MenuPopup, 1);
 
     return &MenuPopup->Ctrl;
 }
@@ -1226,14 +1229,14 @@ YoriWinMenuPopupCreate(
         height of the control needed to display the set of items.
  */
 VOID
-YoriWinMenuGetPopupSizeNeededForItems(
-    __in PYORI_WIN_CTRL_MENU_ENTRY Items,
+YoriWinMenuGetPopupSizeNeeded(
+    __in PYORIWIN_CTRL_MENU_ENTRY Items,
     __in YORI_ALLOC_SIZE_T ItemCount,
     __out PCOORD SizeNeeded
     )
 {
-    DWORD LongestChildItem;
-    DWORD Index;
+    YORI_ALLOC_SIZE_T LongestChildItem;
+    YORI_ALLOC_SIZE_T Index;
 
     LongestChildItem = 0;
     for (Index = 0; Index < ItemCount; Index++) {
@@ -1272,12 +1275,12 @@ YoriWinMenuGetPopupSizeNeededForItems(
  */
 BOOLEAN
 YoriWinMenuPopupChildEvent(
-    __in PYORI_WIN_CTRL Ctrl,
-    __in PYORI_WIN_EVENT Event
+    __in PYORIWIN_CTRL Ctrl,
+    __in PYORIWIN_EVENT Event
     )
 {
-    PYORI_WIN_WINDOW Window;
-    PYORI_WIN_CTRL_MENU_POPUP MenuPopup;
+    PYORIWIN_WINDOW Window;
+    PYORIWIN_CTRL_MENU_POPUP MenuPopup;
 
     Window = YoriWinGetWindowFromWindowCtrl(Ctrl);
     MenuPopup = YoriWinFindControlById(Ctrl, 1);
@@ -1286,9 +1289,9 @@ YoriWinMenuPopupChildEvent(
     }
 
     switch(Event->EventType) {
-        case YoriWinEventMouseDownOutsideWindow:
+        case YoriWinEventMouseDownOutsideWin:
             MenuPopup->Outcome->Outcome = YoriWinMenuOutcomeCancel;
-            YoriWinCloseWindow(Window, 1);
+            YoriWinCloseWindow(Window, 1L);
             break;
     }
     return FALSE;
@@ -1319,25 +1322,25 @@ YoriWinMenuPopupChildEvent(
  */
 BOOLEAN
 YoriWinMenuPopupWindowCreate(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in PSMALL_RECT WindowRect,
     __in BOOLEAN Shadow,
-    __in_ecount(ChildItemCount) PYORI_WIN_CTRL_MENU_ENTRY ChildItems,
+    __in_ecount(ChildItemCount) PYORIWIN_CTRL_MENU_ENTRY ChildItems,
     __in YORI_ALLOC_SIZE_T ChildItemCount,
-    __in PYORI_WIN_MENU_OUTCOME Outcome
+    __in PYORIWIN_MENU_OUTCOME Outcome
     )
 {
-    PYORI_WIN_CTRL MenuPopup;
+    PYORIWIN_CTRL MenuPopup;
     COORD ClientSize;
     SMALL_RECT MenuPopupRect;
     DWORD_PTR ChildResult;
-    PYORI_WIN_WINDOW_HANDLE PopupWindow;
+    PYORIWIN_WINDOW_HANDLE PopupWindow;
 
-    if (!YoriWinCreateWindowEx(WinMgrHandle, WindowRect, Shadow?YORI_WIN_WINDOW_STYLE_SHADOW_TRANSPARENT:0, NULL, &PopupWindow)) {
+    if (!YoriWinCreateWindowEx(WinMgrHandle, WindowRect, (WORD)(Shadow?YORIWIN_WIN_STY_SHADOW_TRANS:0), NULL, &PopupWindow)) {
         return FALSE;
     }
 
-    YoriWinGetControlClientSize(YoriWinGetCtrlFromWindow(PopupWindow), &ClientSize);
+    YoriWinGetCtrlClientSize(YoriWinGetCtrlFromWindow(PopupWindow), &ClientSize);
     MenuPopupRect.Left = 0;
     MenuPopupRect.Top = 0;
     MenuPopupRect.Right = (SHORT)(ClientSize.X - 1);
@@ -1353,8 +1356,8 @@ YoriWinMenuPopupWindowCreate(
     //  ensure the user can click outside to deactivate
     //
 
-    YoriWinMgrLockMouseExclusively(WinMgrHandle, PopupWindow);
-    YoriWinSetCustomNotification(PopupWindow, YoriWinEventMouseDownOutsideWindow, YoriWinMenuPopupChildEvent);
+    YoriWinMgrLockMouseExcl(WinMgrHandle, PopupWindow);
+    YoriWinSetCustomNotification(PopupWindow, YoriWinEventMouseDownOutsideWin, YoriWinMenuPopupChildEvent);
     YoriWinProcessInputForWindow(PopupWindow, &ChildResult);
 
     YoriWinDestroyWindow(PopupWindow);
@@ -1370,17 +1373,17 @@ YoriWinMenuPopupWindowCreate(
 /**
  A structure describing the contents of a menubar control.
  */
-typedef struct _YORI_WIN_CTRL_MENUBAR {
+typedef struct _YORIWIN_CTRL_MENUBAR {
 
     /**
      A common header for all controls
      */
-    YORI_WIN_CTRL Ctrl;
+    YORIWIN_CTRL Ctrl;
 
     /**
      Information about the complete heirarchy of menu options.
      */
-    PYORI_WIN_CTRL_MENU_ENTRY Items;
+    PYORIWIN_CTRL_MENU_ENTRY Items;
 
     /**
      the number of elements in the Items and ItemCtrlArray arrays.
@@ -1397,7 +1400,7 @@ typedef struct _YORI_WIN_CTRL_MENUBAR {
      An array of hotkeys that could reside anywhere within the menu bar
      heirarchy.
      */
-    YORI_WIN_CTRL_MENU_HOTKEY_ARRAY HotkeyArray;
+    YORIWIN_CTRL_MENU_HOTKEY_ARRAY HotkeyArray;
 
     /**
      The color attributes to use to display the menu bar.
@@ -1434,7 +1437,7 @@ typedef struct _YORI_WIN_CTRL_MENUBAR {
      */
     BOOLEAN ActiveMenuItem;
 
-} YORI_WIN_CTRL_MENUBAR, *PYORI_WIN_CTRL_MENUBAR;
+} YORIWIN_CTRL_MENUBAR, FAR *PYORIWIN_CTRL_MENUBAR;
 
 /**
  Draw the menubar with its current state applied.
@@ -1445,7 +1448,7 @@ typedef struct _YORI_WIN_CTRL_MENUBAR {
  */
 BOOLEAN
 YoriWinMenuBarPaint(
-    __in PYORI_WIN_CTRL_MENUBAR MenuBar
+    __in PYORIWIN_CTRL_MENUBAR MenuBar
     )
 {
     YORI_ALLOC_SIZE_T ItemIndex;
@@ -1455,17 +1458,17 @@ YoriWinMenuBarPaint(
     WORD ItemAttributes;
     WORD AcceleratorAttributes;
     COORD ClientSize;
-    PYORI_WIN_WINDOW TopLevelWindow;
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+    PYORIWIN_WINDOW TopLevelWindow;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle;
 
     TopLevelWindow = YoriWinGetTopLevelWindow(&MenuBar->Ctrl);
-    WinMgrHandle = YoriWinGetWindowManagerHandle(TopLevelWindow);
+    WinMgrHandle = YoriWinGetWinMgrHandle(TopLevelWindow);
 
     TextAttributes = MenuBar->TextAttributes;
 
-    YoriWinGetControlClientSize(&MenuBar->Ctrl, &ClientSize);
+    YoriWinGetCtrlClientSize(&MenuBar->Ctrl, &ClientSize);
     for (CellIndex = 0; CellIndex < 1; CellIndex++) {
-        YoriWinSetControlClientCell(&MenuBar->Ctrl, CellIndex, 0, ' ', TextAttributes);
+        YoriWinSetCtrlClientCell(&MenuBar->Ctrl, CellIndex, 0, ' ', TextAttributes);
     }
 
     for (ItemIndex = 0; ItemIndex < MenuBar->ItemCount; ItemIndex++) {
@@ -1475,7 +1478,7 @@ YoriWinMenuBarPaint(
         if (MenuBar->ActiveMenuItem && ItemIndex == MenuBar->ActiveItemIndex) {
             ItemAttributes = MenuBar->SelectedTextAttributes;
         }
-        YoriWinSetControlClientCell(&MenuBar->Ctrl, CellIndex, 0, ' ', ItemAttributes);
+        YoriWinSetCtrlClientCell(&MenuBar->Ctrl, CellIndex, 0, ' ', ItemAttributes);
         CellIndex++;
         for (CharIndex = 0; CharIndex < MenuBar->Items[ItemIndex].DisplayCaption.LengthInChars; CharIndex++) {
             if (MenuBar->DisplayAccelerator &&
@@ -1488,19 +1491,19 @@ YoriWinMenuBarPaint(
                     AcceleratorAttributes = MenuBar->AcceleratorAttributes;
                 }
 
-                YoriWinSetControlClientCell(&MenuBar->Ctrl, CellIndex, 0, MenuBar->Items[ItemIndex].DisplayCaption.StartOfString[CharIndex], AcceleratorAttributes);
+                YoriWinSetCtrlClientCell(&MenuBar->Ctrl, CellIndex, 0, MenuBar->Items[ItemIndex].DisplayCaption.StartOfString[CharIndex], AcceleratorAttributes);
             } else {
-                YoriWinSetControlClientCell(&MenuBar->Ctrl, CellIndex, 0, MenuBar->Items[ItemIndex].DisplayCaption.StartOfString[CharIndex], ItemAttributes);
+                YoriWinSetCtrlClientCell(&MenuBar->Ctrl, CellIndex, 0, MenuBar->Items[ItemIndex].DisplayCaption.StartOfString[CharIndex], ItemAttributes);
             }
             CellIndex++;
         }
-        YoriWinSetControlClientCell(&MenuBar->Ctrl, CellIndex, 0, ' ', ItemAttributes);
+        YoriWinSetCtrlClientCell(&MenuBar->Ctrl, CellIndex, 0, ' ', ItemAttributes);
         CellIndex++;
 
     }
 
-    for (;CellIndex < ClientSize.X; CellIndex++) {
-        YoriWinSetControlClientCell(&MenuBar->Ctrl, CellIndex, 0, ' ', TextAttributes);
+    for (;CellIndex < (WORD)ClientSize.X; CellIndex++) {
+        YoriWinSetCtrlClientCell(&MenuBar->Ctrl, CellIndex, 0, ' ', TextAttributes);
     }
 
 
@@ -1522,18 +1525,18 @@ YoriWinMenuBarPaint(
  */
 BOOLEAN
 YoriWinMenuBarOpenMenu(
-    __in PYORI_WIN_CTRL_MENUBAR MenuBar,
+    __in PYORIWIN_CTRL_MENUBAR MenuBar,
     __in YORI_ALLOC_SIZE_T ItemIndex,
-    __in PYORI_WIN_MENU_OUTCOME Outcome
+    __in PYORIWIN_MENU_OUTCOME Outcome
     )
 {
-    PYORI_WIN_CTRL Ctrl;
+    PYORIWIN_CTRL Ctrl;
     COORD CtrlCoord;
     COORD ScreenCoord;
-    PYORI_WIN_WINDOW TopLevelWindow;
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+    PYORIWIN_WINDOW TopLevelWindow;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle;
     SMALL_RECT ChildRect;
-    PYORI_WIN_CTRL_MENU_ENTRY ChildItems;
+    PYORIWIN_CTRL_MENU_ENTRY ChildItems;
     YORI_ALLOC_SIZE_T ChildItemCount;
     WORD HorizontalOffset;
     YORI_ALLOC_SIZE_T Index;
@@ -1549,13 +1552,13 @@ YoriWinMenuBarOpenMenu(
 
     CtrlCoord.X = 0;
     CtrlCoord.Y = 0;
-    YoriWinTranslateCtrlCoordinatesToScreenCoordinates(Ctrl, FALSE, CtrlCoord, &ScreenCoord);
-    WinMgrHandle = YoriWinGetWindowManagerHandle(TopLevelWindow);
+    YoriWinTransCtrlCoordToScreen(Ctrl, FALSE, CtrlCoord, &ScreenCoord);
+    WinMgrHandle = YoriWinGetWinMgrHandle(TopLevelWindow);
 
     ChildItems = MenuBar->Items[ItemIndex].ChildItems;
     ChildItemCount = MenuBar->Items[ItemIndex].ChildItemCount;
 
-    YoriWinMenuGetPopupSizeNeededForItems(ChildItems, ChildItemCount, &ClientSize);
+    YoriWinMenuGetPopupSizeNeeded(ChildItems, ChildItemCount, &ClientSize);
 
     HorizontalOffset = 0;
     for (Index = 0; Index < ItemIndex; Index++) {
@@ -1604,19 +1607,19 @@ YoriWinMenuBarOpenMenu(
  */
 BOOLEAN
 YoriWinMenuBarExecuteTopMenu(
-    __in PYORI_WIN_CTRL_MENUBAR MenuBar,
+    __in PYORIWIN_CTRL_MENUBAR MenuBar,
     __in YORI_ALLOC_SIZE_T Index
     )
 {
-    YORI_WIN_MENU_OUTCOME Outcome;
+    YORIWIN_MENU_OUTCOME Outcome;
     YORI_ALLOC_SIZE_T DisplayIndex;
 
     DisplayIndex = Index;
 
     while(TRUE) {
 
-        if (MenuBar->Items[DisplayIndex].NotifyCallback != NULL) {
-            MenuBar->Items[DisplayIndex].NotifyCallback(&MenuBar->Ctrl);
+        if (MenuBar->Items[DisplayIndex].NotifyCbk != NULL) {
+            MenuBar->Items[DisplayIndex].NotifyCbk(&MenuBar->Ctrl);
         }
 
         if (MenuBar->Items[DisplayIndex].ChildItemCount > 0) {
@@ -1640,8 +1643,8 @@ YoriWinMenuBarExecuteTopMenu(
                 continue;
             } else if (Outcome.Outcome == YoriWinMenuOutcomeExecute) {
 
-                if (Outcome.Execute.Callback != NULL) {
-                    Outcome.Execute.Callback(&MenuBar->Ctrl);
+                if (Outcome.u.Execute.Callback != NULL) {
+                    Outcome.u.Execute.Callback(&MenuBar->Ctrl);
                 }
                 return TRUE;
             }
@@ -1680,7 +1683,7 @@ YoriWinMenuBarExecuteTopMenu(
  */
 BOOLEAN
 YoriWinMenuBarAccelerator(
-    __in PYORI_WIN_CTRL_MENUBAR MenuBar,
+    __in PYORIWIN_CTRL_MENUBAR MenuBar,
     __in TCHAR Char
     )
 {
@@ -1712,15 +1715,15 @@ YoriWinMenuBarAccelerator(
  */
 BOOLEAN
 YoriWinMenuBarHotkey(
-    __in PYORI_WIN_CTRL_MENUBAR MenuBar,
-    __in PYORI_WIN_EVENT Event
+    __in PYORIWIN_CTRL_MENUBAR MenuBar,
+    __in PYORIWIN_EVENT Event
     )
 {
-    PYORI_WIN_CTRL_MENU_HOTKEY Hotkey;
+    PYORIWIN_CTRL_MENU_HOTKEY Hotkey;
     DWORD EffectiveCtrlMask;
-    DWORD Index;
+    YORI_ALLOC_SIZE_T Index;
 
-    EffectiveCtrlMask = Event->KeyDown.CtrlMask;
+    EffectiveCtrlMask = Event->u.KeyDown.CtrlMask;
 
     //
     //  If right control is pressed, indicate left control is pressed
@@ -1734,10 +1737,10 @@ YoriWinMenuBarHotkey(
     for (Index = 0; Index < MenuBar->HotkeyArray.Populated; Index++) {
         Hotkey = &MenuBar->HotkeyArray.Keys[Index];
         if ((EffectiveCtrlMask & Hotkey->CtrlKeyMaskToCheck) == Hotkey->CtrlKeyMaskToEqual &&
-            Hotkey->VirtualKeyCode == Event->KeyDown.VirtualKeyCode) {
+            Hotkey->VirtualKeyCode == Event->u.KeyDown.VirtualKeyCode) {
 
-            if (Hotkey->EntryToInvoke->NotifyCallback != NULL) {
-                Hotkey->EntryToInvoke->NotifyCallback(&MenuBar->Ctrl);
+            if (Hotkey->EntryToInvoke->NotifyCbk != NULL) {
+                Hotkey->EntryToInvoke->NotifyCbk(&MenuBar->Ctrl);
                 return TRUE;
             }
         }
@@ -1760,12 +1763,12 @@ YoriWinMenuBarHotkey(
  */
 BOOLEAN
 YoriWinMenuBarEventHandler(
-    __in PYORI_WIN_CTRL Ctrl,
-    __in PYORI_WIN_EVENT Event
+    __in PYORIWIN_CTRL Ctrl,
+    __in PYORIWIN_EVENT Event
     )
 {
-    PYORI_WIN_CTRL_MENUBAR MenuBar;
-    MenuBar = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_MENUBAR, Ctrl);
+    PYORIWIN_CTRL_MENUBAR MenuBar;
+    MenuBar = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_MENUBAR, Ctrl);
     switch(Event->EventType) {
         case YoriWinEventParentDestroyed:
             if (MenuBar->Items != NULL) {
@@ -1792,7 +1795,7 @@ YoriWinMenuBarEventHandler(
             YoriWinMenuBarPaint(MenuBar);
             break;
         case YoriWinEventAccelerator:
-            if (YoriWinMenuBarAccelerator(MenuBar, Event->Accelerator.Char)) {
+            if (YoriWinMenuBarAccelerator(MenuBar, Event->u.Accelerator.Char)) {
                 return TRUE;
             }
             break;
@@ -1801,15 +1804,15 @@ YoriWinMenuBarEventHandler(
                 return TRUE;
             }
             break;
-        case YoriWinEventMouseDownInClient:
-            if (YoriWinMenuControlMask(Event->MouseDown.ControlKeyState) == 0 &&
-                Event->MouseDown.ButtonsPressed & FROM_LEFT_1ST_BUTTON_PRESSED) {
+        case YoriWinEventMouseDownClient:
+            if (YoriWinMenuControlMask(Event->u.MouseDown.ControlKeyState) == 0 &&
+                Event->u.MouseDown.ButtonsPressed & FROM_LEFT_1ST_BUTTON_PRESSED) {
 
-                DWORD HorizFound = 1;
+                YORI_ALLOC_SIZE_T HorizFound = 1;
                 YORI_ALLOC_SIZE_T Index;
                 for (Index = 0; Index < MenuBar->ItemCount; Index++) {
-                    if ((DWORD)Event->MouseDown.Location.X >= HorizFound &&
-                        (DWORD)Event->MouseDown.Location.X < HorizFound + MenuBar->Items[Index].DisplayCaption.LengthInChars + 2) {
+                    if ((YORI_ALLOC_SIZE_T)Event->u.MouseDown.Location.X >= HorizFound &&
+                        (YORI_ALLOC_SIZE_T)Event->u.MouseDown.Location.X < HorizFound + MenuBar->Items[Index].DisplayCaption.LengthInChars + 2) {
 
                         YoriWinMenuBarExecuteTopMenu(MenuBar, Index);
                         break;
@@ -1838,25 +1841,25 @@ YoriWinMenuBarEventHandler(
  */
 BOOLEAN
 YoriWinMenuBarAppendItems(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __in PYORI_WIN_MENU Items
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle,
+    __in PYORIWIN_MENU Items
     )
 {
-    PYORI_WIN_CTRL Ctrl;
-    PYORI_WIN_CTRL_MENUBAR MenuBar;
+    PYORIWIN_CTRL Ctrl;
+    PYORIWIN_CTRL_MENUBAR MenuBar;
     YORI_ALLOC_SIZE_T NewCount;
-    PYORI_WIN_CTRL_MENU_ENTRY NewItems;
+    PYORIWIN_CTRL_MENU_ENTRY NewItems;
 
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    MenuBar = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_MENUBAR, Ctrl);
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    MenuBar = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_MENUBAR, Ctrl);
 
     NewCount = MenuBar->ItemCount + Items->ItemCount;
-    NewItems = YoriLibReferencedMalloc(NewCount * sizeof(YORI_WIN_CTRL_MENU_ENTRY));
+    NewItems = YoriLibReferencedMalloc(NewCount * sizeof(YORIWIN_CTRL_MENU_ENTRY));
     if (NewItems == NULL) {
         return FALSE;
     }
 
-    ZeroMemory(NewItems, NewCount * sizeof(YORI_WIN_CTRL_MENU_ENTRY));
+    ZeroMemory(NewItems, NewCount * sizeof(YORIWIN_CTRL_MENU_ENTRY));
 
     if (!YoriWinMenuCopyMultipleItems(&MenuBar->HotkeyArray, Items->Items, &NewItems[MenuBar->ItemCount], Items->ItemCount)) {
         YoriLibDereference(NewItems);
@@ -1882,12 +1885,12 @@ YoriWinMenuBarAppendItems(
  */
 VOID
 YoriWinMenuBarDisableMenuItem(
-    __in PYORI_WIN_CTRL_HANDLE ItemHandle
+    __in PYORIWIN_CTRL_HANDLE ItemHandle
     )
 {
-    PYORI_WIN_CTRL_MENU_ENTRY Item;
-    Item = (PYORI_WIN_CTRL_MENU_ENTRY)ItemHandle;
-    Item->Flags = (Item->Flags | YORI_WIN_MENU_ENTRY_DISABLED);
+    PYORIWIN_CTRL_MENU_ENTRY Item;
+    Item = (PYORIWIN_CTRL_MENU_ENTRY)ItemHandle;
+    Item->Flags = (Item->Flags | YORIWIN_MENU_ENTRY_DISABLED);
 }
 
 /**
@@ -1897,12 +1900,12 @@ YoriWinMenuBarDisableMenuItem(
  */
 VOID
 YoriWinMenuBarEnableMenuItem(
-    __in PYORI_WIN_CTRL_HANDLE ItemHandle
+    __in PYORIWIN_CTRL_HANDLE ItemHandle
     )
 {
-    PYORI_WIN_CTRL_MENU_ENTRY Item;
-    Item = (PYORI_WIN_CTRL_MENU_ENTRY)ItemHandle;
-    Item->Flags = (Item->Flags & ~(YORI_WIN_MENU_ENTRY_DISABLED));
+    PYORIWIN_CTRL_MENU_ENTRY Item;
+    Item = (PYORIWIN_CTRL_MENU_ENTRY)ItemHandle;
+    Item->Flags = (Item->Flags & ~(YORIWIN_MENU_ENTRY_DISABLED));
 }
 
 /**
@@ -1912,12 +1915,12 @@ YoriWinMenuBarEnableMenuItem(
  */
 VOID
 YoriWinMenuBarCheckMenuItem(
-    __in PYORI_WIN_CTRL_HANDLE ItemHandle
+    __in PYORIWIN_CTRL_HANDLE ItemHandle
     )
 {
-    PYORI_WIN_CTRL_MENU_ENTRY Item;
-    Item = (PYORI_WIN_CTRL_MENU_ENTRY)ItemHandle;
-    Item->Flags = (Item->Flags | YORI_WIN_MENU_ENTRY_CHECKED);
+    PYORIWIN_CTRL_MENU_ENTRY Item;
+    Item = (PYORIWIN_CTRL_MENU_ENTRY)ItemHandle;
+    Item->Flags = (Item->Flags | YORIWIN_MENU_ENTRY_CHECKED);
 }
 
 /**
@@ -1927,12 +1930,12 @@ YoriWinMenuBarCheckMenuItem(
  */
 VOID
 YoriWinMenuBarUncheckMenuItem(
-    __in PYORI_WIN_CTRL_HANDLE ItemHandle
+    __in PYORIWIN_CTRL_HANDLE ItemHandle
     )
 {
-    PYORI_WIN_CTRL_MENU_ENTRY Item;
-    Item = (PYORI_WIN_CTRL_MENU_ENTRY)ItemHandle;
-    Item->Flags = (Item->Flags & ~(YORI_WIN_MENU_ENTRY_CHECKED));
+    PYORIWIN_CTRL_MENU_ENTRY Item;
+    Item = (PYORIWIN_CTRL_MENU_ENTRY)ItemHandle;
+    Item->Flags = (Item->Flags & ~(YORIWIN_MENU_ENTRY_CHECKED));
 }
 
 /**
@@ -1948,19 +1951,19 @@ YoriWinMenuBarUncheckMenuItem(
  @return Pointer to the menu item handle, or NULL if the menu item is out
          of range.
  */
-PYORI_WIN_CTRL_HANDLE
+PYORIWIN_CTRL_HANDLE
 YoriWinMenuBarGetSubmenuHandle(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
-    __in_opt PYORI_WIN_CTRL_HANDLE ParentItemHandle,
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle,
+    __in_opt PYORIWIN_CTRL_HANDLE ParentItemHandle,
     __in DWORD SubIndex
     )
 {
-    PYORI_WIN_CTRL_MENU_ENTRY Items;
-    PYORI_WIN_CTRL Ctrl;
-    PYORI_WIN_CTRL_MENUBAR MenuBar;
+    PYORIWIN_CTRL_MENU_ENTRY Items;
+    PYORIWIN_CTRL Ctrl;
+    PYORIWIN_CTRL_MENUBAR MenuBar;
 
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    MenuBar = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_MENUBAR, Ctrl);
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    MenuBar = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_MENUBAR, Ctrl);
 
     if (ParentItemHandle == NULL) {
         if (SubIndex < MenuBar->ItemCount) {
@@ -1969,7 +1972,7 @@ YoriWinMenuBarGetSubmenuHandle(
         return NULL;
     }
 
-    Items = (PYORI_WIN_CTRL_MENU_ENTRY)ParentItemHandle;
+    Items = (PYORIWIN_CTRL_MENU_ENTRY)ParentItemHandle;
 
     if (SubIndex < Items->ChildItemCount) {
         return &Items->ChildItems[SubIndex];
@@ -1989,15 +1992,15 @@ YoriWinMenuBarGetSubmenuHandle(
  */
 BOOLEAN
 YoriWinMenuBarReposition(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle,
     __in PSMALL_RECT CtrlRect
     )
 {
-    PYORI_WIN_CTRL Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    PYORI_WIN_CTRL_MENUBAR MenuBar;
+    PYORIWIN_CTRL Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    PYORIWIN_CTRL_MENUBAR MenuBar;
 
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    MenuBar = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_MENUBAR, Ctrl);
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    MenuBar = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_MENUBAR, Ctrl);
 
     if (!YoriWinControlReposition(Ctrl, CtrlRect)) {
         return FALSE;
@@ -2017,30 +2020,30 @@ YoriWinMenuBarReposition(
 
  @return Pointer to the newly created control or NULL on failure.
  */
-PYORI_WIN_CTRL_HANDLE
+PYORIWIN_CTRL_HANDLE
 YoriWinMenuBarCreate(
-    __in PYORI_WIN_CTRL_HANDLE ParentHandle,
-    __in DWORD Style
+    __in PYORIWIN_CTRL_HANDLE ParentHandle,
+    __in WORD Style
     )
 {
-    PYORI_WIN_CTRL_MENUBAR MenuBar;
-    PYORI_WIN_CTRL Parent;
+    PYORIWIN_CTRL_MENUBAR MenuBar;
+    PYORIWIN_CTRL Parent;
     SMALL_RECT Size;
     COORD ParentClientSize;
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle;
 
     UNREFERENCED_PARAMETER(Style);
 
-    Parent = (PYORI_WIN_CTRL)ParentHandle;
+    Parent = (PYORIWIN_CTRL)ParentHandle;
 
-    MenuBar = YoriLibReferencedMalloc(sizeof(YORI_WIN_CTRL_MENUBAR));
+    MenuBar = YoriLibReferencedMalloc(sizeof(YORIWIN_CTRL_MENUBAR));
     if (MenuBar == NULL) {
         return NULL;
     }
 
-    ZeroMemory(MenuBar, sizeof(YORI_WIN_CTRL_MENUBAR));
+    ZeroMemory(MenuBar, (DWORD)sizeof(YORIWIN_CTRL_MENUBAR));
 
-    YoriWinGetControlClientSize(Parent, &ParentClientSize);
+    YoriWinGetCtrlClientSize(Parent, &ParentClientSize);
 
     Size.Left = 0;
     Size.Top = 0;
@@ -2053,12 +2056,12 @@ YoriWinMenuBarCreate(
         return NULL;
     }
 
-    WinMgrHandle = YoriWinGetWindowManagerHandle(YoriWinGetTopLevelWindow(Parent));
+    WinMgrHandle = YoriWinGetWinMgrHandle(YoriWinGetTopLevelWindow(Parent));
 
     MenuBar->TextAttributes = YoriWinMgrDefaultColorLookup(WinMgrHandle, YoriWinColorMenuDefault);
     MenuBar->SelectedTextAttributes = YoriWinMgrDefaultColorLookup(WinMgrHandle, YoriWinColorMenuSelected);
-    MenuBar->SelectedAcceleratorAttributes = YoriWinMgrDefaultColorLookup(WinMgrHandle, YoriWinColorMenuSelectedAccelerator);
-    MenuBar->AcceleratorAttributes = YoriWinMgrDefaultColorLookup(WinMgrHandle, YoriWinColorMenuAccelerator);
+    MenuBar->SelectedAcceleratorAttributes = YoriWinMgrDefaultColorLookup(WinMgrHandle, YoriWinColorMenuSelectedAccel);
+    MenuBar->AcceleratorAttributes = YoriWinMgrDefaultColorLookup(WinMgrHandle, YoriWinColorMenuAccel);
 
     MenuBar->Ctrl.RelativeToParentClient = FALSE;
     MenuBar->Ctrl.FullRect.Top = (SHORT)(MenuBar->Ctrl.FullRect.Top + Parent->ClientRect.Top);

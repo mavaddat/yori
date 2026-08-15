@@ -451,7 +451,7 @@ YoriLibForEachFileEnum(
                 if ((ForEachContext->FullPath.LengthInChars == 3 && YoriLibIsDrvLetterColonSlash(&ForEachContext->FullPath)) ||
                     (ForEachContext->FullPath.LengthInChars == 7 && YoriLibIsPfxDrvLetterColonSlash(&ForEachContext->FullPath))) {
 
-                    if (YoriLibUpdateFindDataFromFileInformation(&ForEachContext->FileInfo, ForEachContext->FullPath.StartOfString, FALSE)) {
+                    if (YoriLibUpdateFindDataFromFile(&ForEachContext->FileInfo, ForEachContext->FullPath.StartOfString, FALSE)) {
                         ForEachContext->FileInfo.cFileName[0] = '\0';
                         ForEachContext->FileInfo.cAlternateFileName[0] = '\0';
                         hFind = NULL;
@@ -930,7 +930,7 @@ YoriLibDoesFileMatchExpression (
  */
 __success(return)
 BOOL
-YoriLibUpdateFindDataFromFileInformation (
+YoriLibUpdateFindDataFromFile (
     __out PWIN32_FIND_DATA FindData,
     __in LPTSTR FullPath,
     __in BOOL CopyName

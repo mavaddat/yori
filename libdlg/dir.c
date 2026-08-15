@@ -151,7 +151,7 @@ YoriDlgDirGetFullPathNameRelativeTo(
 
 VOID
 YoriDlgDirRefreshView(
-    __in PYORI_WIN_CTRL_HANDLE Dialog,
+    __in PYORIWIN_CTRL_HANDLE Dialog,
     __in PYORI_STRING Directory,
     __in PYORI_STRING Wildcard
     );
@@ -163,11 +163,11 @@ YoriDlgDirRefreshView(
  */
 VOID
 YoriDlgDirOkButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    PYORI_WIN_CTRL_HANDLE EditCtrl;
+    PYORIWIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE EditCtrl;
     YORI_STRING Text;
     YORI_STRING PathComponent;
     YORI_STRING FileComponent;
@@ -189,7 +189,7 @@ YoriDlgDirOkButtonClicked(
     //  - No path specified, indicated by "."
     //
 
-    Parent = YoriWinGetControlParent(Ctrl);
+    Parent = YoriWinGetCtrlParent(Ctrl);
     EditCtrl = YoriWinFindControlById(Parent, YoriDlgDirControlFileText);
     ASSERT(EditCtrl != NULL);
     __analysis_assume(EditCtrl != NULL);
@@ -200,7 +200,7 @@ YoriDlgDirOkButtonClicked(
 
     __analysis_assume(Text.StartOfString != NULL);
 
-    State = YoriWinGetControlContext(Parent);
+    State = YoriWinGetCtrlContext(Parent);
     YoriLibInitEmptyString(&PathComponent);
     YoriLibInitEmptyString(&FileComponent);
 
@@ -326,7 +326,7 @@ YoriDlgDirOkButtonClicked(
             YoriLibConstantString(&Title, _T("Error"));
             YoriLibConstantString(&ButtonText, _T("Ok"));
 
-            YoriDlgMessageBox(YoriWinGetWindowManagerHandle(Parent),
+            YoriDlgMessageBox(YoriWinGetWinMgrHandle(Parent),
                               &Title,
                               &DialogText,
                               1,
@@ -387,11 +387,11 @@ YoriDlgDirOkButtonClicked(
  */
 VOID
 YoriDlgDirCancelButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, FALSE);
 }
 
@@ -402,21 +402,21 @@ YoriDlgDirCancelButtonClicked(
  */
 VOID
 YoriDlgDirDirectorySelectionChanged(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
     YORI_ALLOC_SIZE_T ActiveOption;
     YORI_STRING String;
-    PYORI_WIN_CTRL_HANDLE Parent;
-    PYORI_WIN_CTRL_HANDLE EditCtrl;
+    PYORIWIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE EditCtrl;
     PYORI_DLG_DIR_STATE State;
 
     if (!YoriWinListGetActiveOption(Ctrl, &ActiveOption)) {
         return;
     }
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    State = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    State = YoriWinGetCtrlContext(Parent);
     YoriLibInitEmptyString(&String);
     if (!YoriWinListGetItemText(Ctrl, ActiveOption, &String)) {
         return;
@@ -507,7 +507,7 @@ YoriDlgDirDirFoundCallback(
  */
 VOID
 YoriDlgDirRefreshView(
-    __in PYORI_WIN_CTRL_HANDLE Dialog,
+    __in PYORIWIN_CTRL_HANDLE Dialog,
     __in PYORI_STRING Directory,
     __in PYORI_STRING Wildcard
     )
@@ -515,8 +515,8 @@ YoriDlgDirRefreshView(
     YORI_STRING FullDir;
     YORI_STRING UnescapedPath;
     YORI_STRING SearchString;
-    PYORI_WIN_CTRL_HANDLE CurDirLabel;
-    PYORI_WIN_CTRL_HANDLE DirList;
+    PYORIWIN_CTRL_HANDLE CurDirLabel;
+    PYORIWIN_CTRL_HANDLE DirList;
     PYORI_DLG_DIR_STATE State;
     YORI_STRING DriveDisplay;
     TCHAR DriveProbeString[sizeof("A:\\")];
@@ -544,7 +544,7 @@ YoriDlgDirRefreshView(
     YoriWinLabelSetCaption(CurDirLabel, &UnescapedPath);
     YoriLibFreeStringContents(&UnescapedPath);
 
-    State = YoriWinGetControlContext(Dialog);
+    State = YoriWinGetCtrlContext(Dialog);
     YoriLibFreeStringContents(&State->CurrentDirectory);
     memcpy(&State->CurrentDirectory, &FullDir, sizeof(YORI_STRING));
 
@@ -618,21 +618,21 @@ YoriDlgDirRefreshView(
 __success(return)
 BOOLEAN
 YoriDlgDir(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in PYORI_STRING Title,
     __in DWORD OptionCount,
     __in_opt PYORI_DLG_FILE_CUSTOM_OPTION Options,
     __inout PYORI_STRING Text
     )
 {
-    PYORI_WIN_WINDOW_HANDLE Parent;
+    PYORIWIN_WINDOW_HANDLE Parent;
     COORD WindowSize;
     SMALL_RECT Area;
     YORI_STRING Caption;
     YORI_STRING Wildcard;
     WORD ButtonWidth;
-    PYORI_WIN_CTRL_HANDLE Ctrl;
-    PYORI_WIN_CTRL_HANDLE Edit;
+    PYORIWIN_CTRL_HANDLE Ctrl;
+    PYORIWIN_CTRL_HANDLE Edit;
     DWORD_PTR Result;
     COORD WinMgrSize;
     YORI_DLG_DIR_STATE State;
@@ -670,11 +670,11 @@ YoriDlgDir(
 
     YoriLibInitEmptyString(&State.CurrentDirectory);
     YoriLibInitEmptyString(&State.FileToReturn);
-    if (!YoriWinCreateWindow(WinMgrHandle, 50, (WORD)(13 + OptionCount), WinMgrSize.X, WinMgrSize.Y, YORI_WIN_WINDOW_STYLE_BORDER_SINGLE | YORI_WIN_WINDOW_STYLE_SHADOW_SOLID, Title, &Parent)) {
+    if (!YoriWinCreateWindow(WinMgrHandle, 50, (WORD)(13 + OptionCount), WinMgrSize.X, WinMgrSize.Y, YORIWIN_WIN_STY_BORDER_SINGLE | YORIWIN_WIN_STY_SHADOW_SOLID, Title, &Parent)) {
         return FALSE;
     }
 
-    YoriWinSetControlContext(Parent, &State);
+    YoriWinSetCtrlContext(Parent, &State);
     YoriWinGetClientSize(Parent, &WindowSize);
 
     YoriLibConstantString(&Caption, _T("Directory &Name:"));
@@ -703,20 +703,20 @@ YoriDlgDir(
         return FALSE;
     }
 
-    YoriWinSetControlId(Edit, YoriDlgDirControlFileText);
+    YoriWinSetCtrlId(Edit, YoriDlgDirControlFileText);
 
     Area.Top = (WORD)(Area.Bottom + 1);
     Area.Bottom = Area.Top;
     Area.Left = 1;
     Area.Right = (WORD)(WindowSize.X - 2);
 
-    Ctrl = YoriWinLabelCreate(Parent, &Area, &Caption, YORI_WIN_LABEL_NO_ACCELERATOR);
+    Ctrl = YoriWinLabelCreate(Parent, &Area, &Caption, YORIWIN_LABEL_NO_ACCELERATOR);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;
     }
 
-    YoriWinSetControlId(Ctrl, YoriDlgDirControlCurrentDirectory);
+    YoriWinSetCtrlId(Ctrl, YoriDlgDirControlCurrentDirectory);
 
     YoriLibConstantString(&Caption, _T("&Directories:"));
 
@@ -736,15 +736,15 @@ YoriDlgDir(
     Area.Bottom = (WORD)(WindowSize.Y - OptionCount - 4);
     Area.Right = (WORD)(WindowSize.X - 2);
 
-    Ctrl = YoriWinListCreate(Parent, &Area, YORI_WIN_LIST_STYLE_VSCROLLBAR | YORI_WIN_LIST_STYLE_DESELECT_ON_LOSE_FOCUS | YORI_WIN_LIST_STYLE_AUTO_HSCROLLBAR);
+    Ctrl = YoriWinListCreate(Parent, &Area, YORIWIN_LIST_STY_VSCROLL | YORIWIN_LIST_STY_DESEL_FOCUS | YORIWIN_LIST_STY_AUTO_HSCROLL);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;
     }
 
-    YoriWinControlSetFocusOnMouseClick(Ctrl, FALSE);
-    YoriWinSetControlId(Ctrl, YoriDlgDirControlDirectoryList);
-    YoriWinListSetSelectionNotifyCallback(Ctrl, YoriDlgDirDirectorySelectionChanged);
+    YoriWinCtrlSetFocusOnMouseClick(Ctrl, FALSE);
+    YoriWinSetCtrlId(Ctrl, YoriDlgDirControlDirectoryList);
+    YoriWinListSetSelNotifyCbk(Ctrl, YoriDlgDirDirectorySelectionChanged);
 
     LongestOptionDescription = 0;
     for (Index = 0; Index < OptionCount; Index++) {
@@ -783,7 +783,7 @@ YoriDlgDir(
             return FALSE;
         }
 
-        YoriWinSetControlId(Ctrl, YoriDlgDirFirstCustomCombo + Index);
+        YoriWinSetCtrlId(Ctrl, YoriDlgDirFirstCustomCombo + Index);
 
         if (!YoriWinComboAddItems(Ctrl, (PYORI_STRING)Options[Index].Values, Options[Index].ValueCount)) {
             YoriWinDestroyWindow(Parent);
@@ -802,7 +802,7 @@ YoriDlgDir(
     Area.Left = (SHORT)(1);
     Area.Right = (WORD)(Area.Left + 1 + ButtonWidth);
 
-    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORI_WIN_BUTTON_STYLE_DEFAULT, YoriDlgDirOkButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORIWIN_BUTTON_STY_DEFAULT, YoriDlgDirOkButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;
@@ -812,7 +812,7 @@ YoriDlgDir(
     Area.Right = (WORD)(Area.Right + ButtonWidth + 3);
 
     YoriLibConstantString(&Caption, _T("&Cancel"));
-    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORI_WIN_BUTTON_STYLE_CANCEL, YoriDlgDirCancelButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &Area, &Caption, YORIWIN_BUTTON_STY_CANCEL, YoriDlgDirCancelButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;

@@ -71,7 +71,7 @@ ForHelp(VOID)
     //  Display supported options and operators
     //
 
-    YoriLibFileFiltHelp();
+    YoriLibFilFltHelp();
     return TRUE;
 }
 
@@ -124,7 +124,7 @@ typedef struct _FOR_EXEC_CONTEXT {
     /**
      A list of criteria to filter matches against.
      */
-    YORI_LIB_FILE_FILTER Filter;
+    YORILIB_FILE_FILTER Filter;
 
 } FOR_EXEC_CONTEXT, *PFOR_EXEC_CONTEXT;
 
@@ -819,7 +819,7 @@ ForFileFoundCallback(
 
     ASSERT(YoriLibIsStringNullTerminated(FilePath));
 
-    if (!YoriLibFileFiltCheckFilterMatch(&ExecContext->Filter, FilePath, FileInfo)) {
+    if (!YoriLibFilFltCheckFilterMatch(&ExecContext->Filter, FilePath, FileInfo)) {
         return TRUE;
     }
 
@@ -906,10 +906,10 @@ ENTRYPOINT(
             } else if (YoriLibCompareStringLitIns(&Arg, _T("i")) == 0) {
                 if (i + 1 < ArgC) {
                     YORI_STRING ErrorSubstring;
-                    YORI_LIB_FILE_FILTER Filter;
+                    YORILIB_FILE_FILTER Filter;
                     YoriLibInitEmptyString(&ErrorSubstring);
 
-                    if (!YoriLibFileFiltParseFilterString(&Filter, &ArgV[i + 1], &ErrorSubstring)) {
+                    if (!YoriLibFilFltParseString(&Filter, &ArgV[i + 1], &ErrorSubstring)) {
                         if (ErrorSubstring.LengthInChars > 0) {
                             YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("for: error parsing filter string '%y' at '%y'\n"), &ArgV[i + 1], &ErrorSubstring);
                         } else {
@@ -917,7 +917,7 @@ ENTRYPOINT(
                         }
                         goto cleanup_and_exit;
                     }
-                    memcpy(&ExecContext.Filter, &Filter, sizeof(YORI_LIB_FILE_FILTER));
+                    memcpy(&ExecContext.Filter, &Filter, sizeof(YORILIB_FILE_FILTER));
                     i++;
                     ArgumentUnderstood = TRUE;
                 }
@@ -1223,14 +1223,14 @@ ENTRYPOINT(
         ForWaitForProcessToComplete(&ExecContext);
     }
 
-    YoriLibFileFiltFreeFilter(&ExecContext.Filter);
+    YoriLibFilFltFreeFilter(&ExecContext.Filter);
     YoriLibFree(ExecContext.HandleArray);
 
     return EXIT_SUCCESS;
 
 cleanup_and_exit:
 
-    YoriLibFileFiltFreeFilter(&ExecContext.Filter);
+    YoriLibFilFltFreeFilter(&ExecContext.Filter);
 
     return EXIT_FAILURE;
 }

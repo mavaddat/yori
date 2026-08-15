@@ -32,23 +32,23 @@
 /**
  A structure describing the contents of a checkbox control.
  */
-typedef struct _YORI_WIN_CTRL_CHECKBOX {
+typedef struct _YORIWIN_CTRL_CHECKBOX {
 
     /**
      A common header for all controls
      */
-    YORI_WIN_CTRL Ctrl;
+    YORIWIN_CTRL Ctrl;
 
     /**
      Pointer to the child label control that renders the text within the
      checkbox.
      */
-    PYORI_WIN_CTRL Label;
+    PYORIWIN_CTRL Label;
 
     /**
      A function to invoke when the checkbox is toggled via any mechanism.
      */
-    PYORI_WIN_NOTIFY ToggleCallback;
+    PYORIWIN_NOTIFY ToggleCallback;
 
     /**
      The color to display text in when the control has focus.
@@ -72,7 +72,7 @@ typedef struct _YORI_WIN_CTRL_CHECKBOX {
      */
     BOOLEAN Checked;
 
-} YORI_WIN_CTRL_CHECKBOX, *PYORI_WIN_CTRL_CHECKBOX;
+} YORIWIN_CTRL_CHECKBOX, FAR *PYORIWIN_CTRL_CHECKBOX;
 
 /**
  Draw the checkbox with its current state applied.
@@ -83,7 +83,7 @@ typedef struct _YORI_WIN_CTRL_CHECKBOX {
  */
 BOOLEAN
 YoriWinCheckboxPaint(
-    __in PYORI_WIN_CTRL_CHECKBOX Checkbox
+    __in PYORIWIN_CTRL_CHECKBOX Checkbox
     )
 {
     WORD TextAttributes;
@@ -94,14 +94,14 @@ YoriWinCheckboxPaint(
         TextAttributes = Checkbox->SelectedTextAttributes;
     }
 
-    YoriWinSetControlClientCell(&Checkbox->Ctrl, 0, 0, '[', TextAttributes);
+    YoriWinSetCtrlClientCell(&Checkbox->Ctrl, 0, 0, '[', TextAttributes);
     if (Checkbox->Checked) {
-        YoriWinSetControlClientCell(&Checkbox->Ctrl, 1, 0, 'X', TextAttributes);
+        YoriWinSetCtrlClientCell(&Checkbox->Ctrl, 1, 0, 'X', TextAttributes);
     } else {
-        YoriWinSetControlClientCell(&Checkbox->Ctrl, 1, 0, ' ', TextAttributes);
+        YoriWinSetCtrlClientCell(&Checkbox->Ctrl, 1, 0, ' ', TextAttributes);
     }
-    YoriWinSetControlClientCell(&Checkbox->Ctrl, 2, 0, ']', TextAttributes);
-    YoriWinSetControlClientCell(&Checkbox->Ctrl, 3, 0, ' ', TextAttributes);
+    YoriWinSetCtrlClientCell(&Checkbox->Ctrl, 2, 0, ']', TextAttributes);
+    YoriWinSetCtrlClientCell(&Checkbox->Ctrl, 3, 0, ' ', TextAttributes);
 
     YoriWinLabelSetTextAttributes(Checkbox->Label, TextAttributes);
 
@@ -123,17 +123,17 @@ YoriWinCheckboxPaint(
  */
 BOOLEAN
 YoriWinCheckboxEventHandler(
-    __in PYORI_WIN_CTRL Ctrl,
-    __in PYORI_WIN_EVENT Event
+    __in PYORIWIN_CTRL Ctrl,
+    __in PYORIWIN_EVENT Event
     )
 {
-    PYORI_WIN_CTRL_CHECKBOX Checkbox;
-    Checkbox = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_CHECKBOX, Ctrl);
+    PYORIWIN_CTRL_CHECKBOX Checkbox;
+    Checkbox = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_CHECKBOX, Ctrl);
     switch(Event->EventType) {
         case YoriWinEventKeyDown:
-            if (Event->KeyDown.CtrlMask == 0) {
-                if ((Event->KeyDown.VirtualKeyCode == VK_RETURN) ||
-                    (Event->KeyDown.VirtualKeyCode == VK_SPACE)) {
+            if (Event->u.KeyDown.CtrlMask == 0) {
+                if ((Event->u.KeyDown.VirtualKeyCode == VK_RETURN) ||
+                    (Event->u.KeyDown.VirtualKeyCode == VK_SPACE)) {
 
                     if (Checkbox->Checked) {
                         Checkbox->Checked = FALSE;
@@ -165,13 +165,13 @@ YoriWinCheckboxEventHandler(
             YoriWinDestroyControl(Ctrl);
             YoriLibDereference(Checkbox);
             break;
-        case YoriWinEventMouseDownInClient:
-        case YoriWinEventMouseDownInNonClient:
+        case YoriWinEventMouseDownClient:
+        case YoriWinEventMouseDownNonCli:
             Checkbox->PressedAppearance = TRUE;
             YoriWinCheckboxPaint(Checkbox);
             break;
-        case YoriWinEventMouseUpInClient:
-        case YoriWinEventMouseUpInNonClient:
+        case YoriWinEventMouseUpClient:
+        case YoriWinEventMouseUpNonCli:
             Checkbox->PressedAppearance = FALSE;
             if (Checkbox->Checked) {
                 Checkbox->Checked = FALSE;
@@ -183,7 +183,7 @@ YoriWinCheckboxEventHandler(
                 Checkbox->ToggleCallback(&Checkbox->Ctrl);
             }
             break;
-        case YoriWinEventMouseUpOutsideWindow:
+        case YoriWinEventMouseUpOutsideWin:
             Checkbox->PressedAppearance = FALSE;
             YoriWinCheckboxPaint(Checkbox);
             break;
@@ -221,14 +221,14 @@ YoriWinCheckboxEventHandler(
  */
 BOOLEAN
 YoriWinCheckboxIsChecked(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle
     )
 {
-    PYORI_WIN_CTRL Ctrl;
-    PYORI_WIN_CTRL_CHECKBOX Checkbox;
+    PYORIWIN_CTRL Ctrl;
+    PYORIWIN_CTRL_CHECKBOX Checkbox;
 
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    Checkbox = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_CHECKBOX, Ctrl);
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    Checkbox = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_CHECKBOX, Ctrl);
 
     return Checkbox->Checked;
 }
@@ -244,16 +244,16 @@ YoriWinCheckboxIsChecked(
  */
 BOOLEAN
 YoriWinCheckboxReposition(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle,
     __in PSMALL_RECT CtrlRect
     )
 {
-    PYORI_WIN_CTRL Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
+    PYORIWIN_CTRL Ctrl = (PYORIWIN_CTRL)CtrlHandle;
     SMALL_RECT LabelRect;
-    PYORI_WIN_CTRL_CHECKBOX Checkbox;
+    PYORIWIN_CTRL_CHECKBOX Checkbox;
 
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    Checkbox = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_CHECKBOX, Ctrl);
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    Checkbox = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_CHECKBOX, Ctrl);
 
     if (!YoriWinControlReposition(Ctrl, CtrlRect)) {
         return FALSE;
@@ -286,31 +286,31 @@ YoriWinCheckboxReposition(
 
  @return Pointer to the newly created control or NULL on failure.
  */
-PYORI_WIN_CTRL_HANDLE
+PYORIWIN_CTRL_HANDLE
 YoriWinCheckboxCreate(
-    __in PYORI_WIN_WINDOW_HANDLE ParentHandle,
+    __in PYORIWIN_WINDOW_HANDLE ParentHandle,
     __in PSMALL_RECT Size,
     __in PYORI_STRING Caption,
-    __in DWORD Style,
-    __in_opt PYORI_WIN_NOTIFY ToggleCallback
+    __in WORD Style,
+    __in_opt PYORIWIN_NOTIFY ToggleCallback
     )
 {
-    PYORI_WIN_CTRL_CHECKBOX Checkbox;
-    PYORI_WIN_WINDOW Parent;
+    PYORIWIN_CTRL_CHECKBOX Checkbox;
+    PYORIWIN_WINDOW Parent;
     SMALL_RECT LabelRect;
-    PYORI_WIN_WINDOW TopLevelWindow;
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+    PYORIWIN_WINDOW TopLevelWindow;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle;
 
     UNREFERENCED_PARAMETER(Style);
 
-    Parent = (PYORI_WIN_WINDOW)ParentHandle;
+    Parent = (PYORIWIN_WINDOW)ParentHandle;
 
-    Checkbox = YoriLibReferencedMalloc(sizeof(YORI_WIN_CTRL_CHECKBOX));
+    Checkbox = YoriLibReferencedMalloc(sizeof(YORIWIN_CTRL_CHECKBOX));
     if (Checkbox == NULL) {
         return NULL;
     }
 
-    ZeroMemory(Checkbox, sizeof(YORI_WIN_CTRL_CHECKBOX));
+    ZeroMemory(Checkbox, (DWORD)sizeof(YORIWIN_CTRL_CHECKBOX));
 
     Checkbox->Ctrl.NotifyEventFn = YoriWinCheckboxEventHandler;
     if (!YoriWinCreateControl(Parent, Size, TRUE, FALSE, &Checkbox->Ctrl)) {
@@ -332,9 +332,8 @@ YoriWinCheckboxCreate(
         return NULL;
     }
 
-
     TopLevelWindow = YoriWinGetTopLevelWindow(Parent);
-    WinMgrHandle = YoriWinGetWindowManagerHandle(TopLevelWindow);
+    WinMgrHandle = YoriWinGetWinMgrHandle(TopLevelWindow);
 
     Checkbox->SelectedTextAttributes = YoriWinMgrDefaultColorLookup(WinMgrHandle, YoriWinColorControlSelected);
 
@@ -349,6 +348,5 @@ YoriWinCheckboxCreate(
 
     return &Checkbox->Ctrl;
 }
-
 
 // vim:sw=4:ts=4:et:

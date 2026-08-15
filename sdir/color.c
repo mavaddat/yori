@@ -71,8 +71,8 @@ SdirColorStringFromFeature(
         return TRUE;
     }
 
-    Forecolor = (WORD)(Feature->HighlightColor.Win32Attr & YORILIB_ATTRIBUTE_ONECOLOR_MASK);
-    Backcolor = (WORD)((Feature->HighlightColor.Win32Attr >> 4) & YORILIB_ATTRIBUTE_ONECOLOR_MASK);
+    Forecolor = (WORD)(Feature->HighlightColor.Win32Attr & YORILIB_ATTR_ONECOLOR_MASK);
+    Backcolor = (WORD)((Feature->HighlightColor.Win32Attr >> 4) & YORILIB_ATTR_ONECOLOR_MASK);
 
     if (Feature->HighlightColor.Ctrl & YORILIB_ATTRCTRL_WINDOW_BG) {
         Backstring = NULL;
@@ -113,17 +113,17 @@ SdirColorStringFromFeature(
  */
 VOID
 SdirMarkFeaturesForCollection(
-    __in PYORI_LIB_FILE_FILTER Filter,
+    __in PYORILIB_FILE_FILTER Filter,
     __in BOOL SanitizeColor
     )
 {
-    PYORI_LIB_FILE_FILT_MATCH_CRITERIA ThisMatch;
+    PYORILIB_FILFLT_MATCH_CRITERIA ThisMatch;
     DWORD Index;
     DWORD FeatureNumber;
     PSDIR_FEATURE Feature;
 
     for (Index = 0; Index < Filter->NumberCriteria; Index++) {
-        ThisMatch = (PYORI_LIB_FILE_FILT_MATCH_CRITERIA)YoriLibAddToPointer(Filter->Criteria, Index * Filter->ElementSize);
+        ThisMatch = (PYORILIB_FILFLT_MATCH_CRITERIA)YoriLibAddToPointer(Filter->Criteria, Index * Filter->ElementSize);
         if (ThisMatch->CollectFn != NULL) {
             for (FeatureNumber = 0; FeatureNumber < SdirGetNumSdirOptions(); FeatureNumber++) {
                 if (ThisMatch->CollectFn == SdirOptions[FeatureNumber].CollectFn) {
@@ -136,8 +136,8 @@ SdirMarkFeaturesForCollection(
             ASSERT(FeatureNumber < SdirGetNumSdirOptions());
         }
         if (SanitizeColor) {
-            PYORI_LIB_FILE_FILT_COLOR_CRITERIA ThisColor;
-            ThisColor = (PYORI_LIB_FILE_FILT_COLOR_CRITERIA)ThisMatch;
+            PYORILIB_FILFLT_COLOR_CRITERIA ThisColor;
+            ThisColor = (PYORILIB_FILFLT_COLOR_CRITERIA)ThisMatch;
             ThisColor->Color.Ctrl &= ~(SDIR_ATTRCTRL_INVALID_FILE);
         }
     }
@@ -157,7 +157,7 @@ SdirParseAttributeApplyString(VOID)
     YORI_STRING Combined;
     YORI_STRING ErrorSubstring;
 
-    if (!YoriLibLoadCombinedFileColorString(&Opts->CustomFileColor, &Combined)) {
+    if (!YoriLibLoadCombinedFileColorStr(&Opts->CustomFileColor, &Combined)) {
         return FALSE;
     }
 
@@ -167,7 +167,7 @@ SdirParseAttributeApplyString(VOID)
     //
 
     if (Opts->CustomFileFilter.LengthInChars > 0) {
-        if (!YoriLibFileFiltParseFilterString(&SdirGlobal.FileHideCriteria, &Opts->CustomFileFilter, &ErrorSubstring)) {
+        if (!YoriLibFilFltParseString(&SdirGlobal.FileHideCriteria, &Opts->CustomFileFilter, &ErrorSubstring)) {
             This = YoriLibCStringFromYoriString(&ErrorSubstring);
             goto error_substring_return;
         }
@@ -178,7 +178,7 @@ SdirParseAttributeApplyString(VOID)
     //  Now look for colors to apply in response to specific criteria.
     //
 
-    if (!YoriLibFileFiltParseColorString(&SdirGlobal.FileColorCriteria, &Combined, &ErrorSubstring)) {
+    if (!YoriLibFilFltParseColorStr(&SdirGlobal.FileColorCriteria, &Combined, &ErrorSubstring)) {
         This = YoriLibCStringFromYoriString(&ErrorSubstring);
         goto error_substring_return;
     }
@@ -208,7 +208,7 @@ error_substring_return:
  @return TRUE to indicate success, FALSE to indicate failure.
  */
 BOOL
-SdirParseMetadataAttributeString(VOID)
+SdirParseMetadataAttrString(VOID)
 {
     TCHAR SingleElement[256];
     TCHAR SingleSwitch[20];
@@ -348,14 +348,14 @@ SdirParseMetadataAttributeString(VOID)
                 //  color in the flags field and retain color in the attribute.
                 //
 
-                YoriLibAttributeFromLiteralString(Attribute, &HighlightColor);
+                YoriLibAttrFromLitString(Attribute, &HighlightColor);
                 if (HighlightColor.Ctrl & SDIR_ATTRCTRL_INVALID_METADATA) {
                     SdirWriteString(_T("Invalid color specified in: "));
                     goto error_return;
                     break;
                 }
 
-                YoriLibResolveWindowColorComponents(HighlightColor, Opts->PreviousAttributes, FALSE, &Feature->HighlightColor);
+                YoriLibResolveWindowColors(HighlightColor, Opts->PreviousAttributes, FALSE, &Feature->HighlightColor);
 
                 if (HighlightColor.Ctrl & YORILIB_ATTRCTRL_FILE) {
                     Feature->Flags |= SDIR_FEATURE_USE_FILE_COLOR;
@@ -421,8 +421,8 @@ SdirApplyAttribute(
 
     if (!ForceDisplay) {
 
-        PYORI_LIB_FILE_FILT_MATCH_CRITERIA ThisMatch;
-        PYORI_LIB_FILE_FILT_MATCH_CRITERIA Matches;
+        PYORILIB_FILFLT_MATCH_CRITERIA ThisMatch;
+        PYORILIB_FILFLT_MATCH_CRITERIA Matches;
 
         //
         //  We expect each element to just be the criteria determining a
@@ -431,9 +431,9 @@ SdirApplyAttribute(
 
         ASSERT((SdirGlobal.FileHideCriteria.ElementSize == 0 &&
                 SdirGlobal.FileHideCriteria.NumberCriteria == 0) ||
-               SdirGlobal.FileHideCriteria.ElementSize == sizeof(YORI_LIB_FILE_FILT_MATCH_CRITERIA));
+               SdirGlobal.FileHideCriteria.ElementSize == sizeof(YORILIB_FILFLT_MATCH_CRITERIA));
 
-        Matches = (PYORI_LIB_FILE_FILT_MATCH_CRITERIA)SdirGlobal.FileHideCriteria.Criteria;
+        Matches = (PYORILIB_FILFLT_MATCH_CRITERIA)SdirGlobal.FileHideCriteria.Criteria;
         for (Index = 0; Index < SdirGlobal.FileHideCriteria.NumberCriteria; Index++) {
             ThisMatch = &Matches[Index];
             if (ThisMatch->TruthStates[ThisMatch->CompareFn(DirEnt, &ThisMatch->CompareEntry)]) {
@@ -450,8 +450,8 @@ SdirApplyAttribute(
     //
 
     {
-        PYORI_LIB_FILE_FILT_COLOR_CRITERIA ThisApply;
-        PYORI_LIB_FILE_FILT_COLOR_CRITERIA ColorsToApply;
+        PYORILIB_FILFLT_COLOR_CRITERIA ThisApply;
+        PYORILIB_FILFLT_COLOR_CRITERIA ColorsToApply;
 
         //
         //  We expect each element to be the criteria determining a match and
@@ -460,8 +460,8 @@ SdirApplyAttribute(
 
         ASSERT((SdirGlobal.FileColorCriteria.ElementSize == 0 &&
                 SdirGlobal.FileColorCriteria.NumberCriteria == 0) ||
-               SdirGlobal.FileColorCriteria.ElementSize == sizeof(YORI_LIB_FILE_FILT_COLOR_CRITERIA));
-        ColorsToApply = (PYORI_LIB_FILE_FILT_COLOR_CRITERIA)SdirGlobal.FileColorCriteria.Criteria;
+               SdirGlobal.FileColorCriteria.ElementSize == sizeof(YORILIB_FILFLT_COLOR_CRITERIA));
+        ColorsToApply = (PYORILIB_FILFLT_COLOR_CRITERIA)SdirGlobal.FileColorCriteria.Criteria;
         for (Index = 0; Index < SdirGlobal.FileColorCriteria.NumberCriteria; Index++) {
             ThisApply = &ColorsToApply[Index];
             if (ThisApply->Match.TruthStates[ThisApply->Match.CompareFn(DirEnt, &ThisApply->Match.CompareEntry)]) {
@@ -469,7 +469,7 @@ SdirApplyAttribute(
                 if ((!ForceDisplay || (ThisAttribute.Ctrl & YORILIB_ATTRCTRL_HIDE) == 0) &&
                     (ThisAttribute.Ctrl & YORILIB_ATTRCTRL_CONTINUE) == 0) {
 
-                    YoriLibResolveWindowColorComponents(ThisAttribute, Opts->PreviousAttributes, TRUE, &ThisAttribute);
+                    YoriLibResolveWindowColors(ThisAttribute, Opts->PreviousAttributes, TRUE, &ThisAttribute);
 
                     if (ThisAttribute.Ctrl & YORILIB_ATTRCTRL_INVERT) {
                         ThisAttribute.Win32Attr = (UCHAR)(((ThisAttribute.Win32Attr & 0x0F) << 4) + ((ThisAttribute.Win32Attr & 0xF0) >> 4));

@@ -32,23 +32,23 @@
 /**
  A structure describing the contents of a button control.
  */
-typedef struct _YORI_WIN_CTRL_BUTTON {
+typedef struct _YORIWIN_CTRL_BUTTON {
 
     /**
      A common header for all controls
      */
-    YORI_WIN_CTRL Ctrl;
+    YORIWIN_CTRL Ctrl;
 
     /**
      Pointer to the child label control that renders the text within the
      button.
      */
-    PYORI_WIN_CTRL Label;
+    PYORIWIN_CTRL Label;
 
     /**
      A function to invoke when the button is clicked via any mechanism.
      */
-    PYORI_WIN_NOTIFY ClickCallback;
+    PYORIWIN_NOTIFY ClickCallback;
 
     /**
      The color to display text in when the button has focus or is pressed.
@@ -85,7 +85,7 @@ typedef struct _YORI_WIN_CTRL_BUTTON {
      */
     BOOLEAN DisableFocus;
 
-} YORI_WIN_CTRL_BUTTON, *PYORI_WIN_CTRL_BUTTON;
+} YORIWIN_CTRL_BUTTON, FAR *PYORIWIN_CTRL_BUTTON;
 
 /**
  Draw the button with its current state applied.
@@ -96,7 +96,7 @@ typedef struct _YORI_WIN_CTRL_BUTTON {
  */
 BOOLEAN
 YoriWinButtonPaint(
-    __in PYORI_WIN_CTRL_BUTTON Button
+    __in PYORIWIN_CTRL_BUTTON Button
     )
 {
     SMALL_RECT BorderLocation;
@@ -112,23 +112,23 @@ YoriWinButtonPaint(
     BorderLocation.Right = (SHORT)(Button->Ctrl.FullRect.Right - Button->Ctrl.FullRect.Left);
     BorderLocation.Bottom = (SHORT)(Button->Ctrl.FullRect.Bottom - Button->Ctrl.FullRect.Top);
 
-    BorderFlags = YORI_WIN_BORDER_TYPE_RAISED;
+    BorderFlags = YORIWIN_BORDER_TYPE_RAISED;
 
     if (Button->PressedAppearance) {
-        BorderFlags = YORI_WIN_BORDER_TYPE_SUNKEN;
+        BorderFlags = YORIWIN_BORDER_TYPE_SUNKEN;
     }
 
     WindowAttributes = Button->Ctrl.DefaultAttributes;
     if (Height >= 3) {
         if (Button->EffectiveDefault || Button->HasFocus) {
-            BorderFlags = (WORD)(BorderFlags | YORI_WIN_BORDER_TYPE_DOUBLE);
+            BorderFlags = (WORD)(BorderFlags | YORIWIN_BORDER_TYPE_DOUBLE);
         }
-        YoriWinDrawBorderOnControl(&Button->Ctrl, &BorderLocation, WindowAttributes, BorderFlags);
+        YoriWinDrawBorderCtrl(&Button->Ctrl, &BorderLocation, WindowAttributes, BorderFlags);
     } else {
         if (Button->EffectiveDefault || Button->HasFocus) {
-            BorderFlags = (WORD)(BorderFlags | YORI_WIN_BORDER_BRIGHT);
+            BorderFlags = (WORD)(BorderFlags | YORIWIN_BORDER_BRIGHT);
         }
-        YoriWinDrawSingleLineBorderOnControl(&Button->Ctrl, &BorderLocation, WindowAttributes, BorderFlags);
+        YoriWinDrawSingleLineBorderCtrl(&Button->Ctrl, &BorderLocation, WindowAttributes, BorderFlags);
     }
 
     TextAttributes = WindowAttributes;
@@ -156,23 +156,23 @@ YoriWinButtonPaint(
  */
 BOOLEAN
 YoriWinButtonEventHandler(
-    __in PYORI_WIN_CTRL Ctrl,
-    __in PYORI_WIN_EVENT Event
+    __in PYORIWIN_CTRL Ctrl,
+    __in PYORIWIN_EVENT Event
     )
 {
-    PYORI_WIN_CTRL_BUTTON Button;
-    PYORI_WIN_WINDOW_HANDLE TopLevelWindow;
-    Button = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_BUTTON, Ctrl);
+    PYORIWIN_CTRL_BUTTON Button;
+    PYORIWIN_WINDOW_HANDLE TopLevelWindow;
+    Button = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_BUTTON, Ctrl);
     switch(Event->EventType) {
         case YoriWinEventKeyDown:
-            if (Event->KeyDown.CtrlMask == 0) {
-                if ((Event->KeyDown.VirtualKeyCode == VK_RETURN) ||
-                    (Event->KeyDown.VirtualKeyCode == VK_SPACE)) {
+            if (Event->u.KeyDown.CtrlMask == 0) {
+                if ((Event->u.KeyDown.VirtualKeyCode == VK_RETURN) ||
+                    (Event->u.KeyDown.VirtualKeyCode == VK_SPACE)) {
                     if (Button->ClickCallback != NULL) {
                         Button->ClickCallback(&Button->Ctrl);
                     }
                 } else if (Button->EffectiveCancel &&
-                           (Event->KeyDown.VirtualKeyCode == VK_ESCAPE)) {
+                           (Event->u.KeyDown.VirtualKeyCode == VK_ESCAPE)) {
                     if (Button->ClickCallback != NULL) {
                         Button->ClickCallback(&Button->Ctrl);
                     }
@@ -191,13 +191,13 @@ YoriWinButtonEventHandler(
             YoriWinDestroyControl(Ctrl);
             YoriLibDereference(Button);
             break;
-        case YoriWinEventMouseDownInClient:
-        case YoriWinEventMouseDownInNonClient:
+        case YoriWinEventMouseDownClient:
+        case YoriWinEventMouseDownNonCli:
             Button->PressedAppearance = TRUE;
             YoriWinButtonPaint(Button);
             break;
-        case YoriWinEventMouseUpInClient:
-        case YoriWinEventMouseUpInNonClient:
+        case YoriWinEventMouseUpClient:
+        case YoriWinEventMouseUpNonCli:
             Button->PressedAppearance = FALSE;
 
             //
@@ -213,22 +213,22 @@ YoriWinButtonEventHandler(
                 Button->ClickCallback(&Button->Ctrl);
             }
             break;
-        case YoriWinEventMouseUpOutsideWindow:
+        case YoriWinEventMouseUpOutsideWin:
             Button->PressedAppearance = FALSE;
             YoriWinButtonPaint(Button);
             break;
-        case YoriWinEventGetEffectiveDefault:
+        case YoriWinEventGetEffectDefault:
             Button->EffectiveDefault = TRUE;
             YoriWinButtonPaint(Button);
             break;
-        case YoriWinEventLoseEffectiveDefault:
+        case YoriWinEventLoseEffectDefault:
             Button->EffectiveDefault = FALSE;
             YoriWinButtonPaint(Button);
             break;
-        case YoriWinEventGetEffectiveCancel:
+        case YoriWinEventGetEffectCancel:
             Button->EffectiveCancel = TRUE;
             break;
-        case YoriWinEventLoseEffectiveCancel:
+        case YoriWinEventLoseEffectCancel:
             Button->EffectiveCancel = FALSE;
             break;
         case YoriWinEventLoseFocus:
@@ -271,16 +271,16 @@ YoriWinButtonEventHandler(
  */
 BOOLEAN
 YoriWinButtonReposition(
-    __in PYORI_WIN_CTRL_HANDLE CtrlHandle,
+    __in PYORIWIN_CTRL_HANDLE CtrlHandle,
     __in PSMALL_RECT CtrlRect
     )
 {
-    PYORI_WIN_CTRL Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    PYORI_WIN_CTRL_BUTTON Button;
+    PYORIWIN_CTRL Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    PYORIWIN_CTRL_BUTTON Button;
     WORD Height;
 
-    Ctrl = (PYORI_WIN_CTRL)CtrlHandle;
-    Button = CONTAINING_RECORD(Ctrl, YORI_WIN_CTRL_BUTTON, Ctrl);
+    Ctrl = (PYORIWIN_CTRL)CtrlHandle;
+    Button = CONTAINING_RECORD(Ctrl, YORIWIN_CTRL_BUTTON, Ctrl);
 
     Height = (WORD)(CtrlRect->Bottom - CtrlRect->Top + 1);
     if (Height == 0 || Height == 2) {
@@ -337,35 +337,35 @@ YoriWinButtonReposition(
 
  @return Pointer to the newly created control or NULL on failure.
  */
-PYORI_WIN_CTRL_HANDLE
+PYORIWIN_CTRL_HANDLE
 YoriWinButtonCreate(
-    __in PYORI_WIN_WINDOW_HANDLE ParentHandle,
+    __in PYORIWIN_WINDOW_HANDLE ParentHandle,
     __in PSMALL_RECT Size,
     __in PCYORI_STRING Caption,
-    __in DWORD Style,
-    __in_opt PYORI_WIN_NOTIFY ClickCallback
+    __in WORD Style,
+    __in_opt PYORIWIN_NOTIFY ClickCallback
     )
 {
-    PYORI_WIN_CTRL_BUTTON Button;
-    PYORI_WIN_WINDOW Parent;
-    PYORI_WIN_WINDOW TopLevelWindow;
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle;
+    PYORIWIN_CTRL_BUTTON Button;
+    PYORIWIN_WINDOW Parent;
+    PYORIWIN_WINDOW TopLevelWindow;
+    PYORIWIN_WINMGR_HANDLE WinMgrHandle;
     WORD Height;
 
-    Parent = (PYORI_WIN_WINDOW)ParentHandle;
+    Parent = (PYORIWIN_WINDOW)ParentHandle;
 
     Height = (WORD)(Size->Bottom - Size->Top + 1);
     if (Height == 0 || Height == 2) {
         return FALSE;
     }
 
-    Button = YoriLibReferencedMalloc(sizeof(YORI_WIN_CTRL_BUTTON));
+    Button = YoriLibReferencedMalloc(sizeof(YORIWIN_CTRL_BUTTON));
     if (Button == NULL) {
         return NULL;
     }
 
-    ZeroMemory(Button, sizeof(YORI_WIN_CTRL_BUTTON));
-    if (Style & YORI_WIN_BUTTON_STYLE_DISABLE_FOCUS) {
+    ZeroMemory(Button, (DWORD)sizeof(YORIWIN_CTRL_BUTTON));
+    if (Style & YORIWIN_BUTTON_STY_NOFOCUS) {
         Button->DisableFocus = TRUE;
     }
 
@@ -387,7 +387,7 @@ YoriWinButtonCreate(
 
     Button->ClickCallback = ClickCallback;
 
-    Button->Label = YoriWinLabelCreate(&Button->Ctrl, &Button->Ctrl.ClientRect, Caption, YORI_WIN_LABEL_STYLE_VERTICAL_CENTER | YORI_WIN_LABEL_STYLE_CENTER);
+    Button->Label = YoriWinLabelCreate(&Button->Ctrl, &Button->Ctrl.ClientRect, Caption, YORIWIN_LABEL_STY_VCENTER | YORIWIN_LABEL_STY_CENTER);
     if (Button->Label == NULL) {
         YoriWinDestroyControl(&Button->Ctrl);
         YoriLibDereference(Button);
@@ -395,7 +395,7 @@ YoriWinButtonCreate(
     }
 
     TopLevelWindow = YoriWinGetTopLevelWindow(Parent);
-    WinMgrHandle = YoriWinGetWindowManagerHandle(TopLevelWindow);
+    WinMgrHandle = YoriWinGetWinMgrHandle(TopLevelWindow);
 
     Button->SelectedTextAttributes = YoriWinMgrDefaultColorLookup(WinMgrHandle, YoriWinColorControlSelected);
 
@@ -408,11 +408,11 @@ YoriWinButtonCreate(
 
     YoriWinButtonPaint(Button);
 
-    if (Style & YORI_WIN_BUTTON_STYLE_DEFAULT) {
+    if (Style & YORIWIN_BUTTON_STY_DEFAULT) {
         YoriWinSetDefaultCtrl(Parent, &Button->Ctrl);
     }
 
-    if (Style & YORI_WIN_BUTTON_STYLE_CANCEL) {
+    if (Style & YORIWIN_BUTTON_STY_CANCEL) {
         YoriWinSetCancelCtrl(Parent, &Button->Ctrl);
     }
 

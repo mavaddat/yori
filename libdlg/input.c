@@ -35,11 +35,11 @@
  */
 VOID
 YoriDlgInputOkButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, TRUE);
 }
 
@@ -50,11 +50,11 @@ YoriDlgInputOkButtonClicked(
  */
 VOID
 YoriDlgInputCancelButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, FALSE);
 }
 
@@ -77,24 +77,24 @@ YoriDlgInputCancelButtonClicked(
 __success(return)
 BOOLEAN
 YoriDlgInput(
-    __in PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgrHandle,
+    __in PYORIWIN_WINMGR_HANDLE WinMgrHandle,
     __in PYORI_STRING Title,
     __in BOOLEAN RequireNumeric,
     __inout PYORI_STRING Text
     )
 {
-    PYORI_WIN_WINDOW_HANDLE Parent;
+    PYORIWIN_WINDOW_HANDLE Parent;
     COORD WindowSize;
     SMALL_RECT EditArea;
     SMALL_RECT ButtonArea;
     YORI_STRING Caption;
     WORD ButtonWidth;
-    PYORI_WIN_CTRL_HANDLE Ctrl;
-    PYORI_WIN_CTRL_HANDLE Edit;
-    DWORD Style;
+    PYORIWIN_CTRL_HANDLE Ctrl;
+    PYORIWIN_CTRL_HANDLE Edit;
+    WORD Style;
     DWORD_PTR Result;
 
-    if (!YoriWinCreateWindow(WinMgrHandle, 50, 10, 70, 10, YORI_WIN_WINDOW_STYLE_BORDER_SINGLE | YORI_WIN_WINDOW_STYLE_SHADOW_SOLID, Title, &Parent)) {
+    if (!YoriWinCreateWindow(WinMgrHandle, 50, 10, 70, 10, YORIWIN_WIN_STY_BORDER_SINGLE | YORIWIN_WIN_STY_SHADOW_SOLID, Title, &Parent)) {
         return FALSE;
     }
 
@@ -108,7 +108,7 @@ YoriDlgInput(
     YoriLibConstantString(&Caption, _T(""));
     Style = 0;
     if (RequireNumeric) {
-        Style = Style | YORI_WIN_EDIT_STYLE_NUMERIC;
+        Style = (WORD)(Style | YORIWIN_EDIT_STY_NUMERIC);
     }
 
     Edit = YoriWinEditCreate(Parent, &EditArea, &Caption, Style);
@@ -127,7 +127,7 @@ YoriDlgInput(
     ButtonArea.Left = (SHORT)(1);
     ButtonArea.Right = (WORD)(ButtonArea.Left + 1 + ButtonWidth);
 
-    Ctrl = YoriWinButtonCreate(Parent, &ButtonArea, &Caption, YORI_WIN_BUTTON_STYLE_DEFAULT, YoriDlgInputOkButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &ButtonArea, &Caption, YORIWIN_BUTTON_STY_DEFAULT, YoriDlgInputOkButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;
@@ -137,7 +137,7 @@ YoriDlgInput(
     ButtonArea.Right = (WORD)(ButtonArea.Right + ButtonWidth + 3);
 
     YoriLibConstantString(&Caption, _T("&Cancel"));
-    Ctrl = YoriWinButtonCreate(Parent, &ButtonArea, &Caption, YORI_WIN_BUTTON_STYLE_CANCEL, YoriDlgInputCancelButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &ButtonArea, &Caption, YORIWIN_BUTTON_STY_CANCEL, YoriDlgInputCancelButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
         return FALSE;

@@ -101,11 +101,11 @@ typedef enum _SLMENU_CONTROLS {
  */
 VOID
 SlmenuOkButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, TRUE);
 }
 
@@ -116,11 +116,11 @@ SlmenuOkButtonClicked(
  */
 VOID
 SlmenuCancelButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    Parent = YoriWinGetControlParent(Ctrl);
+    PYORIWIN_CTRL_HANDLE Parent;
+    Parent = YoriWinGetCtrlParent(Ctrl);
     YoriWinCloseWindow(Parent, FALSE);
 }
 
@@ -131,12 +131,12 @@ SlmenuCancelButtonClicked(
  */
 VOID
 SlmenuFindButtonClicked(
-    __in PYORI_WIN_CTRL_HANDLE Ctrl
+    __in PYORIWIN_CTRL_HANDLE Ctrl
     )
 {
-    PYORI_WIN_CTRL_HANDLE Parent;
-    PYORI_WIN_CTRL_HANDLE List;
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr;
+    PYORIWIN_CTRL_HANDLE Parent;
+    PYORIWIN_CTRL_HANDLE List;
+    PYORIWIN_WINMGR_HANDLE WinMgr;
     PSLMENU_CONTEXT MenuContext;
     YORI_STRING Title;
     BOOLEAN MatchCase;
@@ -144,9 +144,9 @@ SlmenuFindButtonClicked(
     YORI_ALLOC_SIZE_T ActiveIndex;
     YORI_ALLOC_SIZE_T SearchIndex;
 
-    Parent = YoriWinGetControlParent(Ctrl);
-    WinMgr = YoriWinGetWindowManagerHandle(Parent);
-    MenuContext = YoriWinGetControlContext(Parent);
+    Parent = YoriWinGetCtrlParent(Ctrl);
+    WinMgr = YoriWinGetWinMgrHandle(Parent);
+    MenuContext = YoriWinGetCtrlContext(Parent);
 
     YoriLibConstantString(&Title, _T("Find"));
     YoriLibInitEmptyString(&Text);
@@ -303,15 +303,15 @@ SlmenuCreateSinglelineMenu(
     __out PYORI_ALLOC_SIZE_T ActiveOption
     )
 {
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr;
-    PYORI_WIN_CTRL_HANDLE List;
-    PYORI_WIN_CTRL_HANDLE Label;
-    PYORI_WIN_WINDOW_HANDLE Parent;
+    PYORIWIN_WINMGR_HANDLE WinMgr;
+    PYORIWIN_CTRL_HANDLE List;
+    PYORIWIN_CTRL_HANDLE Label;
+    PYORIWIN_WINDOW_HANDLE Parent;
     SMALL_RECT CtrlRect;
     COORD WindowSize;
     YORI_STRING Caption;
     WORD ButtonWidth;
-    PYORI_WIN_CTRL_HANDLE Ctrl;
+    PYORIWIN_CTRL_HANDLE Ctrl;
     DWORD_PTR Result;
     COORD WinMgrSize;
 
@@ -319,12 +319,12 @@ SlmenuCreateSinglelineMenu(
         return FALSE;
     }
 
-    if (!YoriWinOpenWindowManager(FALSE, YoriWinColorTableDefault, &WinMgr)) {
+    if (!YoriWinOpenWinMgr(FALSE, YoriWinColorTableDefault, &WinMgr)) {
         return FALSE;
     }
 
     if (!YoriWinGetWinMgrDimensions(WinMgr, &WinMgrSize)) {
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
@@ -341,18 +341,18 @@ SlmenuCreateSinglelineMenu(
         COORD CursorLocation;
         SMALL_RECT WinMgrPos;
 
-        if (!YoriWinGetWinMgrLocation(WinMgr, &WinMgrPos)) {
-            YoriWinCloseWindowManager(WinMgr);
+        if (!YoriWinGetWinMgrPoint(WinMgr, &WinMgrPos)) {
+            YoriWinCloseWinMgr(WinMgr);
             return FALSE;
         }
 
-        if (!YoriWinGetWinMgrInitialCursorLocation(WinMgr, &CursorLocation)) {
-            YoriWinCloseWindowManager(WinMgr);
+        if (!YoriWinGetWinMgrInitCursorPoint(WinMgr, &CursorLocation)) {
+            YoriWinCloseWinMgr(WinMgr);
             return FALSE;
         }
 
         if (CursorLocation.Y < WinMgrPos.Top || CursorLocation.Y > WinMgrPos.Bottom) {
-            YoriWinCloseWindowManager(WinMgr);
+            YoriWinCloseWinMgr(WinMgr);
             return FALSE;
         }
 
@@ -365,7 +365,7 @@ SlmenuCreateSinglelineMenu(
     }
 
     if (!YoriWinCreateWindowEx(WinMgr, &CtrlRect, 0, NULL, &Parent)) {
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
@@ -387,20 +387,20 @@ SlmenuCreateSinglelineMenu(
 
     CtrlRect.Right = (SHORT)(WindowSize.X - 1);
 
-    List = YoriWinListCreate(Parent, &CtrlRect, YORI_WIN_LIST_STYLE_HORIZONTAL | YORI_WIN_LIST_STYLE_NO_BORDER);
+    List = YoriWinListCreate(Parent, &CtrlRect, YORIWIN_LIST_STY_HORIZONTAL | YORIWIN_LIST_STY_NO_BORDER);
     if (List == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
     YoriWinGetClientSize(List, &WindowSize);
     ButtonWidth = SlmenuCalculateColumnWidthForItems(MenuContext->StringArray, MenuContext->StringCount, WindowSize.X);
-    YoriWinListSetHorizontalItemWidth(List, ButtonWidth);
+    YoriWinListSetHorizItemWidth(List, ButtonWidth);
 
     if (!YoriWinListAddItems(List, MenuContext->StringArray, MenuContext->StringCount)) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
@@ -423,10 +423,10 @@ SlmenuCreateSinglelineMenu(
     CtrlRect.Left = (SHORT)(WindowSize.X - 1 - 2 * (ButtonWidth + 2) - 1);
     CtrlRect.Right = (WORD)(CtrlRect.Left + ButtonWidth + 1);
 
-    Ctrl = YoriWinButtonCreate(Parent, &CtrlRect, &Caption, YORI_WIN_BUTTON_STYLE_DEFAULT | YORI_WIN_BUTTON_STYLE_DISABLE_FOCUS, SlmenuOkButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &CtrlRect, &Caption, YORIWIN_BUTTON_STY_DEFAULT | YORIWIN_BUTTON_STY_NOFOCUS, SlmenuOkButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
@@ -435,14 +435,14 @@ SlmenuCreateSinglelineMenu(
     CtrlRect.Left = (SHORT)(WindowSize.X - 1 - (ButtonWidth + 2));
     CtrlRect.Right = (WORD)(CtrlRect.Left + ButtonWidth + 1);
 
-    Ctrl = YoriWinButtonCreate(Parent, &CtrlRect, &Caption, YORI_WIN_BUTTON_STYLE_CANCEL | YORI_WIN_BUTTON_STYLE_DISABLE_FOCUS, SlmenuCancelButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &CtrlRect, &Caption, YORIWIN_BUTTON_STY_CANCEL | YORIWIN_BUTTON_STY_NOFOCUS, SlmenuCancelButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
-    YoriWinSetControlContext(Parent, MenuContext);
+    YoriWinSetCtrlContext(Parent, MenuContext);
 
     Result = FALSE;
     if (!YoriWinProcessInputForWindow(Parent, &Result)) {
@@ -455,7 +455,7 @@ SlmenuCreateSinglelineMenu(
     }
 
     YoriWinDestroyWindow(Parent);
-    YoriWinCloseWindowManager(WinMgr);
+    YoriWinCloseWinMgr(WinMgr);
     return (BOOL)Result;
 }
 
@@ -485,15 +485,15 @@ SlmenuCreateMultilineMenu(
     __out PYORI_ALLOC_SIZE_T ActiveOption
     )
 {
-    PYORI_WIN_WINDOW_MANAGER_HANDLE WinMgr;
-    PYORI_WIN_CTRL_HANDLE List;
-    PYORI_WIN_WINDOW_HANDLE Parent;
+    PYORIWIN_WINMGR_HANDLE WinMgr;
+    PYORIWIN_CTRL_HANDLE List;
+    PYORIWIN_WINDOW_HANDLE Parent;
     SMALL_RECT ListRect;
     COORD WindowSize;
     SMALL_RECT ButtonArea;
     YORI_STRING Caption;
     WORD ButtonWidth;
-    PYORI_WIN_CTRL_HANDLE Ctrl;
+    PYORIWIN_CTRL_HANDLE Ctrl;
     DWORD_PTR Result;
     WORD WindowHeight;
 
@@ -501,7 +501,7 @@ SlmenuCreateMultilineMenu(
         return FALSE;
     }
 
-    if (!YoriWinOpenWindowManager(FALSE, YoriWinColorTableDefault, &WinMgr)) {
+    if (!YoriWinOpenWinMgr(FALSE, YoriWinColorTableDefault, &WinMgr)) {
         return FALSE;
     }
 
@@ -511,12 +511,12 @@ SlmenuCreateMultilineMenu(
 
         if (WindowSize.X < 40 || WindowSize.Y < 12) {
             YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("slmenu: window size too small\n"));
-            YoriWinCloseWindowManager(WinMgr);
+            YoriWinCloseWinMgr(WinMgr);
             return FALSE;
         }
 
         if (!YoriWinCreateWindow(WinMgr, WindowSize.X, WindowSize.Y, WindowSize.X, WindowSize.Y, 0, NULL, &Parent)) {
-            YoriWinCloseWindowManager(WinMgr);
+            YoriWinCloseWinMgr(WinMgr);
             return FALSE;
         }
     } else {
@@ -524,12 +524,12 @@ SlmenuCreateMultilineMenu(
 
         if (WindowHeight < 12) {
             YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("slmenu: window size too small\n"));
-            YoriWinCloseWindowManager(WinMgr);
+            YoriWinCloseWinMgr(WinMgr);
             return FALSE;
         }
 
-        if (!YoriWinCreateWindow(WinMgr, 30, WindowHeight, 60, WindowHeight, YORI_WIN_WINDOW_STYLE_BORDER_SINGLE | YORI_WIN_WINDOW_STYLE_SHADOW_SOLID, Title, &Parent)) {
-            YoriWinCloseWindowManager(WinMgr);
+        if (!YoriWinCreateWindow(WinMgr, 30, WindowHeight, 60, WindowHeight, YORIWIN_WIN_STY_BORDER_SINGLE | YORIWIN_WIN_STY_SHADOW_SOLID, Title, &Parent)) {
+            YoriWinCloseWinMgr(WinMgr);
             return FALSE;
         }
     }
@@ -541,21 +541,21 @@ SlmenuCreateMultilineMenu(
     ListRect.Right = (SHORT)(WindowSize.X - 2);
     ListRect.Bottom = (SHORT)(WindowSize.Y - 3 - 1);
 
-    List = YoriWinListCreate(Parent, &ListRect, YORI_WIN_LIST_STYLE_VSCROLLBAR | YORI_WIN_LIST_STYLE_AUTO_HSCROLLBAR);
+    List = YoriWinListCreate(Parent, &ListRect, YORIWIN_LIST_STY_VSCROLL | YORIWIN_LIST_STY_AUTO_HSCROLL);
     if (List == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
     if (!YoriWinListAddItems(List, MenuContext->StringArray, MenuContext->StringCount)) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
     YoriWinListSetActiveOption(List, 0);
-    YoriWinSetControlId(List, SlmenuControlList);
+    YoriWinSetCtrlId(List, SlmenuControlList);
 
     ButtonWidth = (WORD)(sizeof("Cancel") - 1 + 2);
 
@@ -574,10 +574,10 @@ SlmenuCreateMultilineMenu(
     ButtonArea.Left = (SHORT)(WindowSize.X - 1 - 2 * (ButtonWidth + 2) - 1);
     ButtonArea.Right = (WORD)(ButtonArea.Left + ButtonWidth + 1);
 
-    Ctrl = YoriWinButtonCreate(Parent, &ButtonArea, &Caption, YORI_WIN_BUTTON_STYLE_DEFAULT, SlmenuOkButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &ButtonArea, &Caption, YORIWIN_BUTTON_STY_DEFAULT, SlmenuOkButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
@@ -586,10 +586,10 @@ SlmenuCreateMultilineMenu(
     ButtonArea.Left = (SHORT)(WindowSize.X - 1 - (ButtonWidth + 2));
     ButtonArea.Right = (WORD)(ButtonArea.Left + ButtonWidth + 1);
 
-    Ctrl = YoriWinButtonCreate(Parent, &ButtonArea, &Caption, YORI_WIN_BUTTON_STYLE_CANCEL, SlmenuCancelButtonClicked);
+    Ctrl = YoriWinButtonCreate(Parent, &ButtonArea, &Caption, YORIWIN_BUTTON_STY_CANCEL, SlmenuCancelButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
@@ -601,11 +601,11 @@ SlmenuCreateMultilineMenu(
     Ctrl = YoriWinButtonCreate(Parent, &ButtonArea, &Caption, 0, SlmenuFindButtonClicked);
     if (Ctrl == NULL) {
         YoriWinDestroyWindow(Parent);
-        YoriWinCloseWindowManager(WinMgr);
+        YoriWinCloseWinMgr(WinMgr);
         return FALSE;
     }
 
-    YoriWinSetControlContext(Parent, MenuContext);
+    YoriWinSetCtrlContext(Parent, MenuContext);
 
     Result = FALSE;
     if (!YoriWinProcessInputForWindow(Parent, &Result)) {
@@ -618,7 +618,7 @@ SlmenuCreateMultilineMenu(
     }
 
     YoriWinDestroyWindow(Parent);
-    YoriWinCloseWindowManager(WinMgr);
+    YoriWinCloseWinMgr(WinMgr);
     return (BOOL)Result;
 }
 

@@ -341,7 +341,7 @@ YoriCmd_COLOR(
             if (YoriLibCompareStringLitIns(&ArgV[StartArg], _T("reset")) == 0) {
                 Attributes.Ctrl = YORILIB_ATTRCTRL_WINDOW_BG | YORILIB_ATTRCTRL_WINDOW_FG;
             } else {
-                YoriLibAttributeFromString(&ArgV[StartArg], &Attributes);
+                YoriLibAttrFromString(&ArgV[StartArg], &Attributes);
                 if (Attributes.Ctrl == (YORILIB_ATTRCTRL_WINDOW_BG | YORILIB_ATTRCTRL_WINDOW_FG)) {
                     YoriLibOutput(YORI_LIB_OUTPUT_STDERR, _T("color: invalid character '%c'\n"), ArgV[StartArg].StartOfString[i]);
                     return EXIT_FAILURE;
@@ -350,7 +350,7 @@ YoriCmd_COLOR(
 
             WindowAttributes.Ctrl = 0;
             WindowAttributes.Win32Attr = (UCHAR)OriginalAttributes;
-            YoriLibResolveWindowColorComponents(Attributes, WindowAttributes, TRUE, &Attributes);
+            YoriLibResolveWindowColors(Attributes, WindowAttributes, TRUE, &Attributes);
             BufferInfo.wAttributes = Attributes.Win32Attr;
             break;
         }
